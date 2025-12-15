@@ -43,7 +43,7 @@ void capture_loop(
   int pattern_cols = yaml["pattern_cols"].as<int>();
   int pattern_rows = yaml["pattern_rows"].as<int>();
   tools::logger()->info("棋盘格标定板采集程序启动");
-  tools::logger()->info("标定板内角点数量: {}列 × {}行 (对应{}×{}格子的棋盘格)", pattern_cols, pattern_rows, pattern_cols + 1, pattern_rows + 1);
+  tools::logger()->info("标定板内角点数量: {}列 x {}行 (对应{}x{}格子的棋盘格)", pattern_cols, pattern_rows, pattern_cols + 1, pattern_rows + 1);
   cv::Size pattern_size(pattern_cols, pattern_rows);  // 修改：棋盘格内角点数量
   
   int count = 0;

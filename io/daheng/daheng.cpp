@@ -13,12 +13,16 @@ namespace io
         return false; \
     }
 
-DahengCamera::DahengCamera(double exposure_ms, double gain, 
-                           double frame_rate, const std::string& serial_number)
-    : exposure_us_(exposure_ms * 1000.0), 
+DahengCamera::DahengCamera(std::string camera_sn, 
+                            double exposure_us, 
+                            double gain, 
+                            double gamma,
+                           double frame_rate)
+    : camera_sn_(camera_sn),
+      exposure_us_(exposure_us), 
       gain_(gain), 
+      gamma_(gamma),
       frame_rate_(frame_rate), 
-      serial_number_(serial_number),
       queue_(1)
 {
     tools::logger()->info("Initializing Daheng Camera...");
@@ -96,6 +100,39 @@ DahengCamera::~DahengCamera()
     tools::logger()->info("Daheng Camera destroyed.");
 }
 
+bool DahengCamera::capture_stop(){
+    GX_STATUS status = GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_STOP);
+    DAHENG_CHECK(status);
+    if(frameData.pImgBuf != nullptr){
+        free(frameData.pImgBuf);
+        frameData.pImgBuf = nullptr;
+    }
+    if(pRaw8Buffer != nullptr){
+        free(pRaw8Buffer);
+        pRaw8Buffer = nullptr;
+    }
+    if(pMirrorBuffer != nullptr){
+        free(pMirrorBuffer);
+        pMirrorBuffer = nullptr;
+    }
+    if (pRGBframeData != nullptr)
+    {
+        free(pRGBframeData);
+        pRGBframeData = nullptr;
+    }
+    if (pGammaLut!= nullptr)
+    {
+        free(pGammaLut);
+        pGammaLut= nullptr;
+    }
+    if(open_param_!= nullptr){
+        delete open_param_;
+        open_param_ = nullptr;
+    }
+    GXCloseDevice(hDevice);
+    // GXCloseLib();
+}
+
 void DahengCamera::read(cv::Mat& img, std::chrono::steady_clock::time_point& timestamp)
 {
     CameraData data;
@@ -110,6 +147,12 @@ bool DahengCamera::initialize_camera()
         tools::logger()->error("SDK not initialized!");
         return false;
     }
+
+
+    open_param_ = new GX_OPEN_PARAM;
+        open_param_->openMode = GX_OPEN_SN;//通过序列号打开设备
+        open_param_->accessMode = GX_ACCESS_EXCLUSIVE;//以独占方式打开设备 
+        open_param_->pszContent = (char*)camera_sn_;//标准C字符串，由openMode决定，可能是一个IP地址或者是相机序列号等等
     
     // 枚举设备
     uint32_t device_num = 0;

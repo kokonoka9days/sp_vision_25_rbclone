@@ -8,7 +8,7 @@ exposure_ms: 3
 gain: 10.0
 vid_pid: "2bdf:0001"
 
-camera_name: "daheng"
-exposure_ms: 3
-gain: 10.0
-vid_pid: "2ba2:4d55"
+# camera_name: "daheng"
+# exposure_ms: 3
+# gain: 10.0
+# vid_pid: "2ba2:4d55"

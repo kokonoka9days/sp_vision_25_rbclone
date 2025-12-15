@@ -17,3 +17,4 @@ can_interface: "can0"
 
 #####-----gimbal参数-----#####
 com_port: "/dev/gimbal"
+# com_port: "/dev/ttyACM0"

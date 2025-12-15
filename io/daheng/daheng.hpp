@@ -9,69 +9,17 @@
 #include <mutex>
 #include <condition_variable>
 #include <opencv2/opencv.hpp>
+
 #include "GxIAPI.h"  // 大恒相机SDK头文件
 #include "tools/thread_safe_queue.hpp"
-
+#include "io/camera.hpp"
 #include "tools/logger.hpp"
 
 namespace io
 {
 
-struct CameraData {
-    cv::Mat img;
-    std::chrono::steady_clock::time_point timestamp;
-};
 
-// // 线程安全队列
-// template<typename T>
-// class ThreadSafeQueue {
-// public:
-//     ThreadSafeQueue(size_t max_size = 1) : max_size_(max_size) {}
-    
-//     bool push(const T& value) {
-//         std::unique_lock<std::mutex> lock(mutex_);
-//         if (queue_.size() >= max_size_) {
-//             queue_.pop();  // 丢弃最旧的数据
-//         }
-//         queue_.push(value);
-//         condition_.notify_one();
-//         return true;
-//     }
-    
-//     bool pop(T& value) {
-//         std::unique_lock<std::mutex> lock(mutex_);
-//         if (queue_.empty()) {
-//             condition_.wait(lock);
-//             if (queue_.empty()) return false;
-//         }
-//         value = queue_.front();
-//         queue_.pop();
-//         return true;
-//     }
-    
-//     bool empty() const {
-//         std::lock_guard<std::mutex> lock(mutex_);
-//         return queue_.empty();
-//     }
-    
-//     size_t size() const {
-//         std::lock_guard<std::mutex> lock(mutex_);
-//         return queue_.size();
-//     }
-    
-//     void clear() {
-//         std::lock_guard<std::mutex> lock(mutex_);
-//         while (!queue_.empty()) queue_.pop();
-//     }
-
-// private:
-//     mutable std::mutex mutex_;
-//     std::condition_variable condition_;
-//     std::queue<T> queue_;
-//     size_t max_size_;
-// };
-
-class DahengCamera {
+class DahengCamera  : public CameraBase{
 public:
     /**
      * @brief 构造函数
@@ -80,11 +28,16 @@ public:
      * @param frame_rate 帧率
      * @param serial_number 相机序列号(为空时使用第一个相机)
      */
-    DahengCamera(double exposure_ms = 10.0, double gain = 0.0, 
-                 double frame_rate = 150.0, 
-                 const std::string& serial_number = "");
+    DahengCamera::DahengCamera(std::string camera_sn, 
+                            double exposure_us, 
+                            double gain, 
+                            double gamma,
+                           double frame_rate);
     
     ~DahengCamera();
+
+
+    bool capture_stop();
     
     /**
      * @brief 读取图像
@@ -131,6 +84,11 @@ public:
     void set_white_balance(double r_gain, double g_gain, double b_gain);
 
 private:
+
+    struct CameraData {
+        cv::Mat img;
+        std::chrono::steady_clock::time_point timestamp;
+    };
     // 相机操作
     bool initialize_camera();
     bool open_camera();
@@ -155,13 +113,23 @@ private:
 
 private:
     // 相机参数
+    std::string camera_sn_;
     double exposure_us_;
     double gain_;
+    double gamma_;
     double frame_rate_;
-    std::string serial_number_;
     
     // 相机句柄和状态
-    GX_DEV_HANDLE device_handle_ = nullptr;
+    GX_DEV_HANDLE hDevice = nullptr;
+    GX_OPEN_PARAM* open_param_ = nullptr;
+    int64_t PixelFormat = GX_PIXEL_FORMAT_BAYER_GR8;
+    int64_t ColorFilter = GX_COLOR_FILTER_NONE;
+    GX_FRAME_DATA frameData{};
+    void *pRaw8Buffer = nullptr;
+    void *pMirrorBuffer = nullptr;
+    void *pRGBframeData = nullptr;
+    void *pGammaLut = nullptr;
+    
     std::atomic<bool> connected_{false};
     std::atomic<bool> capturing_{false};
     
@@ -180,14 +148,11 @@ private:
     // 图像参数缓存
     size_t image_width_ = 0;
     size_t image_height_ = 0;
-    GX_PIXEL_FORMAT_ENTRY pixel_format_ = GX_PIXEL_FORMAT_MONO8;
+    // GX_PIXEL_FORMAT_ENTRY pixel_format_ = GX_PIXEL_FORMAT_MONO8;
     
     // 配置参数
     bool trigger_mode_ = false;
     bool auto_white_balance_ = true;
-    double white_balance_r_ = 1.0;
-    double white_balance_g_ = 1.0;
-    double white_balance_b_ = 1.0;
 };
 
 }  // namespace io
