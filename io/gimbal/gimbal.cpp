@@ -133,6 +133,8 @@ void Gimbal::read_thread()
   int error_count = 0;
 
   while (!quit_) {
+
+    // std::cout << "RxData size: " << sizeof(rx_data_) << std::endl;
     if (error_count > 5000) {
       error_count = 0;
       tools::logger()->warn("[Gimbal] Too many errors, attempting to reconnect...");
@@ -142,24 +144,30 @@ void Gimbal::read_thread()
 
     if (!read(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_.head))) {
       error_count++;
+      //  tools::logger()->warn("[Gimbal] 1");
       continue;
     }
 
-    if (rx_data_.head[0] != 'S' || rx_data_.head[1] != 'P') continue;
+    if (
+      rx_data_.head[0] != 0x53
+       || 
+       rx_data_.head[1] != 0x50
+        ) continue;
 
     auto t = std::chrono::steady_clock::now();
 
     if (!read(
           reinterpret_cast<uint8_t *>(&rx_data_) + sizeof(rx_data_.head),
           sizeof(rx_data_) - sizeof(rx_data_.head))) {
+      // tools::logger()->warn("[Gimbal] 2");
       error_count++;
       continue;
     }
 
-    if (!tools::check_crc16(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
-      tools::logger()->debug("[Gimbal] CRC16 check failed.");
-      continue;
-    }
+    // if (!tools::check_crc16(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
+    //   tools::logger()->debug("[Gimbal] CRC16 check failed.");
+    //   continue;
+    // }
 
     error_count = 0;
     Eigen::Quaterniond q(rx_data_.q[0], rx_data_.q[1], rx_data_.q[2], rx_data_.q[3]);

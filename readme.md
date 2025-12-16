@@ -152,10 +152,10 @@ IMU型号：使用C板内置BMI088作为IMU\
         ```
         sudo touch /etc/udev/rules.d/99-usb-serial.rules
         ```
-        然后在文件中写入如下内容（用真实 ID 替换示例，SYMLINK 是规则应用后固定的串口名）：
+     
+        ```   然后在文件中写入如下内容（用真实 ID 替换示例，SYMLINK 是规则应用后固定的串口名）：
         ```
         SUBSYSTEM=="tty", ATTRS{idVendor}=="1234", ATTRS{idProduct}=="1234", ATTRS{serial}=="A1234567", SYMLINK+="gimbal"
-        ```
     4. 重新加载 udev 规则
         ```
         sudo udevadm control --reload-rules
