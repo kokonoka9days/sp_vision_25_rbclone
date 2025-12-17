@@ -16,7 +16,7 @@ namespace io
 class HikRobot : public CameraBase
 {
 public:
-  HikRobot(double exposure_ms, double gain, const std::string & vid_pid);
+  HikRobot(std::string sn, double exposure_ms, double gain, const std::string & vid_pid);
   ~HikRobot() override;
   void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) override;
 
@@ -26,7 +26,8 @@ private:
     cv::Mat img;
     std::chrono::steady_clock::time_point timestamp;
   };
-
+  std::string camera_sn_;
+  size_t nDeviceNum = 0;//当前设备数量
   double exposure_us_;
   double gain_;
 
@@ -41,6 +42,9 @@ private:
 
   int vid_, pid_;
 
+  bool ChoiceCamrea(MV_CC_DEVICE_INFO** pDeviceInfo, 
+                  unsigned char* sn, 
+                  size_t& cameraIndex);
   void capture_start();
   void capture_stop();
 

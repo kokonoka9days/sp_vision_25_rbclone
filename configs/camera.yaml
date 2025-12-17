@@ -3,9 +3,11 @@
 # gamma: 0.5
 # vid_pid: "f622:d13a"
 
-camera_name: "hikrobot"
+camera_name: "daheng"
+camera_sn: "FDN21050087" #FDN21050087 # KE0210010003
 exposure_ms: 3
-gain: 10.0
+gain: 0.4
+gamma: 0.3
 vid_pid: "2bdf:0001"
 
 # camera_name: "daheng"

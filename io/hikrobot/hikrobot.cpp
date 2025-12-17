@@ -8,8 +8,8 @@ using namespace std::chrono_literals;
 
 namespace io
 {
-HikRobot::HikRobot(double exposure_ms, double gain, const std::string & vid_pid)
-: exposure_us_(exposure_ms * 1e3), gain_(gain), queue_(1), daemon_quit_(false), vid_(-1), pid_(-1)
+HikRobot::HikRobot(std::string sn, double exposure_ms, double gain, const std::string & vid_pid)
+: camera_sn_(sn), exposure_us_(exposure_ms * 1e3), gain_(gain), queue_(1), daemon_quit_(false), vid_(-1), pid_(-1)
 {
   set_vid_pid(vid_pid);
   if (libusb_init(NULL)) tools::logger()->warn("Unable to init libusb!");
@@ -51,6 +51,30 @@ void HikRobot::read(cv::Mat & img, std::chrono::steady_clock::time_point & times
   timestamp = data.timestamp;
 }
 
+
+bool HikRobot::ChoiceCamrea(MV_CC_DEVICE_INFO** pDeviceInfo, unsigned char* sn, size_t& cameraIndex){
+    for(size_t i = 0; i < nDeviceNum; i++){
+        std::cout<<"pDeviceInfo "<<i<<": "<<pDeviceInfo[i]->SpecialInfo.stUsb3VInfo.chSerialNumber<<std::endl;
+        // if(*pDeviceInfo[i]->SpecialInfo.stUsb3VInfo.chSerialNumber == *sn) {
+        //     nDeviceNum = i;
+        //     return true;
+        // }
+        bool wl = true;
+        for(int j  = 0; sn[j]!='\0';j++){
+            if(sn[j] != pDeviceInfo[i]->SpecialInfo.stUsb3VInfo.chSerialNumber[j]) {
+                wl = false;
+                break;
+            }
+        }
+        if(wl) {
+            cameraIndex = i;
+            return true;
+        }
+    }
+    return false;
+
+}
+
 void HikRobot::capture_start()
 {
   capturing_ = false;
@@ -58,7 +82,28 @@ void HikRobot::capture_start()
 
   unsigned int ret;
 
+
   MV_CC_DEVICE_INFO_LIST device_list;
+
+  ret = MV_CC_EnumDevices(MV_USB_DEVICE, &device_list);//枚举设备数量
+  if(ret != MV_OK) {
+      tools::logger()->warn("hik EnumDevices failed");
+      return;
+  }
+  if(device_list.nDeviceNum == 0) {
+    tools::logger()->warn("设备数量为0");
+      return;
+  }
+  this->nDeviceNum = device_list.nDeviceNum;
+  // std::cout<<"device_list.nDeviceNum "<<nDeviceNum <<std::endl;
+  size_t cameraIndex = 0;
+  bool exist = ChoiceCamrea(device_list.pDeviceInfo, (unsigned char*)camera_sn_.c_str(), cameraIndex);
+  std::cout<<"camrea exist "<<exist<<std::endl;
+  if(!exist){
+    tools::logger()->warn("不存在hik相机 {}",camera_sn_);
+    return;
+  }
+
   ret = MV_CC_EnumDevices(MV_USB_DEVICE, &device_list);
   if (ret != MV_OK) {
     tools::logger()->warn("MV_CC_EnumDevices failed: {:#x}", ret);
