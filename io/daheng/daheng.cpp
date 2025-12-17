@@ -49,13 +49,15 @@ DahengCamera::DahengCamera(std::string camera_sn,
                             double exposure_us, 
                             double gain, 
                             double gamma,
-                            double frame_rate)
+                            bool flip,
+                            bool mirror
+                        )
     : camera_sn_(camera_sn),
       exposure_us_(exposure_us), 
       gain_(gain), 
       gamma_(gamma),
-      frame_rate_(frame_rate), 
-      queue_(1)
+      queue_(1),
+      flip_(flip), mirror_(mirror)
 {
     tools::logger()->info("Initializing Daheng Camera SDK...");
     
@@ -304,7 +306,7 @@ bool DahengCamera::initialize_camera()
     capture_thread_ = std::thread([&]() {
         tools::logger()->info("Capture thread started.");
         while (!capture_quit_) {
-            cv::Mat frame = getFrame(false, false);
+            cv::Mat frame = getFrame();
             if (!frame.empty()) {
                 CameraData data;
                 data.img = frame;
@@ -329,12 +331,12 @@ bool DahengCamera::open_camera()
     return initialize_camera();
 }
 
-cv::Mat DahengCamera::getFrame(bool flip , bool mirror ) {
+cv::Mat DahengCamera::getFrame() {
     if (GXGetImage(hDevice, &frameData, 100) == GX_STATUS_SUCCESS) {//在开始采集之后，通过此接口可以直接获取图像，注意此接口不能与回调采集方式混用。
 
         if (frameData.nStatus == 0) {
             ProcessData(frameData.pImgBuf, pRaw8Buffer, pRGBframeData, frameData.nWidth, frameData.nHeight,
-                        (int) PixelFormat, mirror ? 2 : 4, flip, mirror);
+                        (int) PixelFormat, mirror_ ? 2 : 4, flip_, mirror_);
             cv::Mat src(cv::Size(frameData.nWidth, frameData.nHeight), CV_8UC3, pRGBframeData);
             return src.clone();//这里不做深拷贝的话多相机imshow画面会出现横杠
         }

@@ -10,8 +10,8 @@ using namespace std::chrono_literals;
 
 namespace io
 {
-MindVision::MindVision(double exposure_ms, double gamma, const std::string & vid_pid)
-: exposure_ms_(exposure_ms),
+MindVision::MindVision(double exposure_us, double gamma, const std::string & vid_pid)
+: exposure_us_(exposure_us),
   gamma_(gamma),
   handle_(-1),
   quit_(false),
@@ -77,7 +77,7 @@ void MindVision::open()
   height_ = camera_capbility.sResolutionRange.iHeightMax;
 
   CameraSetAeState(handle_, FALSE);                        // 关闭自动曝光
-  CameraSetExposureTime(handle_, exposure_ms_ * 1e3);      // 设置曝光
+  CameraSetExposureTime(handle_, exposure_us_ );      // 设置曝光
   CameraSetGamma(handle_, gamma_ * 1e2);                   // 设置伽马
   CameraSetIspOutFormat(handle_, CAMERA_MEDIA_TYPE_BGR8);  // 设置输出格式为BGR
   CameraSetTriggerMode(handle_, 0);                        // 设置为连续采集模式

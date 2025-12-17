@@ -13,26 +13,29 @@ Camera::Camera(const std::string & config_path)
 {
   auto yaml = tools::load(config_path);
   auto camera_name = tools::read<std::string>(yaml, "camera_name");
-  auto exposure_ms = tools::read<double>(yaml, "exposure_ms");
+  auto exposure_us = tools::read<double>(yaml, "exposure_us");
+
+  bool flip = tools::read<bool>(yaml, "flip");
+  bool mirror = tools::read<bool>(yaml, "mirror");
 
   if (camera_name == "mindvision") {
     auto gamma = tools::read<double>(yaml, "gamma");
     auto vid_pid = tools::read<std::string>(yaml, "vid_pid");
-    camera_ = std::make_unique<MindVision>(exposure_ms, gamma, vid_pid);
+    camera_ = std::make_unique<MindVision>(exposure_us, gamma, vid_pid);
   }
 
   else if (camera_name == "hikrobot") {
     auto gain = tools::read<double>(yaml, "gain");
     auto vid_pid = tools::read<std::string>(yaml, "vid_pid");
     auto sn = tools::read<std::string>(yaml, "camera_sn");
-    camera_ = std::make_unique<HikRobot>(sn, exposure_ms, gain, vid_pid);
+    camera_ = std::make_unique<HikRobot>(sn, exposure_us, gain, vid_pid, flip, mirror);
   }
 
   else if(camera_name == "daheng"){
     auto gain = tools::read<double>(yaml, "gain");
     auto gamma = tools::read<double>(yaml, "gamma");
     auto camera_sn = tools::read<std::string>(yaml, "camera_sn");
-    camera_ = std::make_unique<DahengCamera>(camera_sn, exposure_ms*1e3, gain, gamma, 0);
+    camera_ = std::make_unique<DahengCamera>(camera_sn, exposure_us, gain, gamma, flip, mirror);
   }
 
   else {

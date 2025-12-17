@@ -8,8 +8,8 @@ using namespace std::chrono_literals;
 
 namespace io
 {
-HikRobot::HikRobot(std::string sn, double exposure_ms, double gain, const std::string & vid_pid)
-: camera_sn_(sn), exposure_us_(exposure_ms * 1e3), gain_(gain), queue_(1), daemon_quit_(false), vid_(-1), pid_(-1)
+HikRobot::HikRobot(std::string sn, double exposure_us, double gain, const std::string & vid_pid, bool flip, bool mirror)
+: camera_sn_(sn), exposure_us_(exposure_us), gain_(gain), queue_(1), daemon_quit_(false), vid_(-1), pid_(-1), flip_(flip), mirror_(mirror)
 {
   set_vid_pid(vid_pid);
   if (libusb_init(NULL)) tools::logger()->warn("Unable to init libusb!");
@@ -131,7 +131,10 @@ void HikRobot::capture_start()
   set_enum_value("ExposureAuto", MV_EXPOSURE_AUTO_MODE_OFF);
   set_enum_value("GainAuto", MV_GAIN_MODE_OFF);
   set_float_value("ExposureTime", exposure_us_);
-  set_float_value("Gain", gain_);
+
+  MVCC_FLOATVALUE gainRange;
+  MV_CC_GetFloatValue(handle_,"AutoGainUpperLimit", &gainRange);//获取增益值范围
+  set_float_value("Gain", gain_*gainRange.fMax );
   MV_CC_SetFrameRate(handle_, 150);
 
   ret = MV_CC_StartGrabbing(handle_);
@@ -185,6 +188,13 @@ void HikRobot::capture_start()
         {PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBG2RGB}};
       cv::cvtColor(img, dst_image, type_map.at(pixel_type));
       img = dst_image;
+      // 翻转和镜像
+      if (flip_) {
+          cv::flip(img, img, 0); // 垂直翻转
+      }
+      if (mirror_) {
+          cv::flip(img, img, 1); // 水平镜像
+      }
 
       queue_.push({img, timestamp});
 

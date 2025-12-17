@@ -25,16 +25,18 @@ class DahengCamera  : public CameraBase{
 public:
     /**
      * @brief 构造函数
-     * @param exposure_ms 曝光时间(毫秒)
+     * @param exposure_us 曝光时间(微秒)
      * @param gain 增益值
      * @param frame_rate 帧率
      * @param serial_number 相机序列号(为空时使用第一个相机)
      */
     DahengCamera(std::string camera_sn, 
-                            double exposure_us, 
-                            double gain, 
-                            double gamma,
-                           double frame_rate);
+                                double exposure_us, 
+                                double gain, 
+                                double gamma,
+                                bool flip,
+                                bool mirror
+                            );
     
     ~DahengCamera();
 
@@ -59,9 +61,8 @@ private:
     bool initialize_camera();
     bool open_camera();
     bool close_camera();
-    bool start_acquisition();
 
-    cv::Mat getFrame(bool flip , bool mirror );
+    cv::Mat getFrame( );
     void ProcessData(void *pImageBuf, void *pImageRaw8Buf, void *pImageRGBBuf, int nImageWidth, int nImageHeight,
                         int nPixelFormat, int nPixelColorFilter, bool flip , bool mirror ) ;
 private:
@@ -72,6 +73,8 @@ private:
     double gamma_;
     double frame_rate_;
     std::string open_content_; 
+    bool flip_ = false;// 垂直翻转
+    bool mirror_ = false;// 水平镜像
     
     // 相机句柄和状态
     GX_DEV_HANDLE hDevice = nullptr;

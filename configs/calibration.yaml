@@ -6,9 +6,11 @@ R_gimbal2imubody: [1, 0, 0, 0, 1, 0,  0, 0, 1]
 
 camera_name: "hikrobot"
 camera_sn: "DA7188471"
-exposure_ms: 4000
+exposure_us: 4000
 gain: 10.0
 vid_pid: "2bdf:0001"
+flip: false
+mirror: false
 
 #####-----cboard参数-----#####
 quaternion_canid: 0x01

@@ -53,9 +53,11 @@ judge_distance: 2 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
 camera_name: "hikrobot"
-exposure_ms: 2
+exposure_us: 2000
 gain: 16
 vid_pid: "2bdf:0001"
+flip: false
+mirror: false
 
 R_gimbal2imubody: [1, 0, 0, 0, 1, 0,  0, 0, 1]
 

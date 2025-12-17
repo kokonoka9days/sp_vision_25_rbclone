@@ -12,6 +12,8 @@ class CameraBase
 {
 public:
   int64_t sensorWidth = -1, sensorHeight = -1; //相机分辨率
+
+
   virtual ~CameraBase() = default;
   virtual void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) = 0;
 };
