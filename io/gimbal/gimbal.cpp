@@ -86,8 +86,9 @@ void Gimbal::send(io::VisionToGimbal VisionToGimbal)
   tx_data_.pitch = VisionToGimbal.pitch;
   tx_data_.pitch_vel = VisionToGimbal.pitch_vel;
   tx_data_.pitch_acc = VisionToGimbal.pitch_acc;
-  tx_data_.crc16 = tools::get_crc16(
-    reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
+      reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
+  // tx_data_.crc16 = tools::get_crc16(
+  //   reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
 
   try {
     serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
@@ -107,8 +108,9 @@ void Gimbal::send(
   tx_data_.pitch = pitch;
   tx_data_.pitch_vel = pitch_vel;
   tx_data_.pitch_acc = pitch_acc;
-  tx_data_.crc16 = tools::get_crc16(
-    reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
+      reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
+  // tx_data_.crc16 = tools::get_crc16(
+  //   reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
 
   try {
     serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
@@ -135,7 +137,7 @@ void Gimbal::read_thread()
   while (!quit_) {
 
     // std::cout << "RxData size: " << sizeof(rx_data_) << std::endl;
-    if (error_count > 5000) {
+    if (error_count > 50000) {
       error_count = 0;
       tools::logger()->warn("[Gimbal] Too many errors, attempting to reconnect...");
       reconnect();
@@ -149,16 +151,17 @@ void Gimbal::read_thread()
     }
 
     if (
-      rx_data_.head[0] != 0x53
-       || 
-       rx_data_.head[1] != 0x50
+      rx_data_.head != 0x53
+      //  || 
+      //  rx_data_.head[1] != 0x50
         ) continue;
 
     auto t = std::chrono::steady_clock::now();
 
     if (!read(
           reinterpret_cast<uint8_t *>(&rx_data_) + sizeof(rx_data_.head),
-          sizeof(rx_data_) - sizeof(rx_data_.head))) {
+          sizeof(rx_data_) - sizeof(rx_data_.head)))
+    {
       // tools::logger()->warn("[Gimbal] 2");
       error_count++;
       continue;
@@ -168,6 +171,13 @@ void Gimbal::read_thread()
     //   tools::logger()->debug("[Gimbal] CRC16 check failed.");
     //   continue;
     // }
+
+    if (rx_data_.end != 0x5a  )
+    {
+      tools::logger()->warn("[Gimbal] tail {}",rx_data_.end);
+      error_count++;
+      continue;
+    } 
 
     error_count = 0;
     Eigen::Quaterniond q(rx_data_.q[0], rx_data_.q[1], rx_data_.q[2], rx_data_.q[3]);
