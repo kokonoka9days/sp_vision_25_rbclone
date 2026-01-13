@@ -1,0 +1,18 @@
+# camera_name: "mindvision"
+# exposure_us: 2
+# gamma: 0.5
+# vid_pid: "f622:d13a"
+
+camera_name: "hikrobot"
+camera_sn: "DA7188471" #FDN21050087 # KE0210010003 #DA7188471
+exposure_us: 3000
+gain: 0.4
+gamma: 0.3
+vid_pid: "2bdf:0001"
+flip: true
+mirror: true
+
+# camera_name: "daheng"
+# exposure_us: 3
+# gain: 10.0
+# vid_pid: "2ba2:4d55"
