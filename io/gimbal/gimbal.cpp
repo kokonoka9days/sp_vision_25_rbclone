@@ -15,7 +15,7 @@ Gimbal::Gimbal(const std::string & config_path)
   try {
     serial_.setPort(com_port);
     serial_.setBaudrate(460800);
-    auto timeout = serial::Timeout::simpleTimeout(50); 
+    auto timeout = serial::Timeout::simpleTimeout(10); 
     serial_.setTimeout(timeout);
     serial_.open();
   } catch (const std::exception & e) {
