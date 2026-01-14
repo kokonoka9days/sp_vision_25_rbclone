@@ -182,14 +182,15 @@ void Gimbal::read_thread()
     error_count = 0;
     Eigen::Quaterniond q_(rx_data_.q[0], rx_data_.q[1], rx_data_.q[2], rx_data_.q[3]);
     auto ypr = tools::eulers(q_, 2, 1, 0);
-    float yaw = ypr[0];
-    float pitch = ypr[2];
-    float roll = ypr[1];
+    auto q = tools::toeuler(yqr,0,2,1);
+    // float yaw = ypr[0];
+    // float pitch = ypr[2];
+    // float roll = ypr[1];
 
-    Eigen::Quaterniond q = 
-        Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *   // 绕Z轴旋转yaw
-        Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
-        Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
+    // Eigen::Quaterniond q = 
+    //     Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *   // 绕Z轴旋转yaw
+    //     Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
+    //     Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
 
 
     queue_.push({q, t});

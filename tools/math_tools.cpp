@@ -79,6 +79,20 @@ Eigen::Vector3d eulers(Eigen::Matrix3d R, int axis0, int axis1, int axis2, bool 
   return eulers(q, axis0, axis1, axis2, extrinsic);
 }
 
+Eigen::Quaterniond toeuler(Eigen::Vector3d ypr, int axis0, int axis1, int axis2)
+{
+  float yaw = ypr[axis0];
+  float pitch = ypr[axis1];
+  float roll = ypr[axis2];
+
+
+  Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *   // 绕Z轴旋转yaw
+  Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
+  Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
+
+  return toeulers
+}
+
 Eigen::Matrix3d rotation_matrix(const Eigen::Vector3d & ypr)
 {
   double roll = ypr[2];
