@@ -52,12 +52,21 @@ second_tolerance: 100 # 远距离射击容差，degree
 judge_distance: 2 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
-camera_name: "hikrobot"
-exposure_us: 2000
-gain: 16
-vid_pid: "2bdf:0001"
-flip: false
-mirror: false
+# camera_name: "hikrobot"
+# exposure_us: 2000
+# gain: 16
+# vid_pid: "2bdf:0001"
+# flip: false
+# mirror: false
+
+camera_name: "daheng"
+camera_sn: "FDN24040486"
+exposure_us: 4000
+gain: 0.5
+gamma: 0.5
+vid_pid: "2ba2:4d55"
+flip: true
+mirror: true
 
 R_gimbal2imubody: [1, 0, 0, 0, 1, 0,  0, 0, 1]
 

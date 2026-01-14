@@ -13,7 +13,10 @@ Gimbal::Gimbal(const std::string & config_path)
   auto com_port = tools::read<std::string>(yaml, "com_port");
 
   try {
-    serial_.setPort(com_port);
+    serial_.setPort("/dev/ttyACM0");
+    serial_.setBaudrate(460800);
+    serial::Timeout timeout = serial::Timeout::simpleTimeout(10);
+    serial_.setTimeout(timeout);
     serial_.open();
   } catch (const std::exception & e) {
     tools::logger()->error("[Gimbal] Failed to open serial: {}", e.what());
@@ -86,9 +89,8 @@ void Gimbal::send(io::VisionToGimbal VisionToGimbal)
   tx_data_.pitch = VisionToGimbal.pitch;
   tx_data_.pitch_vel = VisionToGimbal.pitch_vel;
   tx_data_.pitch_acc = VisionToGimbal.pitch_acc;
-      reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
-  // tx_data_.crc16 = tools::get_crc16(
-  //   reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
+  tx_data_.crc16 = tools::get_crc16(
+    reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16) - sizeof(tx_data_.end));
 
   try {
     serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
@@ -108,9 +110,8 @@ void Gimbal::send(
   tx_data_.pitch = pitch;
   tx_data_.pitch_vel = pitch_vel;
   tx_data_.pitch_acc = pitch_acc;
-      reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
-  // tx_data_.crc16 = tools::get_crc16(
-  //   reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
+  tx_data_.crc16 = tools::get_crc16(
+    reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
 
   try {
     serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
@@ -135,8 +136,6 @@ void Gimbal::read_thread()
   int error_count = 0;
 
   while (!quit_) {
-
-    // std::cout << "RxData size: " << sizeof(rx_data_) << std::endl;
     if (error_count > 50000) {
       error_count = 0;
       tools::logger()->warn("[Gimbal] Too many errors, attempting to reconnect...");
@@ -145,42 +144,41 @@ void Gimbal::read_thread()
     }
 
     if (!read(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_.head))) {
+       tools::logger()->warn("[Gimbal] 1");
       error_count++;
-      //  tools::logger()->warn("[Gimbal] 1");
       continue;
     }
 
-    if (
-      rx_data_.head != 0x53
-      //  || 
-      //  rx_data_.head[1] != 0x50
-        ) continue;
+    if (rx_data_.head[0] != 0x5a || rx_data_.head[1] != 0x53) continue;
 
     auto t = std::chrono::steady_clock::now();
 
     if (!read(
           reinterpret_cast<uint8_t *>(&rx_data_) + sizeof(rx_data_.head),
-          sizeof(rx_data_) - sizeof(rx_data_.head)))
-    {
-      // tools::logger()->warn("[Gimbal] 2");
+          sizeof(rx_data_) - sizeof(rx_data_.head))) {
+              tools::logger()->warn("[Gimbal] 2");
       error_count++;
       continue;
     }
 
-    // if (!tools::check_crc16(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
-    //   tools::logger()->debug("[Gimbal] CRC16 check failed.");
-    //   continue;
-    // }
-
-    if (rx_data_.end != 0x5a  )
-    {
-      tools::logger()->warn("[Gimbal] tail {}",rx_data_.end);
-      error_count++;
+    if (!tools::check_crc16(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
+      // tools::logger()->debug("[Gimbal] CRC16 check failed.");
       continue;
-    } 
+    }
 
     error_count = 0;
-    Eigen::Quaterniond q(rx_data_.q[0], rx_data_.q[1], rx_data_.q[2], rx_data_.q[3]);
+    Eigen::Quaterniond q_(rx_data_.q[0], rx_data_.q[1], rx_data_.q[2], rx_data_.q[3]);
+    auto ypr = tools::eulers(q_, 2, 1, 0);
+    float yaw = ypr[0];
+    float pitch = ypr[2];
+    float roll = ypr[1];
+
+    Eigen::Quaterniond q = 
+        Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *   // 绕Z轴旋转yaw
+        Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
+        Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
+
+
     queue_.push({q, t});
 
     std::lock_guard<std::mutex> lock(mutex_);

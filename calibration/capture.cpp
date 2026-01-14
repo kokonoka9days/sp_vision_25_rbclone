@@ -60,7 +60,11 @@ void capture_loop(
 
     std::vector<cv::Point2f> corners_2d;
     // 修改：使用棋盘格角点检测
-    bool success = cv::findChessboardCorners(img, pattern_size, corners_2d);
+    bool success = cv::findChessboardCorners(img, pattern_size, corners_2d, 
+                                                                            // cv::CALIB_CB_NORMALIZE_IMAGE
+                                                                            // cv::CALIB_CB_FILTER_QUADS
+                                                                            cv::CALIB_CB_FAST_CHECK
+                                                                          );
     
     // 修改：如果找到角点，进行亚像素级精确化
     if (success) {
@@ -68,10 +72,11 @@ void capture_loop(
       cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
       cv::TermCriteria criteria(cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER, 30, 0.001);
       cv::cornerSubPix(gray, corners_2d, cv::Size(11, 11), cv::Size(-1, -1), criteria);
+      // 修改：显示棋盘格角点识别结果
+      cv::drawChessboardCorners(img_with_ypr, pattern_size, cv::Mat(corners_2d), success);
     }
     
-    // 修改：显示棋盘格角点识别结果
-    cv::drawChessboardCorners(img_with_ypr, pattern_size, cv::Mat(corners_2d), success);
+
     cv::resize(img_with_ypr, img_with_ypr, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
 
     // 按"s"保存图片和对应四元数，按"q"退出程序

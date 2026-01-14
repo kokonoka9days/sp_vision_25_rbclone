@@ -53,12 +53,14 @@ add_executable(calibrate_camera calibration/calibrate_camera.cpp)
 add_executable(calibrate_handeye calibration/calibrate_handeye.cpp)
 add_executable(calibrate_robotworld_handeye calibration/calibrate_robotworld_handeye.cpp)
 add_executable(split_video calibration/split_video.cpp)
+add_executable(test_simple calibration/test_simple.cpp)
 
 target_link_libraries(capture ${OpenCV_LIBS} fmt::fmt tools io)
 target_link_libraries(calibrate_camera ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
 target_link_libraries(calibrate_handeye ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
 target_link_libraries(calibrate_robotworld_handeye ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
 target_link_libraries(split_video ${OpenCV_LIBS} fmt::fmt tools)
+target_link_libraries(test_simple ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
 
 ##################tests##################
 add_executable(auto_aim_test tests/auto_aim_test.cpp)
@@ -95,6 +97,9 @@ target_link_libraries(minimum_vision_system ${OpenCV_LIBS} fmt::fmt yaml-cpp too
 
 add_executable(gimbal_test tests/gimbal_test.cpp)
 target_link_libraries(gimbal_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
+
+add_executable(serial_test tests/test_serial.cpp)
+target_link_libraries(serial_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
 
 add_executable(planner_test tests/planner_test.cpp)
 target_link_libraries(planner_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)

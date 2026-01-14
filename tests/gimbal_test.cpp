@@ -12,7 +12,7 @@
 const std::string keys =
   "{help h usage ? | | 输出命令行参数说明}"
   "{f              | | 是否开火}"
-  "{@config-path   | | yaml配置文件路径 }";
+  "{@config-path   |  | yaml配置文件路径 }";
 
 using namespace std::chrono_literals;
 
@@ -53,6 +53,15 @@ int main(int argc, char * argv[])
     auto q = gimbal.q(t);
     auto ypr = tools::eulers(q, 2, 1, 0);
 
+    float yaw_deg = ypr[0] * 180.0 / M_PI;
+    float pitch_deg = ypr[2] * 180.0 / M_PI;
+    float roll_deg = ypr[1] * 180.0 / M_PI;
+        
+    std::cout << "Euler Angles (deg): ";
+    std::cout << "Yaw: " << yaw_deg << "°, ";
+    std::cout << "Pitch: " << pitch_deg << "°, ";
+    std::cout << "Roll: " << roll_deg << "°" << std::endl;
+
     auto fired = state.bullet_count > last_bullet_count;
     last_bullet_count = state.bullet_count;
 
@@ -60,6 +69,8 @@ int main(int argc, char * argv[])
       first_fired = true;
       tools::logger()->info("Gimbal first fired after: {:.3f}s", tools::delta_time(t, fire_stamp));
     }
+
+    
 
     if (fire && fire_count > 20) {
       // 0.2 s
@@ -74,7 +85,7 @@ int main(int argc, char * argv[])
     }
     fire_count++;
 
-    gimbal.send(true, test_fire && fire, 1, 0, 0, 0, 0, 0);
+    gimbal.send(true, test_fire && fire, yaw_deg, 2, 3, pitch_deg , 5, 6);
 
     nlohmann::json data;
     data["q_yaw"] = ypr[0];
