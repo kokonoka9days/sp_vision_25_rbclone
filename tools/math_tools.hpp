@@ -17,7 +17,7 @@ Eigen::Vector3d eulers(
   Eigen::Quaterniond q, int axis0, int axis1, int axis2, bool extrinsic = false);
 
 //欧拉角转四元数
-Eigen::Quaterniond toeuler(Eigen::Vector3d ypr, int axis0, int axis1, int axis2)
+Eigen::Quaterniond toeuler(Eigen::Vector3d ypr, int axis0, int axis1, int axis2);
 
 // 旋转矩阵转欧拉角
 // x = 0, y = 1, z = 2

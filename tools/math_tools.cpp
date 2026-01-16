@@ -86,11 +86,11 @@ Eigen::Quaterniond toeuler(Eigen::Vector3d ypr, int axis0, int axis1, int axis2)
   float roll = ypr[axis2];
 
 
-  Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *   // 绕Z轴旋转yaw
+  Eigen::Quaterniond toeuler = Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *   // 绕Z轴旋转yaw
   Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
   Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
 
-  return toeulers
+  return toeuler;
 }
 
 Eigen::Matrix3d rotation_matrix(const Eigen::Vector3d & ypr)

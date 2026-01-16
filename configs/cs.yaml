@@ -1,142 +1,63 @@
-# enemy_color: "red"
-enemy_color: "blue"
+R_gimbal2imubody: [-1, 0, 0, 0, 1, 0, 0, 0, 1]
 
-#####-----神经网络参数-----#####
-yolo_name: yolov5
-classify_model: assets/tiny_resnet.onnx
-yolo11_model_path: assets/yolo11.xml
-yolov8_model_path: assets/yolov8.xml
-yolov5_model_path: assets/yolov5.xml
-device: CPU
-min_confidence: 0.8
-use_traditional: true
-nms_threshold: 0.5
-input_width: 640
-input_height: 640
-class_names: ["armor"]
+# 相机同理想情况的偏角: yaw179.94 pitch1.77 roll178.89 degree
+# 标定板到世界坐标系原点的水平距离: 1.96 m
+# 标定板同竖直摆放时的偏角: yaw87.75 pitch-0.39 roll178.50 degree
+R_camera2gimbal: [0.0006300680323985472, 0.03084684563629979, -0.9995239242402179, -0.9998094041241314, -0.019484318694324685, -0.0012315640329051238, -0.019513032548112753, 0.999334195071553, 0.030828689908395462]
+t_camera2gimbal: [-0.09879211822869594, -0.05661876507830866, -0.04718317632615113]
 
-#####-----ROI-----#####
-roi: 
-  x: 420
-  y: 50
-  width: 600
-  height: 600
+R_gimbal2imubody: [1, 0, 0, 0, -1, 0, 0, 0, 1]
 
-use_roi: false
+# 相机同理想情况的偏角: yaw-0.07 pitch1.77 roll178.89 degree
+# 标定板到世界坐标系原点的水平距离: 1.96 m
+# 标定板同竖直摆放时的偏角: yaw-92.26 pitch-0.39 roll178.50 degree
+R_camera2gimbal: [-0.0006300680323985472, -0.03084684563629979, 0.9995239242402179, 0.9998094041241314, 0.019484318694324685, 0.0012315640329051238, -0.019513032548112753, 0.999334195071553, 0.030828689908395462]
+t_camera2gimbal: [0.09879211822869594, 0.05661876507830866, -0.04718317632615113]
 
-#####-----传统方法参数-----#####
-threshold: 150
-max_angle_error: 45 # degree
-min_lightbar_ratio: 1.5
-max_lightbar_ratio: 20
-min_lightbar_length: 8
-min_armor_ratio: 1
-max_armor_ratio: 5
-max_side_ratio: 1.5
-max_rectangular_error: 25 # degree
-min_confidence: 0.8
+R_gimbal2imubody: [1, 0, 0, 0, 1, 0, 0, 0, -1]
 
-#####-----tracker参数-----#####
-min_detect_count: 5
-max_temp_lost_count: 15
-outpost_max_temp_lost_count: 75
-max_armor_distance: 6.5
-max_outpost_distance: 8.0
-max_match_distance: 0.25
-max_match_yaw: 1.0
-eoc_weight: 0.1
-max_v: 6.0
+# 相机同理想情况的偏角: yaw0.07 pitch-1.77 roll-1.12 degree
+# 标定板到世界坐标系原点的水平距离: 1.96 m
+# 标定板同竖直摆放时的偏角: yaw92.26 pitch0.39 roll-1.52 degree
+R_camera2gimbal: [-0.0006300680323985472, -0.03084684563629979, 0.9995239242402179, -0.9998094041241314, -0.019484318694324685, -0.0012315640329051238, 0.019513032548112753, -0.999334195071553, -0.030828689908395462]
+t_camera2gimbal: [0.09879211822869594, -0.05661876507830866, 0.04718317632615113]
 
-#####-----solver参数-----#####
-small_armor_size: [0.135, 0.055]
-large_armor_size: [0.225, 0.055]
-outpost_size: [0.5, 0.5]
-
-#####-----aimer参数-----#####
-yaw_offset: -1 # degree -2.5
-pitch_offset: -1.4 # degree 2
-comming_angle: 60 # degree
-leaving_angle: 20 # degree
-decision_speed: 8 # rad/s
-high_speed_delay_time: 0.030 # s
-low_speed_delay_time: 0.015 # s
-
-#####-----shooter参数-----#####
-first_tolerance: 3 # 近距离射击容差，degree
-second_tolerance: 2 # 远距离射击容差，degree
-judge_distance: 2 #距离判断阈值
-auto_fire: true # 是否由自瞄控制射击
-
-camera_name: "daheng"
-camera_sn: "FDN24040486"
-exposure_us: 4000
-gain: 0.5
-gamma: 0.5
-vid_pid: "2ba2:4d55"
-flip: true
-mirror: true
-
-#####-----相机-云台标定参数-----#####
-# -1  0  0
-#  0 -1  0
-#  0  0  1
 R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 
-# 重投影误差: 0.2697px
-camera_matrix: [1818.3669452465165, 0, 751.06226574703498, 0, 1822.494494078506, 530.43671556112133, 0, 0, 1]
-distort_coeffs: [-0.077944626599568856, 0.15447826031486889, -0.0025714394278524674, 0.00083016311301273629, 0]
+# 相机同理想情况的偏角: yaw0.07 pitch-1.77 roll-1.12 degree
+# 标定板到世界坐标系原点的水平距离: 1.96 m
+# 标定板同竖直摆放时的偏角: yaw92.26 pitch0.39 roll-1.52 degree
+R_camera2gimbal: [-0.0006300680323985472, -0.03084684563629979, 0.9995239242402179, -0.9998094041241314, -0.019484318694324685, -0.0012315640329051238, 0.019513032548112753, -0.999334195071553, -0.030828689908395462]
+t_camera2gimbal: [0.09879211822869594, -0.05661876507830866, 0.04718317632615113]
 
-# 相机同理想情况的偏角: yaw0.46 pitch0.61 roll-1.53 degree
-R_camera2gimbal: [-0.0083195760046954614, 0.010498791137270739, 0.99991027599468041, -0.99960756138647755, -0.026835747568381807, -0.0080352891314148939, 0.026748978935305992, -0.99958472279097077, 0.010717933047771133]
-t_camera2gimbal: [0.094969301833534511, 0.095006290298006682, 0.050987066291756609]
+R_gimbal2imubody: [-1, 0, 0, 0, 1, 0, 0, 0, -1]
 
-#####-----cboard参数-----#####
-quaternion_canid: 0x100
-bullet_speed_canid: 0x101
-send_canid: 0xff
-can_interface: "can0"
+# 相机同理想情况的偏角: yaw-0.07 pitch1.77 roll178.89 degree
+# 标定板到世界坐标系原点的水平距离: 1.96 m
+# 标定板同竖直摆放时的偏角: yaw-92.26 pitch-0.39 roll178.50 degree
+R_camera2gimbal: [-0.0006300680323985472, -0.03084684563629979, 0.9995239242402179, 0.9998094041241314, 0.019484318694324685, 0.0012315640329051238, -0.019513032548112753, 0.999334195071553, 0.030828689908395462]
+t_camera2gimbal: [0.09879211822869594, 0.05661876507830866, -0.04718317632615113]
 
-#####-----gimbal参数-----#####
-com_port: "/dev/ttyACM0"
-baud_rate: 115200
+R_gimbal2imubody: [1, 0, 0, 0, -1, 0, 0, 0, -1]
 
-#####-----planner参数-----#####
-fire_thresh: 0.003
-max_yaw_acc: 50
-max_yaw_vel: 3.0
-Q_yaw: [9e6, 0]
-R_yaw: [1]
-max_pitch_acc: 100
-max_pitch_vel: 2.0
-Q_pitch: [9e6, 0]
-R_pitch: [1]
-control_freq: 100
-predict_time: 0.1
+# 相机同理想情况的偏角: yaw179.94 pitch1.77 roll178.89 degree
+# 标定板到世界坐标系原点的水平距离: 1.96 m
+# 标定板同竖直摆放时的偏角: yaw87.75 pitch-0.39 roll178.50 degree
+R_camera2gimbal: [0.0006300680323985472, 0.03084684563629979, -0.9995239242402179, -0.9998094041241314, -0.019484318694324685, -0.0012315640329051238, -0.019513032548112753, 0.999334195071553, 0.030828689908395462]
+t_camera2gimbal: [-0.09879211822869594, -0.05661876507830866, -0.04718317632615113]
 
-#####-----buff_detector参数-----#####
-detect:
-  contrast: 1
-  brightness: 
-    blue: -120
-    red: -100
-  brightness_threshold:
-    blue: 120
-    red: 40
-  morphology_size:
-    blue: 3
-    red: 3
-  dilate_size: 2
-  R_contours_min_area: 200
-  R_contours_max_area: 600
-  fanblades_head_contours_min_area: 3000
-  fanblades_head_contours_max_area: 8000
-  fanblades_body_contours_min_area: 1000
-  fanblades_body_contours_max_area: 4000
-  standard_fanblade_path: ./assets/standard_fanblade.jpg
+R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, -1]
 
-#####-----buff_aimer参数-----#####
-aim_time: 0.150         # s
-wait_time: 0.300        # s
-command_fire_gap: 0.080 # s
-predict_time: 0.150     # s
-bullet_speed: 28.0      # 弹速 m/s
+# 相机同理想情况的偏角: yaw-179.94 pitch-1.77 roll-1.12 degree
+# 标定板到世界坐标系原点的水平距离: 1.96 m
+# 标定板同竖直摆放时的偏角: yaw-87.75 pitch0.39 roll-1.52 degree
+R_camera2gimbal: [0.0006300680323985472, 0.03084684563629979, -0.9995239242402179, 0.9998094041241314, 0.019484318694324685, 0.0012315640329051238, 0.019513032548112753, -0.999334195071553, -0.030828689908395462]
+t_camera2gimbal: [-0.09879211822869594, 0.05661876507830866, 0.04718317632615113]
+
+R_gimbal2imubody: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+
+# 相机同理想情况的偏角: yaw-179.94 pitch-1.77 roll-1.12 degree
+# 标定板到世界坐标系原点的水平距离: 1.96 m
+# 标定板同竖直摆放时的偏角: yaw-87.75 pitch0.39 roll-1.52 degree
+R_camera2gimbal: [0.0006300680323985472, 0.03084684563629979, -0.9995239242402179, 0.9998094041241314, 0.019484318694324685, 0.0012315640329051238, 0.019513032548112753, -0.999334195071553, -0.030828689908395462]
+t_camera2gimbal: [-0.09879211822869594, 0.05661876507830866, 0.04718317632615113]

@@ -45,6 +45,14 @@ public:
 
   bool checkinit();
 
+  inline Eigen::VectorXd getEKFXest(){
+    return ekf_.x;
+  }
+
+  // void DrawTarget(cv::Mat img){
+    
+  // }
+
 private:
   int armor_num_;
   int switch_count_;

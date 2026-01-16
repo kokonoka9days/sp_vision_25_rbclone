@@ -54,8 +54,8 @@ int main(int argc, char * argv[])
     auto ypr = tools::eulers(q, 2, 1, 0);
 
     float yaw_deg = ypr[0] * 180.0 / M_PI;
-    float pitch_deg = ypr[2] * 180.0 / M_PI;
-    float roll_deg = ypr[1] * 180.0 / M_PI;
+    float pitch_deg = ypr[1] * 180.0 / M_PI;
+    float roll_deg = ypr[2] * 180.0 / M_PI;
         
     std::cout << "Euler Angles (deg): ";
     std::cout << "Yaw: " << yaw_deg << "°, ";

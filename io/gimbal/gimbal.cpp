@@ -152,9 +152,7 @@ void Gimbal::read_thread()
       continue;
     }
 
-    if (
-      rx_data_.head != 0x53
-        ) continue;
+    if (rx_data_.head[0] != 0x5a || rx_data_.head[1] != 0x53) continue;
 
     auto t = std::chrono::steady_clock::now();
 
@@ -168,29 +166,22 @@ void Gimbal::read_thread()
     }
 
     if (!tools::check_crc16(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
-      tools::logger()->debug("[Gimbal] CRC16 check failed.");
-      continue;
-    }
-
-    if (rx_data_.end != 0x5a  )
-    {
-      tools::logger()->warn("[Gimbal] tail {}",rx_data_.end);
-      error_count++;
+      // tools::logger()->debug("[Gimbal] CRC16 check failed.");
       continue;
     }
 
     error_count = 0;
     Eigen::Quaterniond q_(rx_data_.q[0], rx_data_.q[1], rx_data_.q[2], rx_data_.q[3]);
     auto ypr = tools::eulers(q_, 2, 1, 0);
-    auto q = tools::toeuler(yqr,0,2,1);
-    // float yaw = ypr[0];
-    // float pitch = ypr[2];
-    // float roll = ypr[1];
+    // auto q = tools::toeuler(ypr,0,2,1);
+    float yaw = ypr[0];
+    float pitch = ypr[1];
+    float roll = ypr[2];
 
-    // Eigen::Quaterniond q = 
-    //     Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *   // 绕Z轴旋转yaw
-    //     Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
-    //     Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
+    Eigen::Quaterniond q = 
+        Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *   // 绕Z轴旋转yaw
+        Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
+        Eigen::AngleAxisd(-roll, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
 
 
     queue_.push({q, t});

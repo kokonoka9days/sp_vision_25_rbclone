@@ -58,9 +58,20 @@ int main(int argc, char * argv[])
       auto gs = gimbal.state();
       auto plan = planner.plan(target, gs.bullet_speed);
 
+    
+
+    // std::cout<<"x_v:"<<target.getEKFXest()[1]<<std::endl;
+    // std::cout<<"y_v:"<<target.getEKFXest()[3]<<std::endl;
+
       gimbal.send(
         plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
         plan.pitch_acc);
+
+      // tools::draw_text(img, fmt::format("Yaw {:.2f}",plan.yaw), {40, 40}, {0, 0, 255});
+      // tools::draw_text(img, fmt::format("Pitch {:.2f}", plan.pitch), {40, 40}, {0, 0, 255});
+
+      std::cout << "Yaw: " << plan.yaw * 180.0 / M_PI << std::endl;
+      std::cout << "Pitch: " << plan.pitch * 180.0 / M_PI << std::endl;
 
       auto fired = gs.bullet_count > last_bullet_count;
       last_bullet_count = gs.bullet_count;
@@ -111,9 +122,22 @@ int main(int argc, char * argv[])
     camera.read(img, t);
     auto q = gimbal.q(t);
 
+    auto ypr = tools::eulers(q, 2, 1, 0);
+
+    float yaw_deg = ypr[0] * 180.0 / M_PI;
+    float pitch_deg = ypr[1] * 180.0 / M_PI;
+    float roll_deg = ypr[2] * 180.0 / M_PI;
+        
+    // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
+    // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
+     tools::draw_text(img, fmt::format("DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 0, 255});
+      tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
+    // std::cout << "Roll: " << roll_deg << std::endl;
+
     solver.set_R_gimbal2world(q);
     auto armors = yolo.detect(img);
     auto targets = tracker.track(armors, t);
+
     if (!targets.empty())
       target_queue.push(targets.front());
     else

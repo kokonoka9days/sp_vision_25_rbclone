@@ -38,8 +38,8 @@ max_temp_lost_count: 11
 outpost_max_temp_lost_count: 75
 
 #####-----aimer参数-----#####
-yaw_offset: -0.5 # degree -2.5
-pitch_offset: 2 # degree 2
+yaw_offset: 0 # degree -2.5
+pitch_offset: 3 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
@@ -52,37 +52,38 @@ second_tolerance: 2 # 远距离射击容差，degree
 judge_distance: 2 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
-# camera_name: "hikrobot"
-# exposure_us: 2000
-# gain: 16
-# vid_pid: "2bdf:0001"
-# flip: false
-# mirror: false
-
-camera_name: "daheng"
-camera_sn: "FDN24040486"
-exposure_us: 4000
-gain: 0.5
-gamma: 0.5
-vid_pid: "2ba2:4d55"
+camera_name: "hikrobot"
+camera_sn: "DA7188447"
+exposure_us: 12000
+gain: 1.0
+vid_pid: "2bdf:0001"
 flip: true
 mirror: true
+
+# camera_name: "daheng"
+# camera_sn: "FDN24040486"
+# exposure_us: 4000
+# gain: 0.5
+# gamma: 0.5
+# vid_pid: "2ba2:4d55"
+# flip: true
+# mirror: true
 
 # -1  0  0
 #  0 -1  0
 #  0  0  1
 # R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
-R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
+R_gimbal2imubody: [1, 0, 0, 0, -1, 0, 0, 0, 1]
 
-# 重投影误差: 0.1164px
-camera_matrix: [3564.8174968431526, 0, 708.9912310363035, 0, 3564.8889674382763, 515.3306880094015, 0, 0, 1]
-distort_coeffs: [-0.012799652349955518, 0.06769407527114184, 0.000712447471914966, -0.0016254748233795065, 2.541863970933887]
+# 重投影误差: 0.0901px
+camera_matrix: [1813.554114428731, 0, 712.274797427587, 0, 1813.369040609312, 526.9183416131992, 0, 0, 1]
+distort_coeffs: [-0.06533754966400937, 0.11288365366404525, -0.0008807155121340363, -0.0006436478698530189, 0.035117257854987]
 
-# 相机同理想情况的偏角: yaw-0.60 pitch-0.35 roll-1.53 degree
-# 标定板到世界坐标系原点的水平距离: 3.23 m
-# 标定板同竖直摆放时的偏角: yaw37.61 pitch3.23 roll-0.06 degree
-R_camera2gimbal: [0.010630568168778162, -0.005789248980673708, 0.9999267351244534, -0.9995886616740502, -0.02669899594545312, 0.010472395532356843, 0.02663641254167717, -0.9996267544497518, -0.006070693137125566]
-t_camera2gimbal: [0.115368524404037, -0.047768060813373876, 0.05836069500887165]
+# 相机同理想情况的偏角: yaw0.07 pitch-1.77 roll-1.12 degree
+# 标定板到世界坐标系原点的水平距离: 1.96 m
+# 标定板同竖直摆放时的偏角: yaw92.26 pitch0.39 roll-1.52 degree
+R_camera2gimbal: [-0.0006300680323985472, -0.03084684563629979, 0.9995239242402179, -0.9998094041241314, -0.019484318694324685, -0.0012315640329051238, 0.019513032548112753, -0.999334195071553, -0.030828689908395462]
+t_camera2gimbal: [0.09879211822869594, -0.05661876507830866, 0.04718317632615113]
 #####-----cboard参数-----#####
 quaternion_canid: 0x100
 bullet_speed_canid: 0x101

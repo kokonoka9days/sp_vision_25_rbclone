@@ -99,7 +99,7 @@ void HikRobot::capture_start()
   size_t cameraIndex = 0;
   bool exist = ChoiceCamrea(device_list.pDeviceInfo, (unsigned char*)camera_sn_.c_str(), cameraIndex);
   std::cout<<"camrea exist "<<exist<<std::endl;
-  if(!exist){
+  if(false){
     tools::logger()->warn("不存在hik相机 {}",camera_sn_);
     return;
   }

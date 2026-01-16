@@ -26,6 +26,14 @@ Planner::Planner(const std::string & config_path)
 
 Plan Planner::plan(Target target, double bullet_speed)
 {
+  // std::cout<<target.getEKFXest()[0]<<std::endl;
+  // std::cout<<target.getEKFXest()[0]<<std::endl;
+
+  std::cout<<"x:"<<target.getEKFXest()[0]<<std::endl;
+  std::cout<<"y:"<<target.getEKFXest()[2]<<std::endl;
+  std::cout<<"z:"<<target.getEKFXest()[4]<<std::endl;
+
+
   // 0. Check bullet speed
   if (bullet_speed < 10 || bullet_speed > 25) {
     bullet_speed = 22;
