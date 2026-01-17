@@ -23,7 +23,7 @@ using namespace std::chrono_literals;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | configs/demo.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | configs/xiaohuang.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -58,11 +58,6 @@ int main(int argc, char * argv[])
       auto gs = gimbal.state();
       auto plan = planner.plan(target, gs.bullet_speed);
 
-    
-
-    // std::cout<<"x_v:"<<target.getEKFXest()[1]<<std::endl;
-    // std::cout<<"y_v:"<<target.getEKFXest()[3]<<std::endl;
-
       gimbal.send(
         plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
         plan.pitch_acc);
@@ -70,8 +65,8 @@ int main(int argc, char * argv[])
       // tools::draw_text(img, fmt::format("Yaw {:.2f}",plan.yaw), {40, 40}, {0, 0, 255});
       // tools::draw_text(img, fmt::format("Pitch {:.2f}", plan.pitch), {40, 40}, {0, 0, 255});
 
-      std::cout << "Yaw: " << plan.yaw * 180.0 / M_PI << std::endl;
-      std::cout << "Pitch: " << plan.pitch * 180.0 / M_PI << std::endl;
+      // std::cout << "Yaw: " << plan.yaw * 180.0 / M_PI << std::endl;
+      // std::cout << "Pitch: " << plan.pitch * 180.0 / M_PI << std::endl;
 
       auto fired = gs.bullet_count > last_bullet_count;
       last_bullet_count = gs.bullet_count;
@@ -120,7 +115,7 @@ int main(int argc, char * argv[])
 
   while (!exiter.exit()) {
     camera.read(img, t);
-    auto q = gimbal.q(t);
+    auto q = gimbal.q(t - 3ms);
 
     auto ypr = tools::eulers(q, 2, 1, 0);
 
@@ -130,6 +125,7 @@ int main(int argc, char * argv[])
         
     // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
     // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
+    if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
      tools::draw_text(img, fmt::format("DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 0, 255});
       tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
     // std::cout << "Roll: " << roll_deg << std::endl;
@@ -138,8 +134,74 @@ int main(int argc, char * argv[])
     auto armors = yolo.detect(img);
     auto targets = tracker.track(armors, t);
 
-    if (!targets.empty())
+
+    if (!targets.empty()){
       target_queue.push(targets.front());
+
+    auto& target = targets.front();
+    
+          // 获取EKF状态向量
+      Eigen::VectorXd ekf_x = target.getEKFXest();
+      
+      // 1. 计算旋转中心的世界坐标
+      // EKF状态: [x, vx, y, vy, z, vz, angle, w, r, l, h]
+      // 旋转中心: (x, y, z) = (ekf_x[0], ekf_x[2], ekf_x[4])
+      Eigen::Vector3d center_world(ekf_x[0], ekf_x[2], ekf_x[4]);
+      
+      // 2. 计算速度终点（预测0.5秒后的位置）
+      double dt = 0.5; // 预测时间
+      double scale_factor = 1.0; // 放大2倍
+      Eigen::Vector3d velocity(ekf_x[1], ekf_x[3], ekf_x[5]);
+      Eigen::Vector3d pred_center = center_world + velocity * dt * scale_factor ;
+      
+      // 3. 计算角速度方向终点
+      double w = ekf_x[7]; // 角速度
+      Eigen::Vector3d v_yaw_axis_tvec = center_world;
+      v_yaw_axis_tvec[2] += w * 0.1; // 在y方向加上角速度的影响
+
+      double speed_magnitude = std::sqrt(ekf_x[1]*ekf_x[1] + ekf_x[3]*ekf_x[3] + ekf_x[5]*ekf_x[5]);
+
+
+      // std::cout << "角速度大小: " << w * 57.3 << " °/s" << std::endl;
+      // 5. 输出速度大小到控制台
+      // std::cout << "速度大小: " << speed_magnitude << " m/s" << std::endl;
+      
+      // 4. 将世界坐标转换为图像坐标
+      // 这里需要将世界坐标转换为相机坐标，然后再投影到图像
+      // 假设solver有一个将世界坐标转换为图像坐标的函数
+      // 如果没有，你可以创建一个简单的投影函数
+      
+      // 方法1: 如果solver有直接投影点的函数
+      // auto center_img = solver.reproject_point(center_world);
+      // auto pred_point_img = solver.reproject_point(pred_center);
+      // auto v_yaw_axis_point_img = solver.reproject_point(v_yaw_axis_tvec);
+      
+      // 方法2: 使用reproject_armor函数（需要一个虚拟的装甲板）
+      // 这里假设我们有一个虚拟装甲板用于投影
+      auto center_img = solver.reproject_armor(center_world, 0.0, target.armor_type, target.name);
+      auto pred_point_img = solver.reproject_armor(pred_center, 0.0, target.armor_type, target.name);
+      auto v_yaw_axis_point_img = solver.reproject_armor(v_yaw_axis_tvec, 0.0, target.armor_type, target.name);
+      
+      // 5. 绘制速度和角速度方向
+      if (!center_img.empty() && !pred_point_img.empty()) {
+        // 绘制旋转中心
+        cv::circle(img, center_img[0], 5, cv::Scalar(51, 153, 237), -1);
+        
+        // 绘制预测点（速度方向）
+        cv::circle(img, pred_point_img[0], 8, cv::Scalar(0, 0, 255), -1);
+        
+        // 绘制速度方向线
+        cv::line(img, center_img[0], pred_point_img[0], cv::Scalar(0, 255, 255), 2);
+        
+        // 绘制角速度方向线
+        if (!v_yaw_axis_point_img.empty()) {
+          cv::line(img, center_img[0], v_yaw_axis_point_img[0], cv::Scalar(0, 255, 0), 2);
+        }
+    }
+  }
+      
+
+
     else
       target_queue.push(std::nullopt);
 

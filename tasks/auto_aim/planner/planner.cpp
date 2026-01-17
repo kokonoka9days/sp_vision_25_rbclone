@@ -29,9 +29,9 @@ Plan Planner::plan(Target target, double bullet_speed)
   // std::cout<<target.getEKFXest()[0]<<std::endl;
   // std::cout<<target.getEKFXest()[0]<<std::endl;
 
-  std::cout<<"x:"<<target.getEKFXest()[0]<<std::endl;
-  std::cout<<"y:"<<target.getEKFXest()[2]<<std::endl;
-  std::cout<<"z:"<<target.getEKFXest()[4]<<std::endl;
+  // std::cout<<"x:"<<target.getEKFXest()[0]<<std::endl;
+  // std::cout<<"y:"<<target.getEKFXest()[2]<<std::endl;
+  // std::cout<<"z:"<<target.getEKFXest()[4]<<std::endl;
 
 
   // 0. Check bullet speed
@@ -181,7 +181,7 @@ Eigen::Matrix<double, 2, 1> Planner::aim(const Target & target, double bullet_sp
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
   if (bullet_traj.unsolvable) throw std::runtime_error("Unsolvable bullet trajectory!");
 
-  return {tools::limit_rad(azim + yaw_offset_), -bullet_traj.pitch - pitch_offset_};
+  return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + pitch_offset_};
 }
 
 Trajectory Planner::get_trajectory(Target & target, double yaw0, double bullet_speed)

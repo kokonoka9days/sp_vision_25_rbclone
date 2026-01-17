@@ -74,7 +74,7 @@ std::list<Target> Tracker::track(
 
   // 发散检测
   if (state_ != "lost" && target_.diverged()) {
-    tools::logger()->debug("[Tracker] Target diverged!");
+    // tools::logger()->debug("[Tracker] Target diverged!");
     state_ = "lost";
     return {};
   }

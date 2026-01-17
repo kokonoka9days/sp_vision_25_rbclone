@@ -1,5 +1,5 @@
-enemy_color: "red"
-# enemy_color: "blue"
+# enemy_color: "red"
+enemy_color: "blue"
 
 #####-----神经网络参数-----#####
 yolo_name: yolov5
@@ -39,7 +39,7 @@ outpost_max_temp_lost_count: 75
 
 #####-----aimer参数-----#####
 yaw_offset: 0 # degree -2.5
-pitch_offset: 3 # degree 2
+pitch_offset: 0 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
@@ -55,7 +55,7 @@ auto_fire: true # 是否由自瞄控制射击
 camera_name: "hikrobot"
 camera_sn: "DA7188447"
 exposure_us: 12000
-gain: 1.0
+gain: 0.7
 vid_pid: "2bdf:0001"
 flip: true
 mirror: true
@@ -73,17 +73,20 @@ mirror: true
 #  0 -1  0
 #  0  0  1
 # R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
-R_gimbal2imubody: [1, 0, 0, 0, -1, 0, 0, 0, 1]
+R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 
 # 重投影误差: 0.0901px
 camera_matrix: [1813.554114428731, 0, 712.274797427587, 0, 1813.369040609312, 526.9183416131992, 0, 0, 1]
 distort_coeffs: [-0.06533754966400937, 0.11288365366404525, -0.0008807155121340363, -0.0006436478698530189, 0.035117257854987]
 
-# 相机同理想情况的偏角: yaw0.07 pitch-1.77 roll-1.12 degree
+## 相机同理想情况的偏角: yaw0.07 pitch-1.77 roll-1.12 degree
 # 标定板到世界坐标系原点的水平距离: 1.96 m
 # 标定板同竖直摆放时的偏角: yaw92.26 pitch0.39 roll-1.52 degree
 R_camera2gimbal: [-0.0006300680323985472, -0.03084684563629979, 0.9995239242402179, -0.9998094041241314, -0.019484318694324685, -0.0012315640329051238, 0.019513032548112753, -0.999334195071553, -0.030828689908395462]
-t_camera2gimbal: [0.09879211822869594, -0.05661876507830866, 0.04718317632615113]
+t_camera2gimbal: [0.09879211822869594, -0.05661876507830866, 0.14718317632615113]
+# _camera2gimbal第一位调yaw
+# _camera2gimbal第二位调yaw
+# _camera2gimbal第三位调pitch
 #####-----cboard参数-----#####
 quaternion_canid: 0x100
 bullet_speed_canid: 0x101
