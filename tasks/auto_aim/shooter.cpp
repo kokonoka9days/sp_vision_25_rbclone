@@ -41,7 +41,7 @@ bool Shooter::shoot(
 }
 
 bool Shooter::shoot_g(
-  const io::VisionToGimbal & vision_cmd, const auto_aim::Aimer & aimer,
+  const io::sb_VisionToGimbal & vision_cmd, const auto_aim::Aimer & aimer,
   const std::list<auto_aim::Target> & targets, const Eigen::Vector3d & gimbal_pos)
 {
   // vision_cmd.mode == 0: 不控制, 1: 控制不开火, 2: 控制开火

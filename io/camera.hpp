@@ -21,7 +21,7 @@ public:
 class Camera
 {
 public:
-  
+  std::string main_and_secondary = "main";
   Camera(const std::string & config_path);
   void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp);
 

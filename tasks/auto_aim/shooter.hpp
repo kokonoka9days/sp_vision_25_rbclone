@@ -19,7 +19,7 @@ public:
     const std::list<auto_aim::Target> & targets, const Eigen::Vector3d & gimbal_pos);
 
   bool shoot_g(
-    const io::VisionToGimbal & vision_cmd, const auto_aim::Aimer & aimer,
+    const io::sb_VisionToGimbal & vision_cmd, const auto_aim::Aimer & aimer,
     const std::list<auto_aim::Target> & targets, const Eigen::Vector3d & gimbal_pos);
 
 private:

@@ -19,6 +19,7 @@
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
 #include "tools/recorder.hpp"
+#include "tools/yaml.hpp"
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
@@ -45,10 +46,16 @@ int main(int argc, char * argv[])
   // 主相机（工业相机）
   io::Camera camera(config_path);
   
-  // 全向感知相机
-  io::USBCamera usbcam1("video0", config_path);
-  io::USBCamera usbcam2("video2", config_path);
-  io::Camera back_camera("configs/camera.yaml");
+  // 全向感知相机（工业相机）
+  std::string omnl_yaml_name = "configs/omniperception/omn_camera_left.yaml";
+  std::string omnr_yaml_name = "configs/omniperception/omn_camera_right.yaml";
+  io::Camera omn_cam1(omnl_yaml_name);
+  io::Camera omn_cam2(omnr_yaml_name);
+  auto omn_l_yaml = tools::load(omnl_yaml_name);
+  auto omn_r_yaml = tools::load(omnr_yaml_name);
+  omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
+  omn_cam2.main_and_secondary = tools::read<std::string>(omn_r_yaml, "main_and_secondary");
+  // io::Camera back_camera("configs/camera.yaml");
   
   // 改为使用Gimbal串口通信（替代CBoard）
   io::Gimbal gimbal(config_path);
@@ -59,6 +66,7 @@ int main(int argc, char * argv[])
   auto_aim::Tracker tracker(config_path, solver);
   auto_aim::Aimer aimer(config_path);
   auto_aim::Shooter shooter(config_path);
+  
   
   // MPC 规划器
   auto_aim::Planner planner(config_path);
@@ -106,10 +114,7 @@ int main(int argc, char * argv[])
               static_cast<float>(current_plan.pitch_acc)
             );
           }
-        } else {
-          // 没有目标时发送停止指令
-          gimbal.send(false, false, 0, 0, 0, 0, 0, 0);
-        }
+        } 
       }
       std::this_thread::sleep_for(10ms);
     }
@@ -129,7 +134,6 @@ int main(int argc, char * argv[])
     // 只处理自瞄模式
     if (mode != io::GimbalMode::AUTO_AIM) {
       // 非自瞄模式：发送停止指令并跳过
-      gimbal.send(false, false, 0, 0, 0, 0, 0, 0);
       std::this_thread::sleep_for(50ms);
       continue;
     }
@@ -164,13 +168,15 @@ int main(int argc, char * argv[])
     // 模式判断：如果跟踪器丢失目标，切换到全向感知模式
     if (tracker.state() == "lost") {
       // 全向感知模式
-      io::VisionToGimbal vision_cmd = decider.decide_g(
-        yolo, gimbal_euler, usbcam1, usbcam2, back_camera);
+      io::sb_VisionToGimbal vision_cmd = decider.decide_g(
+        yolo, gimbal_euler, omn_cam1, omn_cam2);
       
       if (vision_cmd.mode != 0) {
+
+        vision_cmd.work_mode = static_cast<uint8_t>(io::WorkMode::OMNI_PERCEPTION);
         // 全向感知找到目标，发送控制指令
         // 使用Gimbal的send函数直接发送VisionToGimbal结构体
-        gimbal.send(vision_cmd);
+        gimbal.sb_send(vision_cmd);
         
         // 射击判断（使用shooter_g版本）
         bool should_shoot = shooter.shoot_g(vision_cmd, aimer, targets, gimbal_euler);
@@ -179,11 +185,11 @@ int main(int argc, char * argv[])
         if (should_shoot && vision_cmd.mode == 2) {
           // 重新发送带有射击标志的指令
           vision_cmd.mode = 2;  // 控制并开火
-          gimbal.send(vision_cmd);
+          gimbal.sb_send(vision_cmd);
         }
-      } else {
-        // 全向感知也没找到目标，发送停止指令
-        gimbal.send(false, false, 0, 0, 0, 0, 0, 0);
+        else{
+          gimbal.send(false, false, 0, 0, 0, 0, 0, 0);
+        }
       }
     } else {
       // 自瞄模式 - 使用MPC
