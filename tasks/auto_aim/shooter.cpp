@@ -40,4 +40,31 @@ bool Shooter::shoot(
   return false;
 }
 
+bool Shooter::shoot_g(
+  const io::VisionToGimbal & vision_cmd, const auto_aim::Aimer & aimer,
+  const std::list<auto_aim::Target> & targets, const Eigen::Vector3d & gimbal_pos)
+{
+  // vision_cmd.mode == 0: 不控制, 1: 控制不开火, 2: 控制开火
+  // 当不控制或不开火时，直接返回false
+  if (vision_cmd.mode == 0 || vision_cmd.mode == 1 || targets.empty() || !auto_fire_) return false;
+
+  auto target_x = targets.front().ekf_x()[0];
+  auto target_y = targets.front().ekf_x()[2];
+  auto tolerance = std::sqrt(tools::square(target_x) + tools::square(target_y)) > judge_distance_
+                     ? second_tolerance_
+                     : first_tolerance_;
+  
+  // tools::logger()->debug("d(yaw) is {:.4f}", std::abs(last_yaw_ - vision_cmd.yaw));
+  if (
+    std::abs(last_yaw_ - vision_cmd.yaw) < tolerance * 2 &&  // 此时认为yaw突变不应该射击
+    std::abs(gimbal_pos[0] - last_yaw_) < tolerance &&       // 云台当前位置与上一次命令yaw的差值
+    aimer.debug_aim_point.valid) {
+    last_yaw_ = vision_cmd.yaw;
+    return true;
+  }
+
+  last_yaw_ = vision_cmd.yaw;
+  return false;
+}
+
 }  // namespace auto_aim

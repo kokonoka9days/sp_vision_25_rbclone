@@ -9,6 +9,7 @@
 #include "detection.hpp"
 #include "io/camera.hpp"
 #include "io/command.hpp"
+#include "io/gimbal/gimbal.hpp"
 #include "io/usbcamera/usbcamera.hpp"
 #include "tasks/auto_aim/armor.hpp"
 #include "tasks/auto_aim/target.hpp"
@@ -21,9 +22,13 @@ class Decider
 public:
   Decider(const std::string & config_path);
 
+  io::VisionToGimbal decide_g(
+  auto_aim::YOLO & yolo, const Eigen::Vector3d & gimbal_pos, io::USBCamera & usbcam1,
+  io::USBCamera & usbcam2, io::Camera & back_camera);
+  
   io::Command decide(
-    auto_aim::YOLO & yolo, const Eigen::Vector3d & gimbal_pos, io::USBCamera & usbcam1,
-    io::USBCamera & usbcam2, io::Camera & back_cammera);
+  auto_aim::YOLO & yolo, const Eigen::Vector3d & gimbal_pos, io::USBCamera & usbcam1,
+  io::USBCamera & usbcam2, io::Camera & back_camera);
 
   io::Command decide(
     auto_aim::YOLO & yolo, const Eigen::Vector3d & gimbal_pos, io::Camera & back_cammera);

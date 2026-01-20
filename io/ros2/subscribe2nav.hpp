@@ -3,11 +3,9 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/timer.hpp>
-#include <sp_msgs/msg/detail/autoaim_target_msg__struct.hpp>
-#include <vector>
-
 #include "sp_msgs/msg/autoaim_target_msg.hpp"
 #include "sp_msgs/msg/enemy_status_msg.hpp"
+#include <vector>
 #include "tools/thread_safe_queue.hpp"
 
 namespace io

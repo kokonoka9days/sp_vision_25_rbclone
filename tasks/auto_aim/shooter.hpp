@@ -4,6 +4,7 @@
 #include <string>
 
 #include "io/command.hpp"
+#include "io/gimbal/gimbal.hpp"
 #include "tasks/auto_aim/aimer.hpp"
 
 namespace auto_aim
@@ -17,8 +18,13 @@ public:
     const io::Command & command, const auto_aim::Aimer & aimer,
     const std::list<auto_aim::Target> & targets, const Eigen::Vector3d & gimbal_pos);
 
+  bool shoot_g(
+    const io::VisionToGimbal & vision_cmd, const auto_aim::Aimer & aimer,
+    const std::list<auto_aim::Target> & targets, const Eigen::Vector3d & gimbal_pos);
+
 private:
   io::Command last_command_;
+  double last_yaw_;
   double judge_distance_;
   double first_tolerance_;
   double second_tolerance_;
