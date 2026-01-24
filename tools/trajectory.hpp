@@ -13,7 +13,14 @@ struct Trajectory
   // v0 子弹初速度大小，单位：m/s
   // d 目标水平距离，单位：m
   // h 目标竖直高度，单位：m
+  Trajectory() = default;
   Trajectory(const double v0, const double d, const double h);
+};
+
+
+struct TrajectoryV1 : Trajectory{
+
+  TrajectoryV1(const double v0, const double d, const double h);
 };
 
 }  // namespace tools

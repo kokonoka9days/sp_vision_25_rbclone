@@ -86,6 +86,8 @@ io::Command Aimer::aim(
     auto predict_time = future + std::chrono::microseconds(static_cast<int>(prev_fly_time * 1e6));
     iteration_target[iter].predict(predict_time);
 
+    // current_target.predict(predict_time);  // 基于上一次的状态继续预测
+
     // 计算瞄准点
     auto aim_point = choose_aim_point(iteration_target[iter]);
     debug_aim_point = aim_point;
