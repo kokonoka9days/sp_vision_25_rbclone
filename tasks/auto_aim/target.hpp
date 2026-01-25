@@ -53,6 +53,28 @@ public:
     return t_;
   }
 
+  // ==================== 前哨站专用接口 Start ====================
+  inline bool isTower() const { return name == ArmorName::outpost; }
+  inline bool isTowerInitialized() const { return tower_initialized_; }
+  
+  // 获取当前正在被击打的装甲板ID (0:低, 1:中, 2:高)
+  inline int getCurrentTowerArmorId() const { return current_tower_armor_id_; }
+
+  // 判断角速度方向 (EKF状态 x[7] 为角速度)
+  // 返回 true 表示逆时针(CCW), false 表示顺时针(CW)
+  bool getTowerVyawPositive() const {
+    return ekf_.x[7] > 0;
+  }
+  
+  // 根据旋转方向预测下一块出现的装甲板ID
+  // 逆时针(CCW): 0->1->2->0 (高度升、升、大降)
+  // 顺时针(CW):  0->2->1->0 (高度大升、降、降)
+  int getNextTowerArmorId() const {
+    return getTowerVyawPositive() ? 
+        (current_tower_armor_id_ + 1) % 3 : (current_tower_armor_id_ + 2) % 3;
+  }
+  // ==================== 前哨站专用接口 End ====================
+
 private:
   int armor_num_;
   int switch_count_;
@@ -62,6 +84,17 @@ private:
 
   tools::ExtendedKalmanFilter ekf_;
   std::chrono::steady_clock::time_point t_;
+
+  // ==================== 前哨站专用变量 Start ====================
+  int current_tower_armor_id_ = 0;   // 当前装甲板编号 [0, 1, 2]
+  bool tower_initialized_ = false;   // 是否已完成初始化（锁定ID序列）
+  double last_tower_z_ = 0.0;        // 上一次观测的Z轴高度
+  double now_tower_z_ = 0.0;         // 当前观测的Z轴高度
+  
+  // 更新前哨站高度观测并尝试解算ID
+  void updateTowerInfo(const Armor & armor);
+  void solveTowerLogic();
+  // ==================== 前哨站专用变量 End ====================
 
   void update_ypda(const Armor & armor, int id);  // yaw pitch distance angle
 
