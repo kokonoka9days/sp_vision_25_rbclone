@@ -49,9 +49,9 @@ public:
     return ekf_.x;
   }
 
-  // void DrawTarget(cv::Mat img){
-    
-  // }
+  inline std::chrono::steady_clock::time_point getTimePoint(){
+    return t_;
+  }
 
 private:
   int armor_num_;

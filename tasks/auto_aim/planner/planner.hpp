@@ -38,6 +38,8 @@ public:
 
   Plan plan(Target target, double bullet_speed);
   Plan plan(std::optional<Target> target, double bullet_speed);
+  Plan rbplan(Target target, double bullet_speed, double gimbal_yaw);
+  Plan CenterAimForHero(Target target, double bullet_speed, double gimbal_yaw);
 
 private:
   double yaw_offset_;
@@ -52,7 +54,7 @@ private:
   void setup_pitch_solver(const std::string & config_path);
 
   Eigen::Matrix<double, 2, 1> aim(const Target & target, double bullet_speed);
-  Trajectory get_trajectory(Target & target, double yaw0, double bullet_speed);
+  Trajectory get_trajectory(Target  target, double yaw0, double bullet_speed);
 };
 
 }  // namespace auto_aim

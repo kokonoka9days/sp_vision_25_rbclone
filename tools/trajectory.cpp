@@ -6,7 +6,7 @@ namespace tools
 {
 constexpr double g = 9.7833;
 
-Trajectory::Trajectory(const double v0, const double d, const double h)
+TrajectoryV1::TrajectoryV1(const double v0, const double d, const double h)
 {
   auto a = g * d * d / (2 * v0 * v0);
   auto b = -d;
@@ -35,7 +35,7 @@ constexpr double mBig = 0.043;
 constexpr double kSmall = 0.000067165;
 constexpr double mSmall = 0.0032;
 
-TrajectoryV1::TrajectoryV1(const double v0, const double d, const double h){
+TrajectoryV2::TrajectoryV2(const double v0, const double d, const double h){
   double k, m;
   bool isBigBullet = v0 > 18 ? false : true;
   double fly_time = 0.;

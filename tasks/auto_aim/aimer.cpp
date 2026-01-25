@@ -210,4 +210,7 @@ AimPoint Aimer::choose_aim_point(const Target & target)
   return {false, armor_xyza_list[0]};
 }
 
+
+
+
 }  // namespace auto_aim

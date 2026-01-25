@@ -11,6 +11,8 @@
 #include "tasks/auto_aim/planner/planner.hpp"
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/tracker.hpp"
+#include "tasks/auto_aim/aimer.hpp"
+#include "tasks/auto_aim/shooter.hpp"
 #include "tasks/auto_aim/yolo.hpp"
 #include "tools/exiter.hpp"
 #include "tools/img_tools.hpp"
@@ -25,7 +27,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | configs/xiaohuang.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/xiaohuang.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -45,6 +47,8 @@ int main(int argc, char * argv[])
   auto_aim::YOLO yolo(config_path, true);
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, solver);
+  auto_aim::Aimer aimer(config_path);
+  auto_aim::Shooter shooter(config_path);
   auto_aim::Planner planner(config_path);
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
@@ -65,9 +69,16 @@ int main(int argc, char * argv[])
         plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
         plan.pitch_acc);
 
-      //command预测以及火控
-      io::Command command{false, false, 0, 0};
-      // command = aimer.aim
+      // //command预测以及火控
+      // io::Command command{false, false, 0, 0};
+      // command = aimer.aim(target, target.getTimePoint(), gs.bullet_speed);
+      // auto ypr = Eigen::Vector3d(gs.yaw, 0, 0);//yaw
+      // command.shoot = shooter.shoot(command, aimer, target, ypr);
+      // gimbal.send(
+      // command.control, command.shoot, command.yaw, 0, 0, command.pitch, 0,
+      // 0);
+
+      // //
 
       // tools::draw_text(img, fmt::format("Yaw {:.2f}",plan.yaw), {40, 40}, {0, 0, 255});
       // tools::draw_text(img, fmt::format("Pitch {:.2f}", plan.pitch), {40, 40}, {0, 0, 255});
