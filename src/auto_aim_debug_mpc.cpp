@@ -75,7 +75,7 @@ int main(int argc, char * argv[])
       data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);
 
       data["gimbal_yaw"] = gs.yaw;
-      data["gimbal_yaw_vel"] = gs.yaw_vel;
+      data["`"] = gs.yaw_vel;
       data["gimbal_pitch"] = gs.pitch;
       data["gimbal_pitch_vel"] = gs.pitch_vel;
 

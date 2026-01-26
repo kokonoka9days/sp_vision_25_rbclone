@@ -175,13 +175,13 @@ Eigen::Vector2d Decider::delta_angle(
 
   //TUDO:计算大yaw旋转角度
   if (camera == "left") {
-    delta_angle[0] = 62 + (new_fov_h_ / 2) - armors.front().center_norm.x * new_fov_h_;
+    delta_angle[0] = 120 + (new_fov_h_ / 2) - armors.front().center_norm.x * new_fov_h_;
     delta_angle[1] = armors.front().center_norm.y * new_fov_v_ - new_fov_v_ / 2;
     return delta_angle;
   }
 
   else if (camera == "right") {
-    delta_angle[0] = -62 + (new_fov_h_ / 2) - armors.front().center_norm.x * new_fov_h_;
+    delta_angle[0] = -120 + (new_fov_h_ / 2) - armors.front().center_norm.x * new_fov_h_;
     delta_angle[1] = armors.front().center_norm.y * new_fov_v_ - new_fov_v_ / 2;
     return delta_angle;
   }
