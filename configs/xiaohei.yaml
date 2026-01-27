@@ -1,12 +1,12 @@
-# enemy_color: "red"
+#enemy_color: "red"
 enemy_color: "blue"
 
 #####-----神经网络参数-----#####
 yolo_name: yolov5
-classify_model: ../assets/tiny_resnet.onnx
-yolo11_model_path: ../assets/yolo11.xml
-yolov8_model_path: ../assets/yolov8.xml
-yolov5_model_path: ../assets/yolov5.xml
+classify_model: assets/tiny_resnet.onnx
+yolo11_model_path: assets/yolo11.xml
+yolov8_model_path: assets/yolov8.xml
+yolov5_model_path: assets/yolov5.xml
 device: CPU
 min_confidence: 0.8
 use_traditional: true
@@ -38,13 +38,13 @@ max_temp_lost_count: 11
 outpost_max_temp_lost_count: 75
 
 #####-----aimer参数-----#####
-yaw_offset: 0 # degree -2.5
-pitch_offset: 5 # degree 2
+yaw_offset: -1 # degree -2.5
+pitch_offset: -1.5 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
-high_speed_delay_time: 0.09 # s
-low_speed_delay_time: 0.09 # s
+high_speed_delay_time: 0.030 # s
+low_speed_delay_time: 0.035 # s
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree
@@ -52,22 +52,22 @@ second_tolerance: 2 # 远距离射击容差，degree
 judge_distance: 2 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
-camera_name: "hikrobot"
-camera_sn: "DA7188447"
-exposure_us: 6000
-gain: 0.7
-vid_pid: "2bdf:0001"
-flip: true
-mirror: true
-
-# camera_name: "daheng"
-# camera_sn: "FDN24040486"
-# exposure_us: 4000
-# gain: 0.5
-# gamma: 0.5
-# vid_pid: "2ba2:4d55"
+# camera_name: "hikrobot"
+# camera_sn: "DA7188447"
+# exposure_us: 12000
+# gain: 0.7
+# vid_pid: "2bdf:0001"
 # flip: true
 # mirror: true
+
+camera_name: "daheng"
+camera_sn: "FDN24040486"
+exposure_us: 4000
+gain: 0.5
+gamma: 0.5
+vid_pid: "2ba2:4d55"
+flip: true
+mirror: true
 
 # -1  0  0
 #  0 -1  0
@@ -75,15 +75,15 @@ mirror: true
 # R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 
-# 重投影误差: 0.0552px
-camera_matrix: [3572.373366013139, 0, 626.0114272779299, 0, 3574.718899324038, 518.1603213691299, 0, 0, 1]
-distort_coeffs: [-0.0016831637782622174, 0.22532265563867876, -0.0027424870134692965, -0.008116943124378675, -0.6996106730380051]
+# 重投影误差: 0.1107px
+camera_matrix: [3601.7658318926547, 0, 659.5330739961643, 0, 3597.4837026262717, 495.88619081302943, 0, 0, 1]
+distort_coeffs: [-0.009464225317743472, 0.2293283343753562, 0.00043418223981597944, -0.005110261741024639, -1.9582573900640678]
 
-# 相机同理想情况的偏角: yaw-0.89 pitch-0.80 roll-2.91 degree
-# 标定板到世界坐标系原点的水平距离: 3.31 m
-# 标定板同竖直摆放时的偏角: yaw-27.11 pitch13.66 roll-4.42 degree
-R_camera2gimbal: [0.016204877803424663, -0.013208430617676983, 0.9997814457650201, -0.9985794171285421, -0.05097575373680919, 0.015511937924892848, 0.05075972441412222, -0.9986125424265321, -0.014015722807625128]
-t_camera2gimbal: [0.18225833397346017, -0.026141913562430164, 0.049826940407687315]
+# 相机同理想情况的偏角: yaw-2.05 pitch0.66 roll-3.75 degree
+# 标定板到世界坐标系原点的水平距离: 3.06 m
+# 标定板同竖直摆放时的偏角: yaw3.17 pitch9.02 roll177.33 degree
+R_camera2gimbal: [0.03486726877964135, 0.01385834156331732, 0.9992958620633645, -0.9972553018323437, -0.06486666097319851, 0.03569564765443529, 0.06531566837390321, -0.9977977062828425, 0.011558581295631427]
+t_camera2gimbal: [0.027101776167882157, -0.025460734527501874, 0.06968862890993825]
 # _camera2gimbal第一位调yaw
 # _camera2gimbal第二位调yaw
 # _camera2gimbal第三位调pitch
@@ -97,7 +97,7 @@ can_interface: "can0"
 com_port: "/dev/ttyACM0"
 
 #####-----planner-----#####
-fire_thresh: 0.003
+fire_thresh: 0.006
 
 max_yaw_acc: 50
 Q_yaw: [9e6, 0]

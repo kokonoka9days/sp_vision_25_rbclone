@@ -64,7 +64,7 @@ int main(int argc, char * argv[])
       auto gs = gimbal.state();
 
       //MPC预测以及+自家火控
-      auto plan = planner.plan(target, gs.bullet_speed);
+      auto plan = planner.plan(target, gs.bullet_speed, gs.yaw);
       gimbal.send(
         plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
         plan.pitch_acc);
@@ -100,11 +100,11 @@ int main(int argc, char * argv[])
       data["target_yaw"] = plan.target_yaw;
       data["target_pitch"] = plan.target_pitch;
 
-      data["plan_yaw"] = plan.yaw;
+      data["plan_yaw"] = plan.yaw * 57.3;
       data["plan_yaw_vel"] = plan.yaw_vel;
       data["plan_yaw_acc"] = plan.yaw_acc;
 
-      data["plan_pitch"] = plan.pitch;
+      data["plan_pitch"] = plan.pitch * 57.3;
       data["plan_pitch_vel"] = plan.pitch_vel;
       data["plan_pitch_acc"] = plan.pitch_acc;
 

@@ -34,13 +34,14 @@ class Planner
 {
 public:
   Eigen::Vector4d debug_xyza;
+  double fire_yaw, feedback_yaw;
   Planner(const std::string & config_path);
 
   Plan plan(Target target, double bullet_speed);
-  Plan plan(std::optional<Target> target, double bullet_speed);
+  Plan plan(std::optional<Target> target, double bullet_speed, double gimbal_yaw = 0);
   Plan rbplan(Target target, double bullet_speed, double gimbal_yaw);
-  Plan CenterAimForHero(Target target, double bullet_speed, double gimbal_yaw);
-
+  bool rbShoot(Target target, double gimbal_yaw);
+  Plan CenterAimForHero(Target target, double bullet_speed, double gimbal_yaw); 
 private:
   double yaw_offset_;
   double pitch_offset_;

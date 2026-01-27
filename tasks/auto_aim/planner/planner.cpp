@@ -82,6 +82,7 @@ Plan Planner::plan(Target target, double bullet_speed)
   plan.control = true;
 
   plan.target_yaw = tools::limit_rad(traj(0, HALF_HORIZON) + yaw0);
+
   plan.target_pitch = traj(2, HALF_HORIZON);
 
   plan.yaw = tools::limit_rad(yaw_solver_->work->x(0, HALF_HORIZON) + yaw0);
@@ -103,7 +104,7 @@ Plan Planner::plan(Target target, double bullet_speed)
 
 
 
-bool rbShoot(Target target, double gimbal_yaw){
+bool Planner::rbShoot(Target target, double gimbal_yaw){
     bool suggest_fire = 1;
     // auto x_est = target.getEKFXest();
     // double est_x =  x_est(0);
@@ -121,26 +122,31 @@ bool rbShoot(Target target, double gimbal_yaw){
     }
   }
 
-    double shoot_range = target.armor_type == ArmorType::big ? 22 : 12.5;
+  double target_yaw = target_armor_xyza(3);
 
-      // 打击范围计算
-    double ax = target_armor_xyza(0) - 0.5f * shoot_range * sin(target_armor_xyza(3));
-    double ay = target_armor_xyza(1) + 0.5f * shoot_range * cos(target_armor_xyza(3));
-    double bx = target_armor_xyza(0) + 0.5f * shoot_range * sin(target_armor_xyza(3));
-    double by = target_armor_xyza(1) - 0.5f * shoot_range * cos(target_armor_xyza(3));
-    double angle_a = atan2(ay, ax);
-    double angle_b = atan2(by, bx);
-    double angle_c = atan2(target_armor_xyza(1), target_armor_xyza(0));
-    double allow_fire_ang_max = angle_c - angle_b;
-    double allow_fire_ang_min = angle_c - angle_a;
+  fire_yaw = atan2(target_armor_xyza(1), target_armor_xyza(0));
+  feedback_yaw = gimbal_yaw;
 
-    // yaw_ang_ref
-    double control_delta_angle =
-        tools::limit_rad(atan2(target_armor_xyza(1), target_armor_xyza(0)) - gimbal_yaw );
-    suggest_fire = (control_delta_angle < allow_fire_ang_max &&
-                    control_delta_angle > allow_fire_ang_min);
+  double shoot_range = target.armor_type == ArmorType::big ? 0.22 : 0.12;
+
+    // 打击范围计算
+  double ax = target_armor_xyza(0) - 0.5f * shoot_range * sin(target_yaw);
+  double ay = target_armor_xyza(1) + 0.5f * shoot_range * cos(target_yaw);
+  double bx = target_armor_xyza(0) + 0.5f * shoot_range * sin(target_yaw);
+  double by = target_armor_xyza(1) - 0.5f * shoot_range * cos(target_yaw);
+  double angle_a = atan2(ay, ax);
+  double angle_b = atan2(by, bx);
+  double angle_c = atan2(target_armor_xyza(1), target_armor_xyza(0));
+  double allow_fire_ang_max = angle_c - angle_b;
+  double allow_fire_ang_min = angle_c - angle_a;
+
+  // yaw_ang_ref
+  double control_delta_angle =
+      tools::limit_rad(atan2(target_armor_xyza(1), target_armor_xyza(0)) - gimbal_yaw );
+  suggest_fire = (control_delta_angle < allow_fire_ang_max &&
+                  control_delta_angle > allow_fire_ang_min);
+  
     
-      
     return suggest_fire;
 }
 
@@ -203,7 +209,8 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   Plan plan;
   plan.control = true;
   //mubiaojaiiodu
-  plan.target_yaw = tools::limit_rad(traj(0, HALF_HORIZON) + yaw0);
+  // plan.target_yaw = tools::limit_rad(traj(0, HALF_HORIZON) + yaw0);
+  
   plan.target_pitch = traj(2, HALF_HORIZON);
 
   plan.yaw = tools::limit_rad(yaw_solver_->work->x(0, HALF_HORIZON) + yaw0);
@@ -214,16 +221,16 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   plan.pitch_vel = pitch_solver_->work->x(1, HALF_HORIZON);
   plan.pitch_acc = pitch_solver_->work->u(0, HALF_HORIZON);
 
-  auto shoot_offset_ = 0.002;
+  auto shoot_offset_ = 0.08;
   // plan.fire =
   //   std::hypot(
   //     traj(0, HALF_HORIZON + shoot_offset_) - yaw_solver_->work->x(0, HALF_HORIZON + shoot_offset_),
   //     traj(2, HALF_HORIZON + shoot_offset_) -
   //       pitch_solver_->work->x(0, HALF_HORIZON + shoot_offset_)) < fire_thresh_;
   target.predict(-shoot_offset_);
-
-  plan.fire = rbShoot(target, gimbal_yaw - yaw_offset_);
-
+  plan.fire = rbShoot(target, (gimbal_yaw )/57.3 - yaw_offset_);
+  // tools::logger()->warn("fire:{}", plan.fire);
+  plan.target_yaw = (fire_yaw + yaw_offset_ )* 57.3;
   return plan;
 }
 
@@ -297,7 +304,7 @@ Plan Planner::CenterAimForHero(Target target, double bullet_speed, double gimbal
   plan.pitch_vel = 0;
   plan.pitch_acc = 0;
 
-  auto shoot_offset_ = 0.002;
+  auto shoot_offset_ = 0.0;
   // plan.fire =
   //   std::hypot(
   //     traj(0, HALF_HORIZON + shoot_offset_) - yaw_solver_->work->x(0, HALF_HORIZON + shoot_offset_),
@@ -310,7 +317,7 @@ Plan Planner::CenterAimForHero(Target target, double bullet_speed, double gimbal
   return plan;
 }
 
-Plan Planner::plan(std::optional<Target> target, double bullet_speed)
+Plan Planner::plan(std::optional<Target> target, double bullet_speed, double gimbal_yaw)
 {
   if (!target.has_value()) return {false};
 
@@ -321,7 +328,8 @@ Plan Planner::plan(std::optional<Target> target, double bullet_speed)
 
   target->predict(future);
 
-  return plan(*target, bullet_speed);
+  // return plan(*target, bullet_speed);
+  return rbplan(*target, bullet_speed, gimbal_yaw);
 }
 
 void Planner::setup_yaw_solver(const std::string & config_path)

@@ -231,13 +231,12 @@ void Gimbal::read_thread()
     queue_.push({q, t});
 
     std::lock_guard<std::mutex> lock(mutex_);
+    auto ypr_now = tools::eulers(q, 2, 1, 0);
+    state_.yaw = ypr_now[0] * 57.3;
+    state_.pitch = ypr_now[1] * 57.3;
 
-    state_.yaw = rx_data_.yaw;
-    state_.yaw_vel = rx_data_.yaw_vel;
-    state_.pitch = rx_data_.pitch;
-    state_.pitch_vel = rx_data_.pitch_vel;
     // state_.bullet_speed = rx_data_.bullet_speed;
-    state_.bullet_speed = 21;
+    state_.bullet_speed = 25;
     state_.bullet_count = rx_data_.bullet_count;
 
     switch (rx_data_.mode) {
