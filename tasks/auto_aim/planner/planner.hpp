@@ -34,7 +34,7 @@ class Planner
 {
 public:
   Eigen::Vector4d debug_xyza;
-  double fire_yaw, feedback_yaw;
+  double aim_target_yaw;
   Planner(const std::string & config_path);
 
   Plan plan(Target target, double bullet_speed);
@@ -47,6 +47,8 @@ private:
   double pitch_offset_;
   double fire_thresh_;
   double low_speed_delay_time_, high_speed_delay_time_, decision_speed_;
+  double small_armor_tolerance, big_armor_tolerance;
+  double gimbal_control_delay;
 
   TinySolver * yaw_solver_;
   TinySolver * pitch_solver_;
