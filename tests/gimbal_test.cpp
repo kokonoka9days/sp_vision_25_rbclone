@@ -12,7 +12,7 @@
 const std::string keys =
   "{help h usage ? | | 输出命令行参数说明}"
   "{f              | | 是否开火}"
-  "{@config-path   | configs/standard3.yaml | yaml配置文件路径 }";
+  "{@config-path   | ../configs/standard3.yaml | yaml配置文件路径 }";
 
 using namespace std::chrono_literals;
 
@@ -61,7 +61,8 @@ int main(int argc, char * argv[])
     std::cout << "Yaw: " << yaw_deg << "°, ";
     std::cout << "Pitch: " << pitch_deg << "°, ";
     std::cout << "Roll: " << roll_deg << "°" << std::endl;
-
+    // std::cout<<q<<std::endl;
+// 
     auto fired = state.bullet_count > last_bullet_count;
     last_bullet_count = state.bullet_count;
 

@@ -39,12 +39,12 @@ outpost_max_temp_lost_count: 75
 
 #####-----aimer参数-----#####
 yaw_offset: 0 # degree -2.5
-pitch_offset: 0 # degree 2
+pitch_offset: 5 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
-high_speed_delay_time: 0.030 # s
-low_speed_delay_time: 0.015 # s
+high_speed_delay_time: 0.09 # s
+low_speed_delay_time: 0.09 # s
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree
@@ -52,13 +52,14 @@ second_tolerance: 2 # 远距离射击容差，degree
 judge_distance: 2 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
-camera_name: "hikrobot"
-camera_sn: "DA7188447"
-exposure_us: 12000
-gain: 0.7
+camera_name: "daheng"
+camera_sn: "FDN25030693"
+exposure_us: 20000
+gain: 0.5
+gamma: 1
 vid_pid: "2bdf:0001"
-flip: true
-mirror: true
+flip: false
+mirror: false
 
 # camera_name: "daheng"
 # camera_sn: "FDN24040486"
@@ -74,16 +75,15 @@ mirror: true
 #  0  0  1
 # R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
+# 重投影误差: 0.0974px
+camera_matrix: [1795.90549763288, 0, 684.8677488439638, 0, 1799.8065216655978, 548.538868233239, 0, 0, 1]
+distort_coeffs: [-0.07159281677234114, 0.1293513044907382, -0.002500987705455628, -0.002710119299417476, -0.030038593720518633]
 
-# 重投影误差: 0.0901px
-camera_matrix: [1813.554114428731, 0, 712.274797427587, 0, 1813.369040609312, 526.9183416131992, 0, 0, 1]
-distort_coeffs: [-0.06533754966400937, 0.11288365366404525, -0.0008807155121340363, -0.0006436478698530189, 0.035117257854987]
-
-## 相机同理想情况的偏角: yaw0.07 pitch-1.77 roll-1.12 degree
-# 标定板到世界坐标系原点的水平距离: 1.96 m
-# 标定板同竖直摆放时的偏角: yaw92.26 pitch0.39 roll-1.52 degree
-R_camera2gimbal: [-0.0006300680323985472, -0.03084684563629979, 0.9995239242402179, -0.9998094041241314, -0.019484318694324685, -0.0012315640329051238, 0.019513032548112753, -0.999334195071553, -0.030828689908395462]
-t_camera2gimbal: [0.09879211822869594, -0.05661876507830866, 0.14718317632615113]
+# 相机同理想情况的偏角: yaw-0.89 pitch-0.80 roll-2.91 degree
+# 标定板到世界坐标系原点的水平距离: 3.31 m
+# 相机同理想情况的偏角: yaw3.86 pitch-2.50 roll1.16 degree
+R_camera2gimbal: [-0.06819573998082396, -0.04212834103299546, 0.9967820945072576, -0.9974652094638142, 0.023218336960361352, -0.06726116812919845, -0.020310021117099793, -0.9988423858200065, -0.04360494618297572]
+t_camera2gimbal: [0.11004222654611233, -0.050255900128458875, 0.07831139865453404]
 # _camera2gimbal第一位调yaw
 # _camera2gimbal第二位调yaw
 # _camera2gimbal第三位调pitch
@@ -97,7 +97,7 @@ can_interface: "can0"
 com_port: "/dev/ttyACM0"
 
 #####-----planner-----#####
-fire_thresh: 0.003
+fire_thresh: 0.003 # 
 small_armor_tolerance: 0.12
 big_armor_tolerance: 0.22
 gimbal_control_delay: 0.08

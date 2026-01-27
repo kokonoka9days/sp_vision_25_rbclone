@@ -196,7 +196,11 @@ void Gimbal::read_thread()
       continue;
     }
 
-    if (rx_data_.head[0] != 0x5a || rx_data_.head[1] != 0x53) continue;
+    if (rx_data_.head[0] != 0x5a || rx_data_.head[1] != 0x53){
+      // error_count++;
+      // tools::logger()->warn("找不到帧头");
+      continue;
+    } 
 
     auto t = std::chrono::steady_clock::now();
 
@@ -210,7 +214,7 @@ void Gimbal::read_thread()
     }
 
     if (!tools::check_crc16(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
-      // tools::logger()->debug("[Gimbal] CRC16 check failed.");
+      tools::logger()->debug("[Gimbal] CRC16 check failed.");
       continue;
     }
 
@@ -224,8 +228,8 @@ void Gimbal::read_thread()
 
     Eigen::Quaterniond q = 
         Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *   // 绕Z轴旋转yaw
-        Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
-        Eigen::AngleAxisd(-roll, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
+        Eigen::AngleAxisd(-roll, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
+        Eigen::AngleAxisd(-pitch, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
 
 
     queue_.push({q, t});
