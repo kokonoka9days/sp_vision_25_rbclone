@@ -61,17 +61,18 @@ public:
   inline int getCurrentTowerArmorId() const { return current_tower_armor_id_; }
 
   // 判断角速度方向 (EKF状态 x[7] 为角速度)
-  // 返回 true 表示逆时针(CCW), false 表示顺时针(CW)
+  // 返回 true 表示逆时针(CCW, w>0), false 表示顺时针(CW, w<0)
   bool getTowerVyawPositive() const {
     return ekf_.x[7] > 0;
   }
   
   // 根据旋转方向预测下一块出现的装甲板ID
-  // 逆时针(CCW): 0->1->2->0 (高度升、升、大降)
-  // 顺时针(CW):  0->2->1->0 (高度大升、降、降)
+  // 26赛季规则推导：
+  // CCW (w>0): 观测顺序 0->2->1->0
+  // CW  (w<0): 观测顺序 0->1->2->0
   int getNextTowerArmorId() const {
     return getTowerVyawPositive() ? 
-        (current_tower_armor_id_ + 1) % 3 : (current_tower_armor_id_ + 2) % 3;
+        (current_tower_armor_id_ + 2) % 3 : (current_tower_armor_id_ + 1) % 3;
   }
   // ==================== 前哨站专用接口 End ====================
 
@@ -93,6 +94,7 @@ private:
   
   // 更新前哨站高度观测并尝试解算ID
   void updateTowerInfo(const Armor & armor);
+  // 前哨站逻辑解算核心
   void solveTowerLogic();
   // ==================== 前哨站专用变量 End ====================
 

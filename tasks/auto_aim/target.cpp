@@ -8,9 +8,9 @@
 
 namespace auto_aim
 {
-// 定义前哨站参数
+// 26赛季前哨站参数
 constexpr double TOWER_H_STEP = 0.1;        // 相邻装甲板高度差 0.1m
-constexpr double TOWER_H_JUMP_THRES = 0.15; // 判定大幅度跳变的阈值 (大于0.15认为跨了2层)
+constexpr double TOWER_H_JUMP_THRES = 0.15; // 判定大幅度跳变的阈值 (0.15m)
 
 Target::Target(
   const Armor & armor, std::chrono::steady_clock::time_point t, double radius, int armor_num,
@@ -38,20 +38,21 @@ Target::Target(
   // 旋转中心的坐标初步估计
   auto center_x = xyz[0] + r * std::cos(ypr[0]);
   auto center_y = xyz[1] + r * std::sin(ypr[0]);
-  auto center_z = xyz[2]; // 初始Z暂时认为是当前板子高度，后续EKF会收敛到基准高度(Armor 0)
+  auto center_z = xyz[2]; // 初始Z暂时认为是当前板子高度
 
   if (name == ArmorName::outpost) {
     armor_num_ = 3;
+    // 对于前哨站，如果第一帧看到的是高板，这里初始化可能会有偏差，依靠后续solveTowerLogic修正
   }
 
   // x vx y vy z vz a w r l h
-  // 注意：对于前哨站，x[4](z) 表示0号装甲板(最低)的高度，x[10](h) 表示高度阶梯(0.1)
+  // 注意：对于前哨站，x[4](z) 表示0号装甲板(最低)的高度，x[10](h) 实际上是固定的0.1
+  // 这里初始化给 0.1，后续在 h_jacobian 中将其导数置0，使其保持不变
   double initial_h = (name == ArmorName::outpost) ? TOWER_H_STEP : 0.1;
   
   Eigen::VectorXd x0{{center_x, 0, center_y, 0, center_z, 0, ypr[0], 0, r, 0, initial_h}};
   Eigen::MatrixXd P0 = P0_dig.asDiagonal();
 
-  // 防止夹角求和出现异常值
   auto x_add = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
     Eigen::VectorXd c = a + b;
     c[6] = tools::limit_rad(c[6]);
@@ -105,7 +106,7 @@ void Target::predict(double dt)
   double v1, v2;
   if (name == ArmorName::outpost) {
     v1 = 10;   
-    v2 = 200;  // 前哨站方向随机，角加速度方差给大一点允许转向
+    v2 = 200;  // 前哨站方向随机，给予较大的Yaw轴噪声允许转向
   } else {
     v1 = 100;
     v2 = 400;
@@ -115,7 +116,6 @@ void Target::predict(double dt)
   auto c = dt * dt;
   
   Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(11, 11);
-  // 填充 Q 矩阵 (简化写法，仅示意核心部分)
   Q.block<2, 2>(0, 0) = Eigen::Matrix2d{{a, b}, {b, c}} * v1; // X
   Q.block<2, 2>(2, 2) = Eigen::Matrix2d{{a, b}, {b, c}} * v1; // Y
   Q.block<2, 2>(4, 4) = Eigen::Matrix2d{{a, b}, {b, c}} * v1; // Z
@@ -132,17 +132,17 @@ void Target::predict(double dt)
 
 void Target::update(const Armor & armor)
 {
-  // 1. 前哨站逻辑预处理
+  // 1. 前哨站逻辑：记录高度并解算状态
   if (name == ArmorName::outpost) {
     updateTowerInfo(armor);
   }
 
   int id = 0;
 
-  // 2. 确定当前观测对应的装甲板 ID
+  // 2. 确定装甲板 ID
   if (name == ArmorName::outpost && tower_initialized_) {
-    // 策略：如果是已初始化的前哨站，直接信任内部状态机的判断
-    // 这样可以避免EKF在高度跳变时算错残差
+    // 策略：如果前哨站状态已初始化，完全信任内部状态机计算出的 ID
+    // 这样可以避免 EKF 在高度阶梯变化时计算出错误的 Residual
     id = current_tower_armor_id_;
   } 
   else {
@@ -155,7 +155,7 @@ void Target::update(const Armor & armor)
       xyza_i_list.push_back({xyza_list[i], i});
     }
 
-    // 按 Yaw 排序，处理回环
+    // 按 Yaw 排序
     std::sort(
       xyza_i_list.begin(), xyza_i_list.end(),
       [](const std::pair<Eigen::Vector4d, int> & a, const std::pair<Eigen::Vector4d, int> & b) {
@@ -167,13 +167,13 @@ void Target::update(const Armor & armor)
       const auto & xyza = xyza_i_list[i].first;
       Eigen::Vector3d ypd = tools::xyz2ypd(xyza.head(3));
       
-      // 角度误差
       auto angle_error = std::abs(tools::limit_rad(armor.ypr_in_world[0] - xyza[3]));
       
-      // 高度/Pitch误差 (前哨站高度很重要)
+      // 前哨站增加高度权重的匹配
       if (name == ArmorName::outpost) {
+        // x[4] 是基准高度，xyza[2] 是计算出的该ID板的高度
         double h_diff = std::abs(armor.xyz_in_world[2] - xyza[2]);
-        angle_error += h_diff * 5.0; // 加重高度权重
+        angle_error += h_diff * 5.0; 
       } else {
         angle_error += std::abs(tools::limit_rad(armor.ypd_in_world[0] - ypd[0]));
       }
@@ -183,9 +183,14 @@ void Target::update(const Armor & armor)
         min_angle_error = angle_error;
       }
     }
+    
+    // 未初始化时，暂时同步 ID，方便调试（虽然可能不准）
+    if (name == ArmorName::outpost && !tower_initialized_) {
+        current_tower_armor_id_ = id;
+    }
   }
 
-  // 3. 状态更新
+  // 3. 切换判定
   if (id != last_id) {
     is_switch_ = true;
     switch_count_++;
@@ -193,15 +198,11 @@ void Target::update(const Armor & armor)
     is_switch_ = false;
   }
   
-  // 对于前哨站，如果未初始化，我们根据匹配结果暂时更新 current_id
-  if (name == ArmorName::outpost && !tower_initialized_) {
-      current_tower_armor_id_ = id;
-  }
-
   if (id != 0) jumped = true;
   last_id = id;
   update_count_++;
 
+  // 4. EKF 更新
   update_ypda(armor, id);
 }
 
@@ -209,92 +210,94 @@ void Target::updateTowerInfo(const Armor & armor)
 {
   double current_z = armor.xyz_in_world[2];
 
-  // 初始化历史数据
   if (last_tower_z_ == 0 && now_tower_z_ == 0) {
       now_tower_z_ = current_z;
       return; 
   }
 
-  // 简单的滤波，或者当检测到显著变化时才认为是新的一次观测
-  // 这里使用一个简单的逻辑：如果Z轴变化超过 0.05m，认为可能发生了板子切换，或者在震动
-  // 为了稳健，我们每次都更新，但只在变化量足够大时触发 solveTowerLogic
-  
   double diff = current_z - now_tower_z_;
   
-  // 只有当高度变化显著（例如 > 5cm）时，我们才怀疑是否切换了装甲板
-  // 否则视为同一块板子的测量噪声
+  // 阈值判断：只有变化大于 5cm 才认为是可能的切换，否则视为震动噪声
   if (std::abs(diff) > 0.05) {
       last_tower_z_ = now_tower_z_;
       now_tower_z_ = current_z;
       
-      // 触发逻辑判断
-      if (update_count_ > 5) { // 确保EKF基本收敛了再判断逻辑
+      // 只有当 EKF 速度估计稳定后（防止初始速度为0无法判断方向），再进行逻辑解算
+      if (update_count_ > 10) { 
           solveTowerLogic();
       }
   } else {
-      // 平滑当前高度
+      // 低通滤波平滑高度
       now_tower_z_ = 0.6 * now_tower_z_ + 0.4 * current_z;
   }
 }
 
 void Target::solveTowerLogic()
 {
+    // 需要有效的上一帧数据
     if (last_tower_z_ == 0) return;
 
     double diff = now_tower_z_ - last_tower_z_;
-    bool is_ccw = getTowerVyawPositive(); 
+    bool is_ccw = getTowerVyawPositive(); // CCW > 0, CW < 0
     
-    // 如果转速太低，判断不可信，跳过
+    // 转速保护：如果角速度过小，方向不可信，跳过
     if (std::abs(ekf_.x[7]) < 0.2) return;
 
-    // 核心逻辑：检测高度的 "Big Jump" (0.2m 的跳变)
-    // 26赛季规则:
-    // CCW (逆时针): 0(低)->1(中)->2(高)->0(低) ... 
-    //    变化: +0.1, +0.1, -0.2 (Big Drop)
-    // CW  (顺时针): 0(低)->2(高)->1(中)->0(低) ...
-    //    变化: +0.2 (Big Rise), -0.1, -0.1
+    // ==================== 26赛季前哨站逻辑核心 ====================
+    // 结构：0(低)->1(中)->2(高) 逆时针分布。
+    //
+    // Case 1: 逆时针旋转 (CCW, w > 0)
+    // 视觉观测顺序：0 -> 2 -> 1 -> 0
+    // 高度变化：
+    //   0 -> 2: +0.2 (Big Rise, 大幅上升)
+    //   2 -> 1: -0.1
+    //   1 -> 0: -0.1
+    //
+    // Case 2: 顺时针旋转 (CW, w < 0)
+    // 视觉观测顺序：0 -> 1 -> 2 -> 0
+    // 高度变化：
+    //   0 -> 1: +0.1
+    //   1 -> 2: +0.1
+    //   2 -> 0: -0.2 (Big Drop, 大幅下降)
 
     if (is_ccw) {
-        // 逆时针情况
+        // 逆时针逻辑
         if (diff > TOWER_H_JUMP_THRES) { 
-            // 发现大幅下降 (2 -> 0)
-            current_tower_armor_id_ = 0;
+            // 发现大幅上升 (0->2)
+            current_tower_armor_id_ = 2;
             tower_initialized_ = true;
-            tools::logger()->info("[Tower] CCW Locked: Big Drop (2->0)");
+            tools::logger()->info("[Tower] CCW Locked: Big Rise (0->2)");
         } 
         else if (tower_initialized_ && diff < -0.05) {
-            // 已初始化且发现上升，正常递增
-            current_tower_armor_id_ = (current_tower_armor_id_ + 1) % 3;
+            // 已初始化，且高度下降 (-0.1)，符合 2->1 或 1->0
+            // 公式：(id + 2) % 3。 例: 2->1, 1->0
+            current_tower_armor_id_ = (current_tower_armor_id_ + 2) % 3;
         }
     } 
     else {
-        // 顺时针情况
+        // 顺时针逻辑
         if (diff < -TOWER_H_JUMP_THRES) {
-            // 发现大幅上升 (0 -> 2)
-            current_tower_armor_id_ = 2;
+            // 发现大幅下降 (2->0)
+            current_tower_armor_id_ = 0;
             tower_initialized_ = true;
-            tools::logger()->info("[Tower] CW Locked: Big Rise (0->2)");
+            tools::logger()->info("[Tower] CW Locked: Big Drop (2->0)");
         }
         else if (tower_initialized_ && diff > 0.05) {
-            // 已初始化且发现下降，正常递减 (0->2->1->0 序列)
-            // 2->1 (id 2 to 1), 1->0 (id 1 to 0)
-            // 逻辑: 下一个是 (current + 2) % 3。 例如 2->(4)%3=1, 1->(3)%3=0
-            current_tower_armor_id_ = (current_tower_armor_id_ + 2) % 3; 
+            // 已初始化，且高度上升 (+0.1)，符合 0->1 或 1->2
+            current_tower_armor_id_ = (current_tower_armor_id_ + 1) % 3;
         }
     }
 }
 
 void Target::update_ypda(const Armor & armor, int id)
 {
-  // 观测雅可比
   Eigen::MatrixXd H = h_jacobian(ekf_.x, id);
   auto center_yaw = std::atan2(armor.xyz_in_world[1], armor.xyz_in_world[0]);
   auto delta_angle = tools::limit_rad(armor.ypr_in_world[0] - center_yaw);
   
   Eigen::VectorXd R_dig;
-  // 调整观测噪声
   if (name == ArmorName::outpost) {
-      // 前哨站: 对 Z 轴(index 2) 给予较高信任，对 Yaw(index 3) 给予适当信任
+      // 前哨站: 高度(Z)非常重要且固定，给予高信任；Yaw 允许一定噪声
       R_dig = Eigen::VectorXd{{4e-3, 4e-3, 1e-2, 2e-2}}; 
   } else {
       R_dig = Eigen::VectorXd{{4e-3, 4e-3, log(std::abs(delta_angle) + 1) + 1,
@@ -343,41 +346,36 @@ std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
 
 bool Target::diverged() const
 {
-  // 简单的发散检测
-  auto r_ok = ekf_.x[8] > 0.1 && ekf_.x[8] < 0.6; // 半径范围
+  auto r_ok = ekf_.x[8] > 0.1 && ekf_.x[8] < 0.6;
   if (!r_ok) return true;
   return false;
 }
 
 bool Target::convergened()
 {
-  // 前哨站收敛需要更多时间
-  int limit = (name == ArmorName::outpost) ? 15 : 5;
+  int limit = (name == ArmorName::outpost) ? 15 : 5; // 前哨站需要更长收敛时间
   if (update_count_ > limit && !diverged()) {
       is_converged_ = true;
   }
   return is_converged_;
 }
 
-// 观测模型：根据状态 X 和 装甲板 ID 计算其 XYZ
+// 观测模型：计算指定ID装甲板的XYZ
 Eigen::Vector3d Target::h_armor_xyz(const Eigen::VectorXd & x, int id) const
 {
   auto angle = tools::limit_rad(x[6] + id * 2 * CV_PI / armor_num_);
-  auto r = x[8]; // 半径
+  auto r = x[8]; 
   
   if (name == ArmorName::outpost) {
-    // 26赛季前哨站观测模型
-    // x[4] 为 0号(最低)装甲板高度
-    // id 0: z
-    // id 1: z + h
-    // id 2: z + 2h
-    // x[10] 为高度差 h (约为 0.1)
+    // 26赛季前哨站：
+    // x[4] 定义为 ID=0 (最低板) 的高度
+    // ID=1 => +0.1m, ID=2 => +0.2m
     auto armor_x = x[0] - r * std::cos(angle);
     auto armor_y = x[2] - r * std::sin(angle);
-    auto armor_z = x[4] + id * x[10]; 
+    auto armor_z = x[4] + id * TOWER_H_STEP; 
     return {armor_x, armor_y, armor_z};
   } else {
-    // 平衡步兵/普通步兵逻辑
+    // 普通/平衡装甲板
     auto use_l_h = (armor_num_ == 4) && (id == 1 || id == 3);
     auto current_r = (use_l_h) ? x[8] + x[9] : x[8];
     auto armor_x = x[0] - current_r * std::cos(angle);
@@ -387,7 +385,7 @@ Eigen::Vector3d Target::h_armor_xyz(const Eigen::VectorXd & x, int id) const
   }
 }
 
-// 雅可比矩阵计算
+// 雅可比矩阵
 Eigen::MatrixXd Target::h_jacobian(const Eigen::VectorXd & x, int id) const
 {
   auto angle = tools::limit_rad(x[6] + id * 2 * CV_PI / armor_num_);
@@ -399,14 +397,13 @@ Eigen::MatrixXd Target::h_jacobian(const Eigen::VectorXd & x, int id) const
     auto dx_dr = -std::cos(angle);
     auto dy_dr = -std::sin(angle);
     
-    // Z = z_0 + id * h
-    // dZ/dz_0 (x[4]) = 1
-    // dZ/dh   (x[10]) = id
-    auto dz_dh = static_cast<double>(id);
+    // 由于我们把高度差作为常量 TOWER_H_STEP，不对 x[10] 求导
+    // 且 z = z_base + const，所以 dz/dz_base = 1, dz/dh = 0
+    auto dz_dh = 0.0;
 
     // clang-format off
     Eigen::MatrixXd H_armor_xyza{
-      {1, 0, 0, 0, 0, 0, dx_da, 0, dx_dr, 0,     0},
+      {1, 0, 0, 0, 0, 0, dx_da, 0, dx_dr, 0,     0}, // x, y, z, yaw, r, h...
       {0, 0, 1, 0, 0, 0, dy_da, 0, dy_dr, 0,     0},
       {0, 0, 0, 0, 1, 0,     0, 0,     0, 0, dz_dh},
       {0, 0, 0, 0, 0, 0,     1, 0,     0, 0,     0}
@@ -415,13 +412,12 @@ Eigen::MatrixXd Target::h_jacobian(const Eigen::VectorXd & x, int id) const
 
     Eigen::VectorXd armor_xyz = h_armor_xyz(x, id);
     Eigen::MatrixXd H_armor_ypd = tools::xyz2ypd_jacobian(armor_xyz);
-    // 构建 4x4 映射矩阵 (xyz + yaw -> yaw pitch dist yaw)
     Eigen::MatrixXd H_armor_ypda = Eigen::MatrixXd::Identity(4, 4);
     H_armor_ypda.block<3, 3>(0, 0) = H_armor_ypd;
 
     return H_armor_ypda * H_armor_xyza;
   } else {
-    // 普通装甲板/平衡步兵逻辑
+    // 普通装甲板
     auto use_l_h = (armor_num_ == 4) && (id == 1 || id == 3);
     auto r = (use_l_h) ? x[8] + x[9] : x[8];
     auto dx_da = r * std::sin(angle);
