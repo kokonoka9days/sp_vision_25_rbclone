@@ -256,26 +256,26 @@ void Target::solveTowerLogic()
 
     if (is_ccw) {
         // 逆时针情况
-        if (diff < -TOWER_H_JUMP_THRES) { 
+        if (diff > TOWER_H_JUMP_THRES) { 
             // 发现大幅下降 (2 -> 0)
             current_tower_armor_id_ = 0;
             tower_initialized_ = true;
             tools::logger()->info("[Tower] CCW Locked: Big Drop (2->0)");
         } 
-        else if (tower_initialized_ && diff > 0.05) {
+        else if (tower_initialized_ && diff < -0.05) {
             // 已初始化且发现上升，正常递增
             current_tower_armor_id_ = (current_tower_armor_id_ + 1) % 3;
         }
     } 
     else {
         // 顺时针情况
-        if (diff > TOWER_H_JUMP_THRES) {
+        if (diff < -TOWER_H_JUMP_THRES) {
             // 发现大幅上升 (0 -> 2)
             current_tower_armor_id_ = 2;
             tower_initialized_ = true;
             tools::logger()->info("[Tower] CW Locked: Big Rise (0->2)");
         }
-        else if (tower_initialized_ && diff < -0.05) {
+        else if (tower_initialized_ && diff > 0.05) {
             // 已初始化且发现下降，正常递减 (0->2->1->0 序列)
             // 2->1 (id 2 to 1), 1->0 (id 1 to 0)
             // 逻辑: 下一个是 (current + 2) % 3。 例如 2->(4)%3=1, 1->(3)%3=0
