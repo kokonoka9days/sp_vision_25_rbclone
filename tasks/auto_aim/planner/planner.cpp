@@ -130,7 +130,7 @@ bool Planner::rbShoot(Target target, double gimbal_yaw){
   aim_target_yaw = atan2(target_armor_xyza(1), target_armor_xyza(0));
   // feedback_yaw = gimbal_yaw;
 
-  double shoot_range = target.armor_type == ArmorType::big ? 0.22 : 0.12;
+  double shoot_range = target.armor_type == ArmorType::big ? big_armor_tolerance : small_armor_tolerance;
 
     // 打击范围计算
   double ax = target_armor_xyza(0) - 0.5f * shoot_range * sin(target_yaw);
@@ -224,13 +224,13 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   plan.pitch_vel = pitch_solver_->work->x(1, HALF_HORIZON);
   plan.pitch_acc = pitch_solver_->work->u(0, HALF_HORIZON);
 
-  auto shoot_offset_ = 0.08;
+  
   // plan.fire =
   //   std::hypot(
   //     traj(0, HALF_HORIZON + shoot_offset_) - yaw_solver_->work->x(0, HALF_HORIZON + shoot_offset_),
   //     traj(2, HALF_HORIZON + shoot_offset_) -
   //       pitch_solver_->work->x(0, HALF_HORIZON + shoot_offset_)) < fire_thresh_;
-  target.predict(-shoot_offset_);
+  target.predict(-gimbal_control_delay);
   plan.fire = rbShoot(target, (gimbal_yaw )/57.3 - yaw_offset_);
   // tools::logger()->warn("fire:{}", plan.fire);
   plan.target_yaw = (aim_target_yaw + yaw_offset_ )* 57.3;
