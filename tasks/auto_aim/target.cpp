@@ -42,12 +42,12 @@ Target::Target(
 
   if (name == ArmorName::outpost) {
     armor_num_ = 3;
-    // 对于前哨站，如果第一帧看到的是高板，这里初始化可能会有偏差，依靠后续solveTowerLogic修正
+    // 初始化时可能不准，依赖后续 Big Jump 修正
   }
 
   // x vx y vy z vz a w r l h
-  // 注意：对于前哨站，x[4](z) 表示0号装甲板(最低)的高度，x[10](h) 实际上是固定的0.1
-  // 这里初始化给 0.1，后续在 h_jacobian 中将其导数置0，使其保持不变
+  // 注意：对于前哨站，x[4](z) 表示0号装甲板(最低)的高度
+  // x[10](h) 这里初始化为 0.1，但在 Jacobin 中我们将其导数置0，使其保持常数
   double initial_h = (name == ArmorName::outpost) ? TOWER_H_STEP : 0.1;
   
   Eigen::VectorXd x0{{center_x, 0, center_y, 0, center_z, 0, ypr[0], 0, r, 0, initial_h}};
@@ -106,7 +106,7 @@ void Target::predict(double dt)
   double v1, v2;
   if (name == ArmorName::outpost) {
     v1 = 10;   
-    v2 = 200;  // 前哨站方向随机，给予较大的Yaw轴噪声允许转向
+    v2 = 200;  // 前哨站方向随机，给予较大的 Yaw 轴噪声允许转向
   } else {
     v1 = 100;
     v2 = 400;
@@ -132,7 +132,7 @@ void Target::predict(double dt)
 
 void Target::update(const Armor & armor)
 {
-  // 1. 前哨站逻辑：记录高度并解算状态
+  // 1. 前哨站逻辑：记录高度并解算状态 (计算 diff, 更新 current_tower_armor_id_)
   if (name == ArmorName::outpost) {
     updateTowerInfo(armor);
   }
@@ -142,7 +142,6 @@ void Target::update(const Armor & armor)
   // 2. 确定装甲板 ID
   if (name == ArmorName::outpost && tower_initialized_) {
     // 策略：如果前哨站状态已初始化，完全信任内部状态机计算出的 ID
-    // 这样可以避免 EKF 在高度阶梯变化时计算出错误的 Residual
     id = current_tower_armor_id_;
   } 
   else {
@@ -171,7 +170,7 @@ void Target::update(const Armor & armor)
       
       // 前哨站增加高度权重的匹配
       if (name == ArmorName::outpost) {
-        // x[4] 是基准高度，xyza[2] 是计算出的该ID板的高度
+        // 比较观测高度与模型预测高度 (x[4] + id*0.1)
         double h_diff = std::abs(armor.xyz_in_world[2] - xyza[2]);
         angle_error += h_diff * 5.0; 
       } else {
@@ -184,13 +183,13 @@ void Target::update(const Armor & armor)
       }
     }
     
-    // 未初始化时，暂时同步 ID，方便调试（虽然可能不准）
+    // 未初始化时，暂时同步 ID，方便调试（但此时不可信，直到 Big Jump 出现）
     if (name == ArmorName::outpost && !tower_initialized_) {
         current_tower_armor_id_ = id;
     }
   }
 
-  // 3. 切换判定
+  // 3. 切换判定 (ID 确定后进行判定)
   if (id != last_id) {
     is_switch_ = true;
     switch_count_++;
@@ -202,7 +201,7 @@ void Target::update(const Armor & armor)
   last_id = id;
   update_count_++;
 
-  // 4. EKF 更新
+  // 4. EKF 更新 (使用确定好的 ID)
   update_ypda(armor, id);
 }
 
@@ -217,12 +216,13 @@ void Target::updateTowerInfo(const Armor & armor)
 
   double diff = current_z - now_tower_z_;
   
-  // 阈值判断：只有变化大于 5cm 才认为是可能的切换，否则视为震动噪声
+  // 阈值判断：只有变化大于 5cm 才认为可能发生了切换，进入逻辑判断
+  // 否则视为车辆行进间的震动，仅做平滑
   if (std::abs(diff) > 0.05) {
       last_tower_z_ = now_tower_z_;
       now_tower_z_ = current_z;
       
-      // 只有当 EKF 速度估计稳定后（防止初始速度为0无法判断方向），再进行逻辑解算
+      // 只有当 EKF 速度估计稳定后，再进行逻辑解算
       if (update_count_ > 10) { 
           solveTowerLogic();
       }
@@ -244,46 +244,36 @@ void Target::solveTowerLogic()
     if (std::abs(ekf_.x[7]) < 0.2) return;
 
     // ==================== 26赛季前哨站逻辑核心 ====================
-    // 结构：0(低)->1(中)->2(高) 逆时针分布。
-    //
-    // Case 1: 逆时针旋转 (CCW, w > 0)
-    // 视觉观测顺序：0 -> 2 -> 1 -> 0
-    // 高度变化：
-    //   0 -> 2: +0.2 (Big Rise, 大幅上升)
-    //   2 -> 1: -0.1
-    //   1 -> 0: -0.1
-    //
-    // Case 2: 顺时针旋转 (CW, w < 0)
-    // 视觉观测顺序：0 -> 1 -> 2 -> 0
-    // 高度变化：
-    //   0 -> 1: +0.1
-    //   1 -> 2: +0.1
-    //   2 -> 0: -0.2 (Big Drop, 大幅下降)
+    // CCW (w>0): 观测顺序 0 -> 2 -> 1 -> 0
+    //    变化: 0->2 (+0.2, Big Rise), 2->1 (-0.1, Small Drop), 1->0 (-0.1, Small Drop)
+    // CW  (w<0): 观测顺序 0 -> 1 -> 2 -> 0
+    //    变化: 0->1 (+0.1, Small Rise), 1->2 (+0.1, Small Rise), 2->0 (-0.2, Big Drop)
 
     if (is_ccw) {
-        // 逆时针逻辑
+        // --- 逆时针逻辑 ---
         if (diff > TOWER_H_JUMP_THRES) { 
-            // 发现大幅上升 (0->2)
+            // 发现大幅上升 (0->2) -> 绝对锁定
             current_tower_armor_id_ = 2;
             tower_initialized_ = true;
             tools::logger()->info("[Tower] CCW Locked: Big Rise (0->2)");
         } 
         else if (tower_initialized_ && diff < -0.05) {
             // 已初始化，且高度下降 (-0.1)，符合 2->1 或 1->0
-            // 公式：(id + 2) % 3。 例: 2->1, 1->0
+            // 逆序递推: (id + 2) % 3
             current_tower_armor_id_ = (current_tower_armor_id_ + 2) % 3;
         }
     } 
     else {
-        // 顺时针逻辑
+        // --- 顺时针逻辑 ---
         if (diff < -TOWER_H_JUMP_THRES) {
-            // 发现大幅下降 (2->0)
+            // 发现大幅下降 (2->0) -> 绝对锁定
             current_tower_armor_id_ = 0;
             tower_initialized_ = true;
             tools::logger()->info("[Tower] CW Locked: Big Drop (2->0)");
         }
         else if (tower_initialized_ && diff > 0.05) {
             // 已初始化，且高度上升 (+0.1)，符合 0->1 或 1->2
+            // 顺序递推: (id + 1) % 3
             current_tower_armor_id_ = (current_tower_armor_id_ + 1) % 3;
         }
     }
@@ -367,7 +357,7 @@ Eigen::Vector3d Target::h_armor_xyz(const Eigen::VectorXd & x, int id) const
   auto r = x[8]; 
   
   if (name == ArmorName::outpost) {
-    // 26赛季前哨站：
+    // 26赛季前哨站观测模型：
     // x[4] 定义为 ID=0 (最低板) 的高度
     // ID=1 => +0.1m, ID=2 => +0.2m
     auto armor_x = x[0] - r * std::cos(angle);
@@ -397,8 +387,8 @@ Eigen::MatrixXd Target::h_jacobian(const Eigen::VectorXd & x, int id) const
     auto dx_dr = -std::cos(angle);
     auto dy_dr = -std::sin(angle);
     
-    // 由于我们把高度差作为常量 TOWER_H_STEP，不对 x[10] 求导
-    // 且 z = z_base + const，所以 dz/dz_base = 1, dz/dh = 0
+    // 由于我们把高度差作为常量，不对 x[10] 求导
+    // 且 z = z_base + const，所以 dz/dz_base(x[4]) = 1, dz/dh = 0
     auto dz_dh = 0.0;
 
     // clang-format off

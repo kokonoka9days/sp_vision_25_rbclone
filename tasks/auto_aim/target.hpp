@@ -68,8 +68,8 @@ public:
   
   // 根据旋转方向预测下一块出现的装甲板ID
   // 26赛季规则推导：
-  // CCW (w>0): 观测顺序 0->2->1->0
-  // CW  (w<0): 观测顺序 0->1->2->0
+  // CCW (w>0): 观测顺序 0->2->1->0 (逆序)
+  // CW  (w<0): 观测顺序 0->1->2->0 (顺序)
   int getNextTowerArmorId() const {
     return getTowerVyawPositive() ? 
         (current_tower_armor_id_ + 2) % 3 : (current_tower_armor_id_ + 1) % 3;
