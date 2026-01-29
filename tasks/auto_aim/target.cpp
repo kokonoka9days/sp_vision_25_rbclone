@@ -10,7 +10,7 @@ namespace auto_aim
 {
 // 26赛季前哨站参数
 constexpr double TOWER_H_STEP = 0.1;        // 相邻装甲板高度差 0.1m
-constexpr double TOWER_H_JUMP_THRES = 0.16; // 大跳变阈值
+constexpr double TOWER_H_JUMP_THRES = 0.15; // 大跳变阈值
 
 Target::Target(
   const Armor & armor, std::chrono::steady_clock::time_point t, double radius, int armor_num,
@@ -99,12 +99,10 @@ void Target::predict(double dt)
   };
   // clang-format on
 
-  // ============ [恢复 Q 矩阵参数] ============
-  // 这里完全使用你原有的逻辑，不修改数值
   double v1, v2;
   if (name == ArmorName::outpost) {
     v1 = 10;   
-    v2 = 200;  // 保持原有的大 Yaw 轴噪声，允许快速旋转
+    v2 = 200;  
   } else {
     v1 = 100;
     v2 = 400;
@@ -127,90 +125,84 @@ void Target::predict(double dt)
 
   ekf_.predict(F, Q, f);
 }
-// 1. 修改 update 函数：去掉过于敏感的重置逻辑，或者让它更宽容
+
 void Target::update(const Armor & armor)
 {
-  // 1. 前哨站逻辑
+  // 1. 前哨站逻辑：记录高度并尝试解算状态
   if (name == ArmorName::outpost) {
     updateTowerInfo(armor);
   }
 
-  int id = 0;
-
-  // 2. 确定装甲板 ID
-  // 先跑一遍几何匹配，作为底板
+  // 2. 计算几何最佳 ID (id_geom)
+  // 这是为了保证 EKF 的连续性，必须找一个角度最近的
+  int id_geom = 0;
   auto min_score = 1e10;
   const std::vector<Eigen::Vector4d> & xyza_list = armor_xyza_list();
-  std::vector<std::pair<Eigen::Vector4d, int>> xyza_i_list;
+  
+  // 寻找几何上最接近的ID
   for (int i = 0; i < armor_num_; i++) {
-      xyza_i_list.push_back({xyza_list[i], i});
-  }
-  std::sort(
-      xyza_i_list.begin(), xyza_i_list.end(),
-      [](const std::pair<Eigen::Vector4d, int> & a, const std::pair<Eigen::Vector4d, int> & b) {
-        return a.first[3] < b.first[3];
-      });
-
-  for (int i = 0; i < armor_num_; i++) {
-      const auto & xyza = xyza_i_list[i].first;
-      Eigen::Vector3d ypd = tools::xyz2ypd(xyza.head(3));
-      auto angle_error = std::abs(tools::limit_rad(armor.ypr_in_world[0] - xyza[3]));
-
+      auto angle_error = std::abs(tools::limit_rad(armor.ypr_in_world[0] - xyza_list[i][3]));
       if (name == ArmorName::outpost) {
-          // 几何匹配时，高度权重适当给，但不要太大，以免初始匹配错误
-          double h_diff = std::abs(armor.xyz_in_world[2] - xyza[2]);
+          // 几何匹配稍微带一点高度权重，防止纯重合
+          double h_diff = std::abs(armor.xyz_in_world[2] - xyza_list[i][2]);
           angle_error += h_diff * 2.0; 
       } else {
+          Eigen::Vector3d ypd = tools::xyz2ypd(xyza_list[i].head(3));
           angle_error += std::abs(tools::limit_rad(armor.ypd_in_world[0] - ypd[0]));
       }
 
       if (angle_error < min_score) {
-          id = xyza_i_list[i].second;
+          id_geom = i;
           min_score = angle_error;
       }
   }
 
-  // [关键修改] ID 融合逻辑
+  // 3. 决定用于 EKF 更新的 ID (final_ekf_id)
+  int final_ekf_id = id_geom;
+
   if (name == ArmorName::outpost) {
-      if (tower_initialized_) {
-          // 如果逻辑已锁定，优先使用逻辑计算的 ID
-          // 计算预测偏差
+      if (!tower_initialized_) {
+          // 未初始化时，逻辑ID跟随几何ID，先跑起来
+          current_tower_armor_id_ = id_geom;
+      } 
+      else {
+          // 已初始化，我们有一个 "逻辑上的 ID" (current_tower_armor_id_)
+          // 我们需要检查这个逻辑 ID 是否符合几何约束
+          
           Eigen::Vector3d predicted_xyz = h_armor_xyz(ekf_.x, current_tower_armor_id_);
           Eigen::Vector3d predicted_ypd = tools::xyz2ypd(predicted_xyz);
           double yaw_diff = std::abs(tools::limit_rad(armor.ypd_in_world[0] - predicted_ypd[0]));
-          
-          // 放宽容忍度：允许 60 度左右的偏差 (1.0 rad)
-          // 前哨站转得快时，预测偏差可能会变大，太敏感会导致频繁重置
-          if (yaw_diff < 1.0) {
-              id = current_tower_armor_id_;
+
+          // [关键修复]
+          // 如果逻辑 ID 的预测角度和观测角度偏差 < 0.6 rad (约35度)，
+          // 说明逻辑 ID 是合理的，我们优先使用它来修正 EKF。
+          // 否则，如果偏差太大，强制使用几何 ID 更新 EKF，防止模型炸裂，
+          // 但保留 current_tower_armor_id_ 的值（相信逻辑判断，等待旋转到位）。
+          if (yaw_diff < 0.6) {
+              final_ekf_id = current_tower_armor_id_;
           } else {
-              // 偏差极大，说明可能跟丢了，退回几何匹配，但保留尝试
-              tools::logger()->warn("[Tower] Mismatch! LogicID: {}, GeomID: {}", current_tower_armor_id_, id);
-              // 这里我们选择信任几何ID，并重置 current_tower 为几何 ID
-              // 但不急着把 tower_initialized_ 置为 false，除非连续多次错误（这里简化处理）
-              current_tower_armor_id_ = id; 
-              // 暂时不置 false，看看能不能救回来。如果想严格点可以置 false
-              // tower_initialized_ = false; 
+              // 偏差过大，退回几何ID进行更新
+              final_ekf_id = id_geom;
+              // 此时不重置 tower_initialized_，因为可能是短暂的跟丢或延迟
           }
-      } else {
-          // 未初始化时，直接同步几何 ID，为 solveTowerLogic 提供基础
-          current_tower_armor_id_ = id;
       }
   }
 
-  // 3. 切换判定
-  if (id != last_id) {
+  // 4. 切换判定
+  if (final_ekf_id != last_id) {
     is_switch_ = true;
     switch_count_++;
   } else {
     is_switch_ = false;
   }
   
-  if (id != 0) jumped = true;
-  last_id = id;
+  if (final_ekf_id != 0) jumped = true;
+  last_id = final_ekf_id;
   update_count_++;
 
-  update_ypda(armor, id);
+  // 5. EKF 更新
+  // 无论逻辑判定如何，这里喂进去的一定是符合几何约束的 ID
+  update_ypda(armor, final_ekf_id);
 }
 
 void Target::updateTowerInfo(const Armor & armor)
@@ -228,7 +220,6 @@ void Target::updateTowerInfo(const Armor & armor)
       last_tower_z_ = now_tower_z_;
       now_tower_z_ = current_z;
       
-      // 只有EKF稳定追踪一段时间后才启用逻辑判断
       if (update_count_ > 20) { 
           solveTowerLogic();
       }
@@ -236,6 +227,7 @@ void Target::updateTowerInfo(const Armor & armor)
       now_tower_z_ = 0.6 * now_tower_z_ + 0.4 * current_z;
   }
 }
+
 void Target::solveTowerLogic()
 {
     if (last_tower_z_ == 0) return;
@@ -243,55 +235,42 @@ void Target::solveTowerLogic()
     double diff = now_tower_z_ - last_tower_z_;
     bool is_ccw = getTowerVyawPositive(); 
     
-    // 转速太低不判断，防止误判方向
-    if (std::abs(ekf_.x[7]) < 0.2) return;
-
-    // 逻辑修正：
-    // 不再检查 tower_initialized_。只要高度变化符合物理特征，就更新 ID。
-    // 这样即使初始化断了，一旦出现 0.1m 的变化，也能把 ID 接上。
+    // [关键修复] 提高转速阈值
+    // 防止低速震荡时方向误判导致逻辑反转
+    if (std::abs(ekf_.x[7]) < 0.4) return;
 
     if (is_ccw) {
         // CCW: 0 -> 2 -> 1 -> 0
-        // 0 -> 2: +0.2 (Big Rise)
-        // 2 -> 1: -0.1 (Small Drop)
-        // 1 -> 0: -0.1 (Small Drop)
-
         if (diff > 0.14) { 
-            // 大幅上升，必须是 0->2
+            // 0 -> 2 (Big Rise)
             current_tower_armor_id_ = 2;
             tower_initialized_ = true;
-            tools::logger()->info("[Tower] CCW Locked: Big Rise (0->2)");
+            tools::logger()->info("[Tower] CCW Locked: Rise (0->2)");
         } 
         else if (diff < -0.06 && diff > -0.14) {
-            // 小幅下降，可能是 2->1 或 1->0
-            // 无论当前是几，逆时针的小下降就是 ID 减 1 (模3)
-            // (id + 2) % 3 等价于 减1
-            int next_id = (current_tower_armor_id_ + 2) % 3;
-            tools::logger()->info("[Tower] CCW Step: Drop ({:.1f} -> {:.1f}) ID:{}->{}", last_tower_z_, now_tower_z_, current_tower_armor_id_, next_id);
-            current_tower_armor_id_ = next_id;
+            // 2 -> 1 or 1 -> 0 (Small Drop)
+            // (id + 2) % 3 相当于 id - 1
+            current_tower_armor_id_ = (current_tower_armor_id_ + 2) % 3;
+            tools::logger()->info("[Tower] CCW Step: Drop -> ID {}", current_tower_armor_id_);
         }
     } 
     else {
         // CW: 0 -> 1 -> 2 -> 0
-        // 0 -> 1: +0.1 (Small Rise)
-        // 1 -> 2: +0.1 (Small Rise)
-        // 2 -> 0: -0.2 (Big Drop)
-
         if (diff < -0.14) {
-            // 大幅下降，必须是 2->0
+            // 2 -> 0 (Big Drop)
             current_tower_armor_id_ = 0;
             tower_initialized_ = true;
-            tools::logger()->info("[Tower] CW Locked: Big Drop (2->0)");
+            tools::logger()->info("[Tower] CW Locked: Drop (2->0)");
         }
         else if (diff > 0.06 && diff < 0.14) {
-            // 小幅上升，可能是 0->1 或 1->2
-            // 无论当前是几，顺时针的小上升就是 ID 加 1 (模3)
-            int next_id = (current_tower_armor_id_ + 1) % 3;
-            tools::logger()->info("[Tower] CW Step: Rise ({:.1f} -> {:.1f}) ID:{}->{}", last_tower_z_, now_tower_z_, current_tower_armor_id_, next_id);
-            current_tower_armor_id_ = next_id;
+            // 0 -> 1 or 1 -> 2 (Small Rise)
+            // (id + 1) % 3
+            current_tower_armor_id_ = (current_tower_armor_id_ + 1) % 3;
+            tools::logger()->info("[Tower] CW Step: Rise -> ID {}", current_tower_armor_id_);
         }
     }
 }
+
 void Target::update_ypda(const Armor & armor, int id)
 {
   Eigen::MatrixXd H = h_jacobian(ekf_.x, id);
@@ -299,18 +278,13 @@ void Target::update_ypda(const Armor & armor, int id)
   auto delta_angle = tools::limit_rad(armor.ypr_in_world[0] - center_yaw);
   
   Eigen::VectorXd R_dig;
-  // ============ [恢复 R 矩阵参数] ============
-  // 恢复为你原来代码中的逻辑，不再动态调整噪声
-  // if (name == ArmorName::outpost) {
-  //     // 保持你原有的设定，或者参考平衡步兵的设定
-  //     // 假设原代码对前哨站有特殊设定，这里给一个稳定的值
-  //     // 如果你之前代码里这里有特定值，请改回那个值。
-  //     // 下面这个是比较通用的稳健值：
-  //     R_dig = Eigen::VectorXd{{4e-3, 4e-3, 1e-2, 2e-2}}; 
-  // } else {
+  // 保持原有观测噪声参数
+  if (name == ArmorName::outpost) {
+      R_dig = Eigen::VectorXd{{4e-3, 4e-3, 1e-2, 2e-2}}; 
+  } else {
       R_dig = Eigen::VectorXd{{4e-3, 4e-3, log(std::abs(delta_angle) + 1) + 1,
                            log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2}};
-  // }
+  }
 
   Eigen::MatrixXd R = R_dig.asDiagonal();
 
@@ -416,7 +390,7 @@ Eigen::MatrixXd Target::h_jacobian(const Eigen::VectorXd & x, int id) const
 
     return H_armor_ypda * H_armor_xyza;
   } else {
-    // 普通装甲板保持不变
+    // 普通装甲板部分
     auto use_l_h = (armor_num_ == 4) && (id == 1 || id == 3);
     auto r = (use_l_h) ? x[8] + x[9] : x[8];
     auto dx_da = r * std::sin(angle);
