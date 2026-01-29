@@ -53,12 +53,22 @@ public:
     return t_;
   }
 
+  // 新增：获取旋转方向（前哨站专用）
+  inline double getOmegaSign() const { return omega_sign_; }
+
 private:
   int armor_num_;
   int switch_count_;
   int update_count_;
 
   bool is_switch_, is_converged_;
+
+  // 前哨站专用成员
+  bool is_outpost_;  // 是否是前哨站
+  double fixed_radius_;  // 固定半径（前哨站）
+  double fixed_omega_;  // 固定角速度（前哨站）
+  double omega_sign_;   // 旋转方向：+1或-1（前哨站）
+  std::vector<double> height_offsets_;  // 各装甲板高度偏移（前哨站）
 
   tools::ExtendedKalmanFilter ekf_;
   std::chrono::steady_clock::time_point t_;
