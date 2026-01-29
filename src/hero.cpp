@@ -64,7 +64,7 @@ int main(int argc, char * argv[])
       auto gs = gimbal.state();
 
       //MPC预测以及+自家火控
-      auto plan = planner.plan(target, gs.bullet_speed, gs.yaw);
+      auto plan = planner.plan(target, gs.bullet_speed, gs.yaw, auto_aim::Planner::ShootStrategy::rbHero);
       gimbal.send(
         plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
         plan.pitch_acc);

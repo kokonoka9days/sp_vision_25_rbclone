@@ -7,6 +7,7 @@
 
 #include "tasks/auto_aim/target.hpp"
 #include "tinympc/tiny_api.hpp"
+#include "tools/logger.hpp"
 
 namespace auto_aim
 {
@@ -33,15 +34,51 @@ struct Plan
 class Planner
 {
 public:
+  enum ShootStrategy{//开火策略
+    Dynamics,          //动力学
+    rbSuppressiveFire, //旧火控,火力压制
+    rbHero             //英雄
+  };
   Eigen::Vector4d debug_xyza;
   double aim_target_yaw;
   Planner(const std::string & config_path);
 
   Plan plan(Target target, double bullet_speed);
-  Plan plan(std::optional<Target> target, double bullet_speed, double gimbal_yaw = 0);
+  inline Plan plan(std::optional<Target> target, 
+            double bullet_speed, 
+            double gimbal_yaw = 0,
+            ShootStrategy strategy = Dynamics){
+
+    if (!target.has_value()) return {false};
+
+    double delay_time =
+      std::abs(target->ekf_x()[7]) > decision_speed_ ? high_speed_delay_time_ : low_speed_delay_time_;
+
+    auto future = std::chrono::steady_clock::now() + std::chrono::microseconds(int(delay_time * 1e6));
+
+    target->predict(future);
+
+    switch (strategy)
+    {
+    case Dynamics:
+      return plan(*target, bullet_speed);
+      break;
+    case rbSuppressiveFire:
+      return rbplan(*target, bullet_speed, gimbal_yaw);
+      break;
+    case rbHero:
+      return rbHeroplan(*target, bullet_speed, gimbal_yaw);
+      break;
+    default:
+      // tools::logger()->warn("planner model error!");
+      break;
+    }
+    
+    
+  }
   Plan rbplan(Target target, double bullet_speed, double gimbal_yaw);
   bool rbShoot(Target target, double gimbal_yaw);
-  Plan CenterAimForHero(Target target, double bullet_speed, double gimbal_yaw); 
+  Plan rbHeroplan(Target target, double bullet_speed, double gimbal_yaw); 
 private:
   double yaw_offset_;
   double pitch_offset_;

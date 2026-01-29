@@ -238,7 +238,7 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
 }
 
 
-Plan Planner::CenterAimForHero(Target target, double bullet_speed, double gimbal_yaw){
+Plan Planner::rbHeroplan(Target target, double bullet_speed, double gimbal_yaw){
 // 0. Check bullet speed
   if (bullet_speed < 10 || bullet_speed > 25) {
     bullet_speed = 22;
@@ -320,20 +320,20 @@ Plan Planner::CenterAimForHero(Target target, double bullet_speed, double gimbal
   return plan;
 }
 
-Plan Planner::plan(std::optional<Target> target, double bullet_speed, double gimbal_yaw)
-{
-  if (!target.has_value()) return {false};
+// Plan Planner::plan(std::optional<Target> target, double bullet_speed, double gimbal_yaw)
+// {
+//   if (!target.has_value()) return {false};
 
-  double delay_time =
-    std::abs(target->ekf_x()[7]) > decision_speed_ ? high_speed_delay_time_ : low_speed_delay_time_;
+//   double delay_time =
+//     std::abs(target->ekf_x()[7]) > decision_speed_ ? high_speed_delay_time_ : low_speed_delay_time_;
 
-  auto future = std::chrono::steady_clock::now() + std::chrono::microseconds(int(delay_time * 1e6));
+//   auto future = std::chrono::steady_clock::now() + std::chrono::microseconds(int(delay_time * 1e6));
 
-  target->predict(future);
+//   target->predict(future);
 
-  // return plan(*target, bullet_speed);
-  return rbplan(*target, bullet_speed, gimbal_yaw);
-}
+//   // return plan(*target, bullet_speed);
+//   return rbplan(*target, bullet_speed, gimbal_yaw);
+// }
 
 void Planner::setup_yaw_solver(const std::string & config_path)
 {

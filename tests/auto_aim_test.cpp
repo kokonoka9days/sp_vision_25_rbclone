@@ -9,6 +9,7 @@
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/tracker.hpp"
 #include "tasks/auto_aim/yolo.hpp"
+#include "tasks/auto_aim/detector.hpp"
 #include "tools/exiter.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
@@ -17,10 +18,10 @@
 
 const std::string keys =
   "{help h usage ? |                   | 输出命令行参数说明 }"
-  "{config-path c  | configs/demo.yaml | yaml配置文件的路径}"
+  "{config-path c  | ../configs/demo.yaml | yaml配置文件的路径}"
   "{start-index s  | 0                 | 视频起始帧下标    }"
   "{end-index e    | 0                 | 视频结束帧下标    }"
-  "{@input-path    | assets/demo/demo  | avi和txt文件的路径}";
+  "{@input-path    | ../assets/demo/demo  | avi和txt文件的路径}";
 
 int main(int argc, char * argv[])
 {
@@ -44,6 +45,7 @@ int main(int argc, char * argv[])
   std::ifstream text(text_path);
 
   auto_aim::YOLO yolo(config_path);
+  auto_aim::Detector traditional(config_path, true);
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, solver);
   auto_aim::Aimer aimer(config_path);
@@ -77,6 +79,8 @@ int main(int argc, char * argv[])
 
     auto yolo_start = std::chrono::steady_clock::now();
     auto armors = yolo.detect(img, frame_count);
+    // auto traditional_start = std::chrono::steady_clock::now();
+    // auto armors = traditional.detect(img, frame_count);
 
     auto tracker_start = std::chrono::steady_clock::now();
     auto targets = tracker.track(armors, timestamp);
