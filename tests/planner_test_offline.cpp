@@ -15,7 +15,7 @@ const std::string keys =
   "{help h usage ? |     | 输出命令行参数说明    }"
   "{d              | 3.0 | Target距离(m)       }"
   "{w              | 5.0 | Target角速度(rad/s) }"
-  "{@config-path   |     | yaml配置文件路径     }";
+  "{@config-path   |  ../configs/demo.yaml   | yaml配置文件路径     }";
 
 int main(int argc, char * argv[])
 {
@@ -39,7 +39,9 @@ int main(int argc, char * argv[])
   while (!exiter.exit()) {
     target.predict(0.01);
 
+    auto plan_start = std::chrono::steady_clock::now();
     auto plan = planner.plan(target, 22);
+    tools::logger()->info("plan: {:.1f}ms", tools::delta_time(std::chrono::steady_clock::now(), plan_start)* 1e3);
 
     nlohmann::json data;
     data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);

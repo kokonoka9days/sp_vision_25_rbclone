@@ -21,7 +21,7 @@ const std::string keys =
   "{config-path c  | ../configs/demo.yaml | yaml配置文件的路径}"
   "{start-index s  | 0                 | 视频起始帧下标    }"
   "{end-index e    | 0                 | 视频结束帧下标    }"
-  "{@input-path    | ../assets/demo/demo  | avi和txt文件的路径}";
+  "{@input-path    | ../records_outpost/outpost  | avi和txt文件的路径}";
 
 int main(int argc, char * argv[])
 {
@@ -65,7 +65,7 @@ int main(int argc, char * argv[])
 
   for (int frame_count = start_index; !exiter.exit(); frame_count++) {
     if (end_index > 0 && frame_count > end_index) break;
-
+    // auto inshow_start = std::chrono::steady_clock::now();
     video.read(img);
     if (img.empty()) break;
 
@@ -189,13 +189,16 @@ int main(int argc, char * argv[])
       data["nees_fail"] = target.ekf().data.at("nees_fail");
       data["recent_nis_failures"] = target.ekf().data.at("recent_nis_failures");
     }
-
+    
     plotter.plot(data);
 
     cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
     cv::imshow("reprojection", img);
-    auto key = cv::waitKey(30);
+    auto key = cv::waitKey(1);
     if (key == 'q') break;
+
+    //  tools::logger()->info(
+    //     "imshow : {:.1f}ms",  tools::delta_time(std::chrono::steady_clock::now(), inshow_start) * 1e3);
   }
 
   return 0;
