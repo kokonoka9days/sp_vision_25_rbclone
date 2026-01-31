@@ -144,7 +144,7 @@ int main(int argc, char * argv[])
     // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
     // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
     if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
-     tools::draw_text(img, fmt::format("DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 0, 255});
+     tools::draw_text(img, fmt::format( "DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 0, 255});
       tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
     // std::cout << "Roll: " << roll_deg << std::endl;
 

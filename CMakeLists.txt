@@ -27,6 +27,7 @@ add_subdirectory(io)
 add_subdirectory(tasks/auto_aim)
 add_subdirectory(tasks/auto_buff)
 add_subdirectory(tasks/omniperception)
+add_subdirectory(sp_ws/src)
 
 ####################src###################
 add_executable(standard src/standard.cpp)
@@ -119,7 +120,21 @@ find_package(rclcpp QUIET)
 find_package(std_msgs QUIET)
 find_package(rosidl_typesupport_cpp QUIET)
 find_package(sp_msgs QUIET)
+
 # 只有在找到 ROS 环境时才会添加 sentry 和 publish_test
+if(ament_cmake_FOUND)
+    message(STATUS "找到ament_cmake_FOUND")
+endif()
+if(rclcpp_FOUND)
+    message(STATUS "找到rclcpp_FOUND")
+endif()
+if(rosidl_typesupport_cpp_FOUND)
+    message(STATUS "找到rosidl_typesupport_cpp_FOUND")
+endif()
+if(sp_msgs_FOUND)
+    message(STATUS "找到sp_msgs_FOUND")
+endif()
+
 if(ament_cmake_FOUND AND rclcpp_FOUND AND std_msgs_FOUND AND rosidl_typesupport_cpp_FOUND AND sp_msgs_FOUND)
     # 编译 sentry 和 publish_test
     add_executable(sentry src/sentry.cpp)

@@ -115,7 +115,7 @@ void HikRobot::capture_start()
     return;
   }
 
-  ret = MV_CC_CreateHandle(&handle_, device_list.pDeviceInfo[0]);
+  ret = MV_CC_CreateHandle(&handle_, device_list.pDeviceInfo[cameraIndex]);
   if (ret != MV_OK) {
     tools::logger()->warn("MV_CC_CreateHandle failed: {:#x}", ret);
     return;
