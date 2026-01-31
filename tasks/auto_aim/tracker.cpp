@@ -79,14 +79,13 @@ std::list<Target> Tracker::track(
     return {};
   }
 
-  // 收敛效果检测：
   if (
-    std::accumulate(
-      target_.ekf().recent_nis_failures.begin(), target_.ekf().recent_nis_failures.end(), 0) >=
-    (0.4 * target_.ekf().window_size)) {
-    tools::logger()->debug("[Target] Bad Converge Found!");
-    state_ = "lost";
-    return {};
+  std::accumulate(
+    target_.ekf().recent_nis_failures.begin(), target_.ekf().recent_nis_failures.end(), 0) >=
+  (0.4 * target_.ekf().window_size)) {
+      tools::logger()->debug("[Target] Bad Converge Found!");
+      state_ = "lost";
+      return {};
   }
 
   if (state_ == "lost") return {};
@@ -262,7 +261,6 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
 
   return true;
 }
-
 bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t)
 {
   target_.predict(t);
@@ -277,16 +275,18 @@ bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock
 
   if (found_count == 0) return false;
 
+  // 只更新最左侧的装甲板
   for (auto & armor : armors) {
     if (
       armor.name != target_.name || armor.type != target_.armor_type
-      //  || armor.center.x != min_x
+      || armor.center.x != min_x  // 恢复这个条件，确保只更新一个装甲板
     )
       continue;
 
     solver_.solve(armor);
 
     target_.update(armor);
+    break; // 找到第一个匹配的就退出
   }
 
   return true;

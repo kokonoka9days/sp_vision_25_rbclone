@@ -6,6 +6,7 @@ namespace tools
 {
 constexpr double g = 9.7833;
 
+//同济原弹道模型
 TrajectoryV1::TrajectoryV1(const double v0, const double d, const double h)
 {
   auto a = g * d * d / (2 * v0 * v0);
@@ -30,6 +31,7 @@ TrajectoryV1::TrajectoryV1(const double v0, const double d, const double h)
   fly_time = (t_1 < t_2) ? t_1 : t_2;
 }
 
+//V2空气阻力弹道模型
 constexpr double kBig = 0.000429838;
 constexpr double mBig = 0.043;
 constexpr double kSmall = 0.000067165;

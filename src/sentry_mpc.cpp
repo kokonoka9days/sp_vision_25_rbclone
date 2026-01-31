@@ -23,7 +23,8 @@
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | configs/sentry_mpc.yaml | 位置参数，yaml配置文件路径 }";
+  "{short_camera   | ../configs/omniperception/short_camera.yaml | 短焦相机配置文件路径 }"
+  "{long_camera    | ../configs/omniperception/long_camera.yaml  | 长焦相机配置文件路径 }";
 
 using namespace std::chrono_literals;
 
@@ -38,13 +39,16 @@ int main(int argc, char * argv[])
     cli.printMessage();
     return 0;
   }
-  auto config_path = cli.get<std::string>(0);
+  auto short_camera_config_path = cli.get<std::string>("short_camera");
+  auto long_camera_config_path = cli.get<std::string>("long_camera");
 
   // ROS2 通信
   io::ROS2 ros2;
   
   // 主相机（工业相机）
-  io::Camera camera(config_path);
+  io::Camera short_camera(short_camera_config_path);
+  io::Camera long_camera(long_camera_config_path);
+  
   
   // 全向感知相机（工业相机）
   std::string omnl_yaml_name = "configs/omniperception/omn_camera_left.yaml";
@@ -58,21 +62,22 @@ int main(int argc, char * argv[])
   // io::Camera back_camera("configs/camera.yaml");
   
   // 改为使用Gimbal串口通信（替代CBoard）
-  io::Gimbal gimbal(config_path);
+  io::Gimbal gimbal(short_camera_config_path);
   
   // 视觉模块
-  auto_aim::YOLO yolo(config_path, false);  // 主相机YOLO
-  auto_aim::Solver solver(config_path);
-  auto_aim::Tracker tracker(config_path, solver);
-  auto_aim::Aimer aimer(config_path);
-  auto_aim::Shooter shooter(config_path);
+  auto_aim::YOLO yolo(short_camera_config_path, false);  // 主相机YOLO
+  auto_aim::Solver short_camera_solver(short_camera_config_path);
+  auto_aim::Tracker tracker(short_camera_config_path, short_camera_solver);//默认短焦
+  auto_aim::Aimer aimer(short_camera_config_path);
+  auto_aim::Shooter shooter(short_camera_config_path);
   
   
   // MPC 规划器
-  auto_aim::Planner planner(config_path);
+  auto_aim::Planner short_camera_planner(short_camera_config_path);
+  auto_aim::Planner long_camera_planner(long_camera_config_path);
   
   // 全向感知决策器
-  omniperception::Decider decider(config_path);
+  omniperception::Decider decider(short_camera_config_path);
   
   // 线程安全队列（用于MPC规划线程）
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
@@ -99,7 +104,7 @@ int main(int argc, char * argv[])
         if (target.has_value()) {
           // 使用MPC规划器计算控制指令
           auto gs = gimbal.state();
-          current_plan = planner.plan(*target, gs.bullet_speed);
+          current_plan = short_camera_planner.plan(*target, gs.bullet_speed);
           
           if (current_plan.control) {
             // 发送MPC控制指令到云台
