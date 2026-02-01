@@ -273,6 +273,7 @@ int main(int argc, char * argv[])
       if (!targets.empty()) {
         // 将目标放入队列供MPC线程处理
         target_queue.push(targets.front());
+        bincameras.ChangeTheScope(targets.front(), tracker);
       } else {
         target_queue.push(std::nullopt);
       }

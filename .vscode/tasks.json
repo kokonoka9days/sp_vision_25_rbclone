@@ -6,7 +6,7 @@
         {
             "label": "build",
             "type": "shell",
-            "command": "source install/setup.bash; ./make.sh",
+            "command": "./make.sh; source ./sp_ws/install/setup.bash ",
             "group": {
                 "kind": "build",
                 "isDefault": true

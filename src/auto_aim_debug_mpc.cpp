@@ -138,7 +138,7 @@ int main(int argc, char * argv[])
     if (!targets.empty()){
       target_queue.push(targets.front());
 
-    auto& target = targets.front();
+      auto& target = targets.front();
     
           // 获取EKF状态向量
       Eigen::VectorXd ekf_x = target.getEKFXest();
