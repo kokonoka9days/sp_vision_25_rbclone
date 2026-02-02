@@ -295,6 +295,7 @@ void Target::update(const Armor & armor)
       is_switch_ = true;
       UpdateTowerArmor(armor.xyz_in_world[2]);
       tower_armor_hs[id] = armor.xyz_in_world[2];
+      this->ekf_x()(4) = armor.xyz_in_world[2];
     } else {
       // UpdateNowArmorH(armor.xyz_in_world[2]);
       is_switch_ = false;
