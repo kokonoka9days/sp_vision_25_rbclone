@@ -236,8 +236,8 @@ void Gimbal::read_thread()
 
     Eigen::Quaterniond q = 
         Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *   // 绕Z轴旋转yaw
-        Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
-        Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
+        Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
+        Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
 
 
     queue_.push({q, t});
