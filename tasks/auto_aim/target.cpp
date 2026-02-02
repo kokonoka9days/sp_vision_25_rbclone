@@ -295,7 +295,21 @@ void Target::update(const Armor & armor)
       is_switch_ = true;
       UpdateTowerArmor(armor.xyz_in_world[2]);
       tower_armor_hs[id] = armor.xyz_in_world[2];
-      this->ekf_x()(4) = armor.xyz_in_world[2];
+      // this->ekf_x()(4) = armor.xyz_in_world[2];
+      if(name == ArmorName::outpost){
+        double dz = tower_armor_hs[id] - tower_armor_hs[0];
+        int dz_px = dz > 0 ? 1 : -1;
+        int dz_mu;
+        if(abs(dz) > 0.16){
+          dz_mu = 2;
+        }else if(abs(dz) < 0.16 && abs(dz) > 0.05){
+          dz_mu = 1;
+        }else if(abs(dz) < 0.05){
+          dz_mu = 0;
+        }
+        double zc = armor.xyz_in_world[2] - TOWTER_ARMOR_DH * dz_px * dz_mu;
+        this->ekf_x()(4) = zc;
+      }
     } else {
       // UpdateNowArmorH(armor.xyz_in_world[2]);
       is_switch_ = false;
