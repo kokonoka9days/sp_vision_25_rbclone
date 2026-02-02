@@ -140,8 +140,14 @@ bool Planner::rbShoot(Target target, double gimbal_yaw){
   double angle_a = atan2(ay, ax);
   double angle_b = atan2(by, bx);
   double angle_c = atan2(target_armor_xyza(1), target_armor_xyza(0));
-  double allow_fire_ang_max = angle_c - angle_b;
-  double allow_fire_ang_min = angle_c - angle_a;
+  // double allow_fire_ang_max = angle_c - angle_b;
+  // double allow_fire_ang_min = angle_c - angle_a;
+  double allow_fire_ang_max = std::max(angle_a, angle_b) - angle_c;
+  double allow_fire_ang_min = std::min(angle_a, angle_b) - angle_c;
+  allow_fire_ang_max = tools::limit_rad(allow_fire_ang_max);
+  allow_fire_ang_min = tools::limit_rad(allow_fire_ang_min);
+  
+
 
   // yaw_ang_ref
   double control_delta_angle =
