@@ -123,6 +123,8 @@ private:
   tools::ThreadSafeQueue<std::tuple<Eigen::Quaterniond, std::chrono::steady_clock::time_point>>
     queue_{1000};
 
+  int gimbal_yaw2vision, gimbal_pitch2vision, gimbal_roll2vision;
+
   bool read(uint8_t * buffer, size_t size);
   void read_thread();
   void reconnect();

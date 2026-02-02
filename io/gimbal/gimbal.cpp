@@ -12,6 +12,10 @@ Gimbal::Gimbal(const std::string & config_path)
   auto yaml = tools::load(config_path);
   auto com_port = tools::read<std::string>(yaml, "com_port");
 
+  this->gimbal_yaw2vision = tools::read<int>(yaml, "gimbal_y1");
+  this->gimbal_pitch2vision = tools::read<int>(yaml, "gimbal_p2");
+  this->gimbal_roll2vision = tools::read<int>(yaml, "gimbal_r3");
+
   try {
     serial_.setPort(com_port);
     serial_.setBaudrate(460800);
@@ -222,14 +226,18 @@ void Gimbal::read_thread()
     Eigen::Quaterniond q_(rx_data_.q[0], rx_data_.q[1], rx_data_.q[2], rx_data_.q[3]);
     auto ypr = tools::eulers(q_, 2, 1, 0);
     // auto q = tools::toeuler(ypr,0,2,1);
-    float yaw = ypr[0];
-    float pitch = ypr[1];
-    float roll = ypr[2];
+    float yaw = ypr[abs(gimbal_yaw2vision) -  1];
+    float pitch = ypr[abs(gimbal_pitch2vision) - 1];
+    float roll = ypr[abs(gimbal_roll2vision) - 1];
+
+    yaw = gimbal_yaw2vision > 0 ? yaw : - yaw;
+    pitch = gimbal_pitch2vision > 0 ? pitch : -pitch;
+    roll = gimbal_roll2vision > 0 ? roll : -roll;
 
     Eigen::Quaterniond q = 
         Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *   // 绕Z轴旋转yaw
-        Eigen::AngleAxisd(-roll, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
-        Eigen::AngleAxisd(-pitch, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
+        Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
+        Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
 
 
     queue_.push({q, t});
