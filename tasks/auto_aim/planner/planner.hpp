@@ -86,6 +86,7 @@ private:
   double low_speed_delay_time_, high_speed_delay_time_, decision_speed_;
   double small_armor_tolerance, big_armor_tolerance;
   double gimbal_control_delay;
+  double tower_pitch_prediction_time_;
 
   TinySolver * yaw_solver_;
   TinySolver * pitch_solver_;
@@ -94,6 +95,7 @@ private:
   void setup_pitch_solver(const std::string & config_path);
 
   Eigen::Matrix<double, 2, 1> aim(const Target & target, double bullet_speed);
+  Eigen::Matrix<double, 2, 1> heroaim(const Target & target, double bullet_speed, double gimbal_yaw);
   Trajectory get_trajectory(Target  target, double yaw0, double bullet_speed);
 };
 

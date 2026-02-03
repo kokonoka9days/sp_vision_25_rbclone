@@ -111,6 +111,7 @@ fire_thresh: 0.003 #
 small_armor_tolerance: 0.12
 big_armor_tolerance: 0.22
 gimbal_control_delay: 0.08
+tower_pitch_prediction_time: 0.05
 
 max_yaw_acc: 50
 Q_yaw: [9e6, 0]

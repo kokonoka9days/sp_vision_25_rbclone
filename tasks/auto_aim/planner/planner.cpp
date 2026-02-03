@@ -22,6 +22,7 @@ Planner::Planner(const std::string & config_path)
   small_armor_tolerance = tools::read<double>(yaml, "small_armor_tolerance");
   big_armor_tolerance = tools::read<double>(yaml, "big_armor_tolerance");
   gimbal_control_delay = tools::read<double>(yaml, "gimbal_control_delay");
+  tower_pitch_prediction_time_ = tools::read<double>(yaml, "tower_pitch_prediction_time");
 
   setup_yaw_solver(config_path);
   setup_pitch_solver(config_path);
@@ -249,7 +250,7 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
 
 
 Plan Planner::rbHeroplan(Target target, double bullet_speed, double gimbal_yaw){
-// 0. Check bullet speed
+  // 0. Check bullet speed
   if (bullet_speed < 10 || bullet_speed > 25) {
     bullet_speed = 22;
   }
@@ -270,63 +271,42 @@ Plan Planner::rbHeroplan(Target target, double bullet_speed, double gimbal_yaw){
   // 2. Get trajectory
   double yaw0;
   Trajectory traj;
-  
-  double yaw;
-   min_dist = 1e10;
-
-  for (auto & xyza : target.armor_xyza_list()) {
-    auto dist = xyza.head<2>().norm();
-    if (dist < min_dist) {
-      min_dist = dist;
-      xyz = xyza.head<3>();
-      yaw = xyza[3];
-    }
-  }
-  debug_xyza = Eigen::Vector4d(xyz.x(), xyz.y(), xyz.z(), yaw);
-  auto x_est = target.getEKFXest();
-
-  double armor_x = x_est(0) - x_est(8) * cos(gimbal_yaw);
-  double armor_y = x_est(2) - x_est(8) * sin(gimbal_yaw);
-  auto azim = std::atan2(armor_y, armor_x);
-  try
-  {
-    auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
-    if (bullet_traj.unsolvable) throw std::runtime_error("Unsolvable bullet trajectory!");    
-  }
-  catch(const std::exception& e)
-  {
-    tools::logger()->warn("Unsolvable target {:.2f}", bullet_speed);
-    
-  }
-  
   Eigen::Vector2d yaw_pitch;
-  yaw_pitch = {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + pitch_offset_};
+  try {
+    yaw_pitch = heroaim(target, bullet_speed, gimbal_yaw);
+    yaw0 = yaw_pitch(0);
+    // traj = get_trajectory(target, yaw0, bullet_speed);
+  } catch (const std::exception & e) {
+    tools::logger()->warn("Unsolvable target {:.2f}", bullet_speed);
+    return {false};
+  }
+
 
 
   Plan plan;
   plan.control = true;
-  //mubiaojaiiodu
-  plan.target_yaw = tools::limit_rad(traj(0, HALF_HORIZON) + yaw0);
+  // plan.target_yaw = tools::limit_rad(traj(0, HALF_HORIZON) + yaw0);
+  
   plan.target_pitch = traj(2, HALF_HORIZON);
 
-  plan.yaw = yaw_pitch(0);
-  plan.yaw_vel = 0;
-  plan.yaw_acc = 0;
+  plan.yaw = yaw_pitch(0); // tools::limit_rad(yaw_solver_->work->x(0, HALF_HORIZON) + yaw0);
+  plan.yaw_vel = 0; //yaw_solver_->work->x(1, HALF_HORIZON);
+  plan.yaw_acc = 0; //yaw_solver_->work->u(0, HALF_HORIZON);
 
-  plan.pitch = yaw_pitch(1);
-  plan.pitch_vel = 0;
-  plan.pitch_acc = 0;
+  plan.pitch = yaw_pitch(1); //itch_solver_->work->x(0, HALF_HORIZON);
+  plan.pitch_vel = 0; //pitch_solver_->work->x(1, HALF_HORIZON);
+  plan.pitch_acc = 0; //pitch_solver_->work->u(0, HALF_HORIZON);
 
-  auto shoot_offset_ = 0.0;
+  
   // plan.fire =
   //   std::hypot(
   //     traj(0, HALF_HORIZON + shoot_offset_) - yaw_solver_->work->x(0, HALF_HORIZON + shoot_offset_),
   //     traj(2, HALF_HORIZON + shoot_offset_) -
   //       pitch_solver_->work->x(0, HALF_HORIZON + shoot_offset_)) < fire_thresh_;
-  target.predict(-shoot_offset_);
-
-  plan.fire = rbShoot(target, gimbal_yaw - yaw_offset_);
-
+  target.predict(-gimbal_control_delay);
+  plan.fire = rbShoot(target, (gimbal_yaw )/57.3 - yaw_offset_);
+  // tools::logger()->warn("fire:{}", plan.fire);
+  plan.target_yaw = (aim_target_yaw + yaw_offset_ )* 57.3;
   return plan;
 }
 
@@ -409,6 +389,69 @@ Eigen::Matrix<double, 2, 1> Planner::aim(const Target & target, double bullet_sp
 
   auto azim = std::atan2(xyz.y(), xyz.x());
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
+  if (bullet_traj.unsolvable) throw std::runtime_error("Unsolvable bullet trajectory!");
+
+  return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + pitch_offset_};
+}
+
+Eigen::Matrix<double, 2, 1> Planner::heroaim(const Target & target, double bullet_speed, double gimbal_yaw)
+{
+  Eigen::Vector3d xyz;
+  double yaw;
+  auto min_dist = 1e10;
+
+  for (auto & xyza : target.armor_xyza_list()) {
+    auto dist = xyza.head<2>().norm();
+    if (dist < min_dist) {
+      min_dist = dist;
+      xyz = xyza.head<3>();
+      yaw = xyza[3];
+    }
+  }
+
+  auto r = target.ekf_x()(8);
+  auto v_yaw = target.ekf_x()(7);
+
+    // 旋转中心的坐标
+  auto center_x = target.ekf_x()(0);
+  auto center_y = target.ekf_x()(2);
+
+  auto aim_point_x = center_x - r*std::cos(gimbal_yaw);
+  auto aim_point_y = center_y - r*std::sin(gimbal_yaw);
+  auto aim_point_z = xyz.z();
+
+  if(abs(v_yaw) < 0.6){
+    aim_point_x = xyz.x();
+    aim_point_y = xyz.y();
+  }
+  auto min_dist1 = min_dist;
+  if(target.name == ArmorName::outpost){
+    Target target_pitch = target;
+    // double pitch_prediction_time_ = 0.05;
+    min_dist1 = 1e10;
+    Eigen::Vector3d xyz1;
+    double yaw1;
+    target_pitch.predict(tower_pitch_prediction_time_);
+    for (auto & xyza : target.armor_xyza_list()) {
+      auto dist = xyza.head<2>().norm();
+      if (dist < min_dist1) {
+        min_dist1 = dist;
+        xyz1 = xyza.head<3>();
+        yaw1 = xyza[3];
+      }
+    }
+    aim_point_z = xyz1.z();
+  }
+
+  //补偿距离和补偿高度
+  double comp_dist = 0;
+  double comp_h = 0;
+  min_dist = sqrt(aim_point_x*aim_point_x + aim_point_y*aim_point_y);
+
+  debug_xyza = Eigen::Vector4d(aim_point_x, aim_point_y, aim_point_z, yaw);
+
+  auto azim = std::atan2(aim_point_y, aim_point_x);
+  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist1 - comp_dist, aim_point_z - comp_h);
   if (bullet_traj.unsolvable) throw std::runtime_error("Unsolvable bullet trajectory!");
 
   return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + pitch_offset_};
