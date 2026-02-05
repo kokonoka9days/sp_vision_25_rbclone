@@ -218,7 +218,7 @@ void Gimbal::read_thread()
     }
 
     if (!tools::check_crc16(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
-      tools::logger()->debug("[Gimbal] CRC16 check failed.");
+      // tools::logger()->debug("[Gimbal] CRC16 check failed.");
       continue;
     }
 

@@ -27,7 +27,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/hero.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/hero_short.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -44,7 +44,7 @@ int main(int argc, char * argv[])
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
 
-  auto_aim::YOLO yolo(config_path, true);
+  auto_aim::YOLO yolo(config_path, false);
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, solver);
   auto_aim::Aimer aimer(config_path);
@@ -130,11 +130,16 @@ int main(int argc, char * argv[])
 
   cv::Mat img;
   std::chrono::steady_clock::time_point t;
+  std::chrono::steady_clock::time_point last_t;
 
   while (!exiter.exit()) {
     camera.read(img, t);
     auto q = gimbal.q(t - 3ms);
 
+    double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
+    tools::draw_text(img, "fps: "+fmt::format("{:.2f}",fps), cv::Point(40, 130));
+    last_t = t;
+    tools::logger()->info("fps:: {:.2f}", fps);
     auto ypr = tools::eulers(q, 2, 1, 0);
 
     float yaw_deg = ypr[0] * 180.0 / M_PI;

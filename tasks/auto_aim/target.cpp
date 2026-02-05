@@ -14,111 +14,6 @@ constexpr double TOWER_ARMOR_XTB = 0.06;//前哨装甲小跳变m
 namespace auto_aim
 {
 
-void Target::SolveTower(){
-    if(last_tower_armor_h == 0){
-        // std::cout<<"需等待前哨站出现第二块装甲板，无法解算"<<std::endl;
-        // tools::logger()->debug("[Target] r={:.3f}, l={:.3f}", ekf_.x[8], ekf_.x[9]);
-        tools::logger()->info("[tower]需等待前哨站出现第二块装甲板，无法解算");
-        return;
-    }
-    
-    //守护前哨站状态按顺序变化
-    // static double next_current_tower_armor = getNextCurrentTowerArmor();
-    
-    if(tower_initialized){
-      double next_armor_offset = getTowerOtherArmorGap(current_tower_armor, getTowerWAnglePositive()? 1 : 2)* TOWTER_ARMOR_DH;
-      double last_and_now_dh_error = abs((last_tower_armor_h + next_armor_offset) - now_tower_armor_h);  
-
-        if(last_and_now_dh_error > 0.1){
-            // std::cout<<"前哨站观测器异常跳变,状态顺序错误"<<std::endl;
-            tools::logger()->debug("[tower]前哨站观测器异常跳变,状态顺序错误");
-            tower_initialized = false;
-            last_last_tower_armor_h = last_tower_armor_h = 0;
-            return;
-        }else{
-            tools::logger()->info("[tower]前哨站装甲板正常切换");
-            current_tower_armor = getNextCurrentTowerArmor();
-            return;
-        }
-        
-
-    } 
-    double now_and_last_diff = now_tower_armor_h - last_tower_armor_h;
-    // std::cout<<"now_and_last_diff"<<now_and_last_diff<<std::endl;
-
-    // 角速度方向为正
-    if(getTowerWAnglePositive() && abs(this->ekf_.x(7))  > 0.5){
-
-        if(now_and_last_diff < -TOWER_ARMOR_DTB){ //2 to 0
-            current_tower_armor = 0;
-            tower_initialized = true;
-            // next_current_tower_armor = getNextCurrentTowerArmor();
-            return;
-        }
-
-        if(last_last_tower_armor_h == 0 && tower_initialized == false){
-            // std::cout<<"需等待前哨站出现第三块装甲板，无法解算"<<std::endl;
-            tools::logger()->info("[tower]需等待前哨站出现第三块装甲板，暂时无法解算");
-            return;
-        }
-        double last_and_lastlast_diff = now_tower_armor_h - last_last_tower_armor_h;
-        if(//0 to 1 to 2
-            last_and_lastlast_diff < -TOWER_ARMOR_DTB
-            // && `
-            // now_and_last_diff <=16 && now_and_last_diff > 0
-            ){ 
-            current_tower_armor = 2;
-            tower_initialized = true;
-            // next_current_tower_armor = getNextCurrentTowerArmor();
-            return;
-        }
-
-        if(now_and_last_diff < 0){
-          tools::logger()->debug("[tower]前哨站观测器异常跳变,角速度方向错误");
-            // std::cerr<<"前哨站观测器异常跳变,角速度方向错误"<<std::endl;
-            return;
-        }
-
-        tools::logger()->debug("[tower]其他情况需排除");
-        // std::cout<<"其他情况需排除"<<std::endl;
-
-    }
-    // 角速度方向为负
-    else if(!getTowerWAnglePositive() && abs(this->ekf_.x(7))  > 0.5){
-        if(now_and_last_diff > TOWER_ARMOR_DTB){ //0 to 2
-            current_tower_armor = 2;
-            tower_initialized = true;
-            // next_current_tower_armor = getNextCurrentTowerArmor();
-            return;
-        }
-
-        if(last_last_tower_armor_h == 0 && tower_initialized == false){
-            tools::logger()->info("[tower]需等待前哨站出现第三块装甲板，暂时无法解算");
-            return;
-        }
-        double last_and_lastlast_diff = now_tower_armor_h - last_last_tower_armor_h;
-        if(//2 to 1 to 0
-            last_and_lastlast_diff > TOWER_ARMOR_DTB
-            // && `
-            // now_and_last_diff >= -16 && now_and_last_diff < 0
-            ){ 
-            current_tower_armor = 0;
-            tower_initialized = true;
-            // next_current_tower_armor = getNextCurrentTowerArmor();
-            return;
-        }
-
-        if(now_and_last_diff > 0){
-          tools::logger()->debug("[tower]前哨站观测器异常跳变,角速度方向错误");
-            return;
-        }
-
-        tools::logger()->debug("[tower]其他情况需排除");
-    }else{
-        tools::logger()->debug("[tower]前哨站观测器未收敛或速度过慢，不更新状态");
-
-    }
-}
 Target::Target(
   const Armor & armor, std::chrono::steady_clock::time_point t, double radius, int armor_num,
   Eigen::VectorXd P0_dig)
@@ -142,7 +37,6 @@ Target::Target(
   auto center_x = xyz[0] + r * std::cos(ypr[0]);
   auto center_y = xyz[1] + r * std::sin(ypr[0]);
   auto center_z = xyz[2];
-  UpdateNowArmorH(center_z);
   tower_armor_hs[0] = center_z;
 
   // x vx y vy z vz a w r l h
@@ -293,9 +187,7 @@ void Target::update(const Armor & armor)
     
     if (id != last_id) {
       is_switch_ = true;
-      UpdateTowerArmor(armor.xyz_in_world[2]);
       tower_armor_hs[id] = armor.xyz_in_world[2];
-      // this->ekf_x()(4) = armor.xyz_in_world[2];
       if(name == ArmorName::outpost){
         double dz = tower_armor_hs[id] - tower_armor_hs[0];
         int dz_px = dz > 0 ? 1 : -1;
@@ -311,7 +203,6 @@ void Target::update(const Armor & armor)
         this->ekf_x()(4) = zc;
       }
     } else {
-      // UpdateNowArmorH(armor.xyz_in_world[2]);
       is_switch_ = false;
     }
     // for(auto it :tower_armor_hs){

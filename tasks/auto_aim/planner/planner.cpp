@@ -156,9 +156,9 @@ bool Planner::rbShoot(Target target, double gimbal_yaw){
   suggest_fire = (control_delta_angle < allow_fire_ang_max &&
                   control_delta_angle > allow_fire_ang_min);
   if(suggest_fire){
-    tools::logger()->info("fire! control_delta_angle: {},  allow_fire_ang_max: {}, allow_fire_ang_min: {}",
-      control_delta_angle, allow_fire_ang_max, allow_fire_ang_min
-    );
+    // tools::logger()->info("fire! control_delta_angle: {},  allow_fire_ang_max: {}, allow_fire_ang_min: {}",
+    //   control_delta_angle, allow_fire_ang_max, allow_fire_ang_min
+    // );
   }
     
     return suggest_fire;

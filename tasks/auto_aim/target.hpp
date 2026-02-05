@@ -70,56 +70,9 @@ private:
 
 
   //前哨站
-  // 从低到高逆时针，第一个最低，逆时针为正方向
-  double last_last_tower_armor_h = 0, 
-          last_tower_armor_h = 0, 
-          now_tower_armor_h = 0;
   double tower_armor_hs[3] = {0,0,0};
-  int  current_tower_armor = 1; //默认指向第二个
-  bool tower_initialized = false;//前哨站建模完成
 
-  /// @brief 获取前哨站角速度方向
-  /// @return true表示角速度方向为正
-  inline bool getTowerWAnglePositive(){
-      return this->ekf_.x(7) > 0;
-  }
-
-  /// @brief 获取下一个前哨站装甲板编号
-  /// @return 下一个前哨站装甲板编号
-  inline int getNextCurrentTowerArmor(){
-      return getTowerWAnglePositive() ? 
-          (current_tower_armor + 1) % 3 : (current_tower_armor + 2) % 3;
-  }
-
-  /// @brief 返回当前观察前哨站装甲板编号
-  /// @return 
-  inline int getNowCurrentTowerArmor(){
-      return current_tower_armor;
-  }
-
-  inline void UpdateNowArmorH(double now_tower_armor_h_){
-      now_tower_armor_h = now_tower_armor_h_;
-  }
-
-  /// @brief 更新前哨站装甲板高度信息
-  /// @param now_tower_armor_h_ 
-  inline void UpdateTowerArmor(double now_tower_armor_h_){
-      last_last_tower_armor_h = last_tower_armor_h;
-      last_tower_armor_h = now_tower_armor_h;
-      now_tower_armor_h = now_tower_armor_h_;
-      // current_tower_armor = getNextCurrentTowerArmor();
-  }
-  /// @brief 返回前哨站其他装甲板落点差，逆时针为正方向
-  /// @param cur_id 输入装甲板id号
-  /// @param next_num 下几块装甲板
-  /// @return 
-  inline int getTowerOtherArmorGap(size_t cur_id, int next_num){
-    --next_num;
-    return -cur_id + ((cur_id + next_num + 1) % 3);
-  }
   
-  /// @brief 前哨站解算
-  void SolveTower();
 
 };
 

@@ -5,10 +5,11 @@
 #include "tools/exiter.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
+#include "tools/img_tools.hpp"
 
 const std::string keys =
   "{help h usage ? |                     | 输出命令行参数说明}"
-  "{config-path c  | ../configs/camera.yaml | yaml配置文件路径 }"
+  "{config-path c  | ../configs/hero_short.yaml | yaml配置文件路径 }"
   "{d display      |        1             | 显示视频流       }";
 
 int main(int argc, char * argv[])
@@ -27,9 +28,16 @@ int main(int argc, char * argv[])
 
   cv::Mat img;
   std::chrono::steady_clock::time_point timestamp;
+  std::chrono::steady_clock::time_point last_t;
+
   auto last_stamp = std::chrono::steady_clock::now();
   while (!exiter.exit()) {
     camera.read(img, timestamp);
+
+    // double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(timestamp - last_t).count()*1000000;
+    // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
+    // last_t = timestamp;
+    // tools::logger()->info("fps:: {:.2f}", fps);
 
     auto dt = tools::delta_time(timestamp, last_stamp);
     last_stamp = timestamp;
