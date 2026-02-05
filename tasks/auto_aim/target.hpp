@@ -53,6 +53,12 @@ public:
     return t_;
   }
 
+  //前哨站
+  double tower_armor_hs[3] = {0,0,0};  
+  double tower_armor_h;
+  double tower_armor_hs_datas[3]; 
+  int tower_armor_hs_datas_ptr = 0;
+
 private:
   int armor_num_;
   int switch_count_;
@@ -69,8 +75,7 @@ private:
   Eigen::MatrixXd h_jacobian(const Eigen::VectorXd & x, int id) const;
 
 
-  //前哨站
-  double tower_armor_hs[3] = {0,0,0};
+
 
   
 

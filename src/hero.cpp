@@ -114,6 +114,10 @@ int main(int argc, char * argv[])
       if (target.has_value()) {
         data["target_z"] = target->ekf_x()[4];   //z
         data["target_vz"] = target->ekf_x()[5];  //vz
+        data["tower_h1"] = target->tower_armor_hs[0];
+        data["tower_h2"] = target->tower_armor_hs[1];
+        data["tower_h3"] = target->tower_armor_hs[2];
+        data["tower_armor_h"] = target->tower_armor_h;
       }
 
       if (target.has_value()) {
@@ -139,7 +143,7 @@ int main(int argc, char * argv[])
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
     tools::draw_text(img, "fps: "+fmt::format("{:.2f}",fps), cv::Point(40, 130));
     last_t = t;
-    tools::logger()->info("fps:: {:.2f}", fps);
+    // tools::logger()->info("fps:: {:.2f}", fps);
     auto ypr = tools::eulers(q, 2, 1, 0);
 
     float yaw_deg = ypr[0] * 180.0 / M_PI;
