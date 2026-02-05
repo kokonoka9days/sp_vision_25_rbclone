@@ -416,8 +416,8 @@ Eigen::Matrix<double, 2, 1> Planner::heroaim(const Target & target, double bulle
   auto center_x = target.ekf_x()(0);
   auto center_y = target.ekf_x()(2);
 
-  auto aim_point_x = center_x - r*std::cos(gimbal_yaw);
-  auto aim_point_y = center_y - r*std::sin(gimbal_yaw);
+  auto aim_point_x = center_x - r*std::cos(center_x);
+  auto aim_point_y = center_y - r*std::sin(center_x);
   auto aim_point_z = xyz.z();
 
   if(abs(v_yaw) < 0.6){

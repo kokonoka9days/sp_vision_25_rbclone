@@ -64,7 +64,7 @@ int main(int argc, char * argv[])
       auto gs = gimbal.state();
 
       
-      auto plan = planner.plan(target, gs.bullet_speed, gs.yaw, auto_aim::Planner::ShootStrategy::rbHero);
+      auto plan = planner.plan(target, 11.8, gs.yaw, auto_aim::Planner::ShootStrategy::rbHero);
       gimbal.send(
         plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
         plan.pitch_acc);
