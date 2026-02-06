@@ -184,7 +184,7 @@ void Target::update(const Armor & armor)
     if (id != 0) jumped = true;
     // 
     if(name == ArmorName::outpost){
-      double a = 0.5;
+      double a = 0.7;
       tower_armor_h = a*armor.xyz_in_world[2] + (1-a)*last_tower_armor_h[id];
       tower_armor_hs_datas[id] += tower_armor_h;
       last_tower_armor_h[id] = tower_armor_h;
