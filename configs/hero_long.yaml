@@ -2,7 +2,7 @@ enemy_color: "red"
 # enemy_color: "blue"
 
 #####-----神经网络参数-----#####
-yolo_name: yolov5
+yolo_name: yolov8
 classify_model: ../assets/tiny_resnet.onnx
 yolo11_model_path: ../assets/yolo11.xml
 yolov8_model_path: ../assets/yolov8.xml
@@ -38,13 +38,13 @@ max_temp_lost_count: 11
 outpost_max_temp_lost_count: 75
 
 #####-----aimer参数-----#####
-yaw_offset: 5 # degree -2.5
-pitch_offset: 5 # degree 2
+yaw_offset: 2.4 # degree -2.5
+pitch_offset: -1 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
 high_speed_delay_time: 0.09 # s
-low_speed_delay_time: 0.09 # s
+low_speed_delay_time: 0.61 # s
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree
@@ -106,8 +106,8 @@ gimbal_r3: -2
 
 
 #####-----planner-----#####
-fire_thresh: 0.003 # 
-small_armor_tolerance: 0.12
+fire_thresh: 0.2 # 
+small_armor_tolerance: 0.03
 big_armor_tolerance: 0.22
 gimbal_control_delay: 0.08
 tower_pitch_prediction_time: 0.05

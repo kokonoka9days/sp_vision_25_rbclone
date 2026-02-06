@@ -100,6 +100,7 @@ int main(int argc, char * argv[])
       data["target_yaw"] = plan.target_yaw;
       data["target_pitch"] = plan.target_pitch;
 
+      data["plan_mode"] = plan.control ? (plan.fire ? 2 : 1) : 0;
       data["plan_yaw"] = plan.yaw * 57.3;
       data["plan_yaw_vel"] = plan.yaw_vel;
       data["plan_yaw_acc"] = plan.yaw_acc;

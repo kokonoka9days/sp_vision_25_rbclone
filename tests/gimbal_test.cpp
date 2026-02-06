@@ -57,10 +57,10 @@ int main(int argc, char * argv[])
     float pitch_deg = ypr[1] * 180.0 / M_PI;
     float roll_deg = ypr[2] * 180.0 / M_PI;
         
-    // std::cout << "Euler Angles (deg): ";
-    // std::cout << "Yaw: " << yaw_deg << "°, ";
-    // std::cout << "Pitch: " << pitch_deg << "°, ";
-    // std::cout << "Roll: " << roll_deg << "°" << std::endl;
+    std::cout << "Euler Angles (deg): ";
+    std::cout << "Yaw: " << yaw_deg << "°, ";
+    std::cout << "Pitch: " << pitch_deg << "°, ";
+    std::cout << "Roll: " << roll_deg << "°" << std::endl;
     // std::cout<<q<<std::endl;
 // 
     auto fired = state.bullet_count > last_bullet_count;

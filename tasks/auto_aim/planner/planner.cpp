@@ -108,7 +108,7 @@ Plan Planner::plan(Target target, double bullet_speed)
 
 
 
-bool Planner::rbShoot(Target target, double gimbal_yaw){
+bool Planner::rbShoot(Target target, double gimbal_yaw, bool tower_fixed_pitch){
     bool suggest_fire = 1;
     // auto x_est = target.getEKFXest();
     // double est_x =  x_est(0);
@@ -149,12 +149,17 @@ bool Planner::rbShoot(Target target, double gimbal_yaw){
   allow_fire_ang_min = tools::limit_rad(allow_fire_ang_min);
   
 
+  // pitch
+  bool suggest_pitch = true;
+  if(tower_fixed_pitch && abs(target.ekf_x()(4) - target_armor_xyza(2)) > 0.003){
+    suggest_pitch = false;
+  }
 
   // yaw_ang_ref
   double control_delta_angle =
       tools::limit_rad(atan2(target_armor_xyza(1), target_armor_xyza(0)) - gimbal_yaw );
   suggest_fire = (control_delta_angle < allow_fire_ang_max &&
-                  control_delta_angle > allow_fire_ang_min);
+                  control_delta_angle > allow_fire_ang_min && suggest_pitch) ;
   if(suggest_fire){
     // tools::logger()->info("fire! control_delta_angle: {},  allow_fire_ang_max: {}, allow_fire_ang_min: {}",
     //   control_delta_angle, allow_fire_ang_max, allow_fire_ang_min
@@ -266,7 +271,7 @@ Plan Planner::rbHeroplan(Target target, double bullet_speed, double gimbal_yaw){
     }
   }
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
-  target.predict(bullet_traj.fly_time);
+  target.predict(bullet_traj.fly_time );
 
   // 2. Get trajectory
   double yaw0;
@@ -304,7 +309,9 @@ Plan Planner::rbHeroplan(Target target, double bullet_speed, double gimbal_yaw){
   //     traj(2, HALF_HORIZON + shoot_offset_) -
   //       pitch_solver_->work->x(0, HALF_HORIZON + shoot_offset_)) < fire_thresh_;
   target.predict(-gimbal_control_delay);
-  plan.fire = rbShoot(target, (gimbal_yaw )/57.3 - yaw_offset_);
+  plan.fire = rbShoot(target, (gimbal_yaw )/57.3 - yaw_offset_
+                                                    ,true
+                                                  );
   // tools::logger()->warn("fire:{}", plan.fire);
   plan.target_yaw = (aim_target_yaw + yaw_offset_ )* 57.3;
   return plan;
@@ -441,7 +448,8 @@ Eigen::Matrix<double, 2, 1> Planner::heroaim(const Target & target, double bulle
         yaw1 = xyza[3];
       }
     }
-    aim_point_z = xyz1.z();
+    // aim_point_z = xyz1.z();
+    aim_point_z = target.ekf_x()(4);
   }
 
   //补偿距离和补偿高度

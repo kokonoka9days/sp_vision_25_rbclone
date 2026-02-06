@@ -6,9 +6,9 @@
 #include "tools/math_tools.hpp"
 
 
-constexpr double TOWTER_ARMOR_DH = 0.1;//前哨站两个装甲板之间的最短高低差m
+constexpr double TOWTER_ARMOR_DH = 0.105;//前哨站两个装甲板之间的最短高低差m
 constexpr double TOWER_ARMOR_DTB = 0.16;//前哨装甲大跳变m
-constexpr double TOWER_ARMOR_XTB = 0.06;//前哨装甲小跳变m
+constexpr double TOWER_ARMOR_XTB = 0.05;//前哨装甲小跳变m
 
 
 namespace auto_aim
