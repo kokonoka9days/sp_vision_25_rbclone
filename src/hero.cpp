@@ -27,7 +27,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/hero_short.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/hero_long.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -138,10 +138,10 @@ int main(int argc, char * argv[])
 
   while (!exiter.exit()) {
     camera.read(img, t);
-    auto q = gimbal.q(t - 3ms);
+    auto q = gimbal.q(t - 2ms);
 
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
-    tools::draw_text(img, "fps: "+fmt::format("{:.2f}",fps), cv::Point(40, 130));
+    tools::draw_text(img, "fps: "+ fmt::format("{:.2f}",fps), cv::Point(40, 130));
     last_t = t;
     // tools::logger()->info("fps:: {:.2f}", fps);
     auto ypr = tools::eulers(q, 2, 1, 0);
@@ -152,9 +152,9 @@ int main(int argc, char * argv[])
         
     // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
     // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
-    if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
-     tools::draw_text(img, fmt::format("DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 0, 255});
-      tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
+    // if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
+    //  tools::draw_text(img, fmt::format("DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 0, 255});
+    //   tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
     // std::cout << "Roll: " << roll_deg << std::endl;
 
     solver.set_R_gimbal2world(q);

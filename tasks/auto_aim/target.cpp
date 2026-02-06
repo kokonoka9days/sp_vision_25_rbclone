@@ -183,31 +183,23 @@ void Target::update(const Armor & armor)
 
     if (id != 0) jumped = true;
     // 
-    tower_armor_h = armor.xyz_in_world[2];
-    tower_armor_hs_datas[id] += tower_armor_h;
-    tower_armor_hs_datas_ptr++;
+    if(name == ArmorName::outpost){
+      tower_armor_h = armor.xyz_in_world[2];
+      tower_armor_hs_datas[id] += tower_armor_h;
+      tower_armor_hs_datas_ptr++;      
+    }
+
     // if(tower_armor_hs_datas_ptr > 39) tower_armor_hs_datas_ptr = 0;
     
     if (id != last_id) {
       
       is_switch_ = true;
-      tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / (tower_armor_hs_datas_ptr + 1);//armor.xyz_in_world[2];
-      // if(name == ArmorName::outpost){
-      //   double dz = tower_armor_hs[id] - tower_armor_hs[0];
-      //   int dz_px = dz > 0 ? 1 : -1;
-      //   int dz_mu;
-      //   if(abs(dz) > 0.16){
-      //     dz_mu = 2;
-      //   }else if(abs(dz) < 0.16 && abs(dz) > 0.05){
-      //     dz_mu = 1;
-      //   }else if(abs(dz) < 0.05){
-      //     dz_mu = 0;
-      //   }
-      //   double zc = armor.xyz_in_world[2] - TOWTER_ARMOR_DH * dz_px * dz_mu;
-      //   this->ekf_x()(4) = zc;
-      // }
-      tower_armor_hs_datas_ptr = 0;
-      tower_armor_hs_datas[last_id] = 0;
+      if(name == ArmorName::outpost){
+        tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / (tower_armor_hs_datas_ptr + 1);//armor.xyz_in_world[2];
+        tower_armor_hs_datas_ptr = 0;
+        tower_armor_hs_datas[last_id] = 0;        
+      }
+
     } else {
       is_switch_ = false;
     }
