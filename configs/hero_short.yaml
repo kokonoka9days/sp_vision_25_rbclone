@@ -1,5 +1,5 @@
-# enemy_color: "red"
-enemy_color: "blue"
+enemy_color: "red"
+# enemy_color: "blue"
 
 #####-----神经网络参数-----#####
 yolo_name: yolov8
@@ -109,9 +109,9 @@ gimbal_r3: -2
 
 #####-----planner-----#####
 fire_thresh: 0.003 # 
-small_armor_tolerance: 0.12
+small_armor_tolerance: 0.05
 big_armor_tolerance: 0.22
-gimbal_control_delay: 0.08
+gimbal_control_delay: 0.15
 tower_pitch_prediction_time: 0.05
 
 max_yaw_acc: 50
