@@ -139,7 +139,7 @@ int main(int argc, char * argv[])
 
   while (!exiter.exit()) {
     camera.read(img, t);
-    auto q = gimbal.q(t - 2ms);
+    auto q = gimbal.q(t - 3800us);
 
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
     tools::draw_text(img, "fps: "+ fmt::format("{:.2f}",fps), cv::Point(40, 130));
@@ -154,8 +154,8 @@ int main(int argc, char * argv[])
     // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
     // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
     // if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
-    //  tools::draw_text(img, fmt::format("DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 0, 255});
-    //   tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
+     tools::draw_text(img, fmt::format("DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 0, 255});
+      tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
     // std::cout << "Roll: " << roll_deg << std::endl;
 
     solver.set_R_gimbal2world(q);
