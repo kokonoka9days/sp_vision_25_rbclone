@@ -6,6 +6,7 @@
 #include <list>
 #include <string>
 
+#include "io/gimbal/gimbal.hpp"
 #include "armor.hpp"
 #include "solver.hpp"
 #include "target.hpp"
@@ -21,17 +22,24 @@ public:
 
   std::string state() const;
 
+  std::list<Target> sb_track(
+    std::list<Armor> & armors, std::chrono::steady_clock::time_point t,
+    bool use_enemy_color = true);
+
   std::list<Target> track(
     std::list<Armor> & armors, std::chrono::steady_clock::time_point t,
     bool use_enemy_color = true);
+
 
   std::tuple<omniperception::DetectionResult, std::list<Target>> track(
     const std::vector<omniperception::DetectionResult> & detection_queue, std::list<Armor> & armors,
     std::chrono::steady_clock::time_point t, bool use_enemy_color = true);
 
   inline void setSolver(Solver & solver__){this->solver_ = solver__; }
+  void set_gimbal(io::Gimbal* gimbal) { gimbal_ = gimbal; }
 private:
   Solver & solver_;
+  io::Gimbal* gimbal_ = nullptr; // 新增一个云台指针，默认为空
   Color enemy_color_;
   int min_detect_count_;
   int max_temp_lost_count_;

@@ -246,6 +246,7 @@ void Gimbal::read_thread()
     auto ypr_now = tools::eulers(q, 2, 1, 0);
     state_.yaw = ypr_now[0] * 57.3;
     state_.pitch = ypr_now[1] * 57.3;
+    state_.mouse = rx_data_.mouse;
 
     // state_.bullet_speed = rx_data_.bullet_speed;
     state_.bullet_speed = 25;

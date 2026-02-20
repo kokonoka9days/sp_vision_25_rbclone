@@ -28,6 +28,7 @@ struct __attribute__((packed)) GimbalToVision
   uint8_t mode;  // 0: 空闲, 1: 自瞄, 2: 小符, 3: 大符
   float q[4];    // wxyz顺序
   float bullet_speed;
+  uint8_t mouse;
   uint16_t bullet_count;  // 子弹累计发送次数
   uint16_t crc16;
 };
@@ -79,6 +80,7 @@ struct GimbalState
   float yaw_vel;
   float pitch;
   float pitch_vel;
+  uint8_t mouse;
   float bullet_speed;
   uint16_t bullet_count;
 };
