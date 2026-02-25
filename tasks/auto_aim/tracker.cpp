@@ -132,15 +132,33 @@ std::list<Target> Tracker::track(
   //按下右键时，mouse为1则跟随上一次的目标，不按则瞄准最近的装甲板
   if(g.mouse == 1)
   {
-if (state_ == "lost") {
-    found = set_target(armors, t);
-  }
+    if (state_ == "lost") {
+        found = set_target(armors, t);
+        tools::logger()->debug("按下右键，只选择正在跟踪的装甲板，跳过其他兵种，直至丢跟踪，初始化跟踪类型为 {}", ARMOR_NAMES[armors.front().name]);
+    }
+    else {
+      found = update_target(armors, t);
+    }
+  }else{
+    if (state_ == "lost") {
+        found = set_target(armors, t);
+    }
+    else {
+      if(target_.name == armors.front().name 
+        && target_.armor_type == armors.front().type)
+      {
+        found = update_target(armors, t);
+      }else{
+        found = set_target(armors, t);
+        state_ = "detecting";
+        detect_count_ = 1;
+        tools::logger()->debug("不按右键，默认选中离图像中心最近的兵种，切换至： {}, 跟踪器重置", ARMOR_NAMES[armors.front().name]);
+      }
 
-  else {
-    found = update_target(armors, t);
+     
+    }
   }
-  }
-  found = set_target(armors, t);
+  // found = set_target(armors, t);
 
   state_machine(found);
 
