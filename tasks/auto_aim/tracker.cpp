@@ -141,9 +141,9 @@ std::list<Target> Tracker::track(
   // armors.sort(
   //   [](const auto_aim::Armor & a, const auto_aim::Armor & b) { return a.priority < b.priority; });
 
-  bool found;
+  bool found = 0;
   //按下右键时，mouse为1则跟随上一次的目标，不按则瞄准最近的装甲板
-  if(g.mouse == 1)
+  if(g.mode == 1)
   {
     if (state_ == "lost") {
         found = set_target(armors, t);
@@ -152,7 +152,7 @@ std::list<Target> Tracker::track(
     else {
       found = update_target(armors, t);
     }
-  }else{
+  }else if(g.mode == 0){
     if (state_ == "lost") {
         found = set_target(armors, t);
     }
