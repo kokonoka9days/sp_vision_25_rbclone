@@ -150,65 +150,24 @@ int main(int argc, char * argv[])
   
   // MPC 规划线程（独立线程运行MPC控制器）
   std::atomic<bool> quit = false;
-  auto mpc_thread = std::thread([&]() {
-    auto_aim::Plan plan{false};
-    
-    while (!quit) {
-        auto target = target_queue.front();
-        
-        // 使用MPC规划器计算控制指令
-        plan = bincameras.planners.aim_ptr->plan(*target, 22);
-          
-
-        nlohmann::json data;
-        data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);
-
-
-        data["target_yaw"] = plan.target_yaw;
-        data["target_pitch"] = plan.target_pitch;
-
-        data["plan_yaw"] = plan.yaw;
-        data["plan_yaw_vel"] = plan.yaw_vel;
-        data["plan_yaw_acc"] = plan.yaw_acc;
-
-        data["plan_pitch"] = plan.pitch;
-        data["plan_pitch_vel"] = plan.pitch_vel;
-        data["plan_pitch_acc"] = plan.pitch_acc;
-
-        if (target.has_value()) {
-            data["target_z"] = target->ekf_x()[4];   //z
-            data["target_vz"] = target->ekf_x()[5];  //vz
-        }
-
-        if (target.has_value()) {
-            data["w"] = target->ekf_x()[7];
-        } else {
-            data["w"] = 0.0;
-        }
-
-        plotter.plot(data);
-
-      
-        std::this_thread::sleep_for(10ms);
-    }
-  });
 
   // 主循环
   while (!exiter.exit()) {
-    
-    
-    // 读取主相机图像
+    static int count = 0;
+    // tools::logger()->info("当前使用 {} 焦镜头", bincameras.is_short ? "短" : "长");
+    // // 读取主相机图像
     bincameras.cameras.aim_ptr->read(img, timestamp);
     
     
-    // 获取云台欧拉角
-    gimbal_euler = tools::eulers(bincameras.solvers.aim_ptr->R_gimbal2world(), 2, 1, 0);
+    // // 获取云台欧拉角
+    // gimbal_euler = tools::eulers(bincameras.solvers.aim_ptr->R_gimbal2world(), 2, 1, 0);
     
     // 主相机检测
     auto armors = yolo.detect(img);
     
     // 跟踪目标
     auto targets = tracker.track(armors, timestamp);
+    tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
      
     // 自瞄模式 - 使用MPC
     if (!targets.empty()) {
@@ -312,9 +271,6 @@ int main(int argc, char * argv[])
   
   // 清理
   quit = true;
-  if (mpc_thread.joinable()) {
-    mpc_thread.join();
-  }
   
   
   return 0;

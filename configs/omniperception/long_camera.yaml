@@ -93,6 +93,22 @@ second_tolerance: 2 # 远距离射击容差，degree
 judge_distance: 3 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
+#####-----planner-----#####
+fire_thresh: 0.0035
+small_armor_tolerance: 0.12
+big_armor_tolerance: 0.22
+gimbal_control_delay: 0.08
+tower_pitch_prediction_time: 0.05
+
+max_yaw_acc: 50
+Q_yaw: [9e6, 0]
+R_yaw: [1]
+
+max_pitch_acc: 100
+Q_pitch: [9e6, 0]
+R_pitch: [1]
+
+
 #####-----decider参数-----#####
 mode: 1
 
