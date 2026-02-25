@@ -141,6 +141,7 @@ int main(int argc, char * argv[])
   
   cv::Mat img;
   std::chrono::steady_clock::time_point timestamp;
+  std::chrono::steady_clock::time_point last_t;
   
   // 云台状态
   Eigen::Vector3d gimbal_euler;
@@ -167,7 +168,10 @@ int main(int argc, char * argv[])
     
     // 跟踪目标
     auto targets = tracker.track(armors, timestamp);
-    tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
+    double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - last_t).count()*1000000;
+    tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
+    last_t = std::chrono::steady_clock::now();
+    tools::logger()->info("fps:: {:.2f}", fps);
      
     // 自瞄模式 - 使用MPC
     if (!targets.empty()) {
@@ -260,13 +264,13 @@ int main(int argc, char * argv[])
     }
 
     
-    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    cv::imshow("reprojection", img);
-    auto key = cv::waitKey(1);
-    if (key == 'q') break;
-    if (key == 'c'){// 强制切换
-        bincameras.Switch();
-    }
+    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    // cv::imshow("reprojection", img);
+    // auto key = cv::waitKey(1);
+    // if (key == 'q') break;
+    // if (key == 'c'){// 强制切换
+    //     bincameras.Switch();
+    // }
   }
   
   // 清理
