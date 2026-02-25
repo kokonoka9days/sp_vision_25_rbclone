@@ -29,6 +29,7 @@ struct __attribute__((packed)) GimbalToVision
   float q[4];    // wxyz顺序
   float bullet_speed;
   uint8_t mouse;
+  uint8_t color; // 0: 蓝色, 1: 红色
   uint16_t bullet_count;  // 子弹累计发送次数
   uint16_t crc16;
 };
@@ -81,6 +82,7 @@ struct GimbalState
   float pitch;
   float pitch_vel;
   uint8_t mouse;
+  uint8_t enemy_color; // 0: 蓝色, 1: 红色
   float bullet_speed;
   uint16_t bullet_count;
 };

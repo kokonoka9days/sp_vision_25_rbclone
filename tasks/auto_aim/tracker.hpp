@@ -41,6 +41,7 @@ private:
   Solver & solver_;
   io::Gimbal* gimbal_ = nullptr; // 新增一个云台指针，默认为空
   Color enemy_color_;
+  std::string enemy_color_str_;
   int min_detect_count_;
   int max_temp_lost_count_;
   int detect_count_;
