@@ -136,6 +136,7 @@ int main(int argc, char * argv[])
   auto_aim::Solver long_camera_solver(long_camera_config_path);
 
   auto_aim::Tracker tracker(short_camera_config_path, short_camera_solver);//默认短焦
+  tracker.set_gimbal(&gimbal);
   auto_aim::Aimer aimer(short_camera_config_path);
   auto_aim::Shooter shooter(short_camera_config_path);
   
