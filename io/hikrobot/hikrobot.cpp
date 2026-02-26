@@ -298,4 +298,18 @@ void HikRobot::reset_usb() const
   libusb_close(handle);
 }
 
+void HikRobot::pause() {
+    // 停止海康相机采流
+    if (handle_ != nullptr) {
+        MV_CC_StopGrabbing(handle_);
+    }
+}
+
+void HikRobot::resume() {
+    // 恢复海康相机采流
+    if (handle_ != nullptr) {
+        MV_CC_StartGrabbing(handle_);
+    }
+}
+
 }  // namespace io

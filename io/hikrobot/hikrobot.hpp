@@ -55,6 +55,9 @@ private:
 
   void set_vid_pid(const std::string & vid_pid);
   void reset_usb() const;
+
+  void pause() override;
+  void resume() override;
 };
 
 }  // namespace io
