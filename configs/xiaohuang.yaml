@@ -59,6 +59,7 @@ gain: 0.7
 vid_pid: "2bdf:0001"
 flip: true
 mirror: true
+timestamp_offset_us: 1000 #us
 
 # camera_name: "daheng"
 # camera_sn: "FDN24040486"
@@ -68,6 +69,7 @@ mirror: true
 # vid_pid: "2ba2:4d55"
 # flip: true
 # mirror: true
+# timestamp_offset_us: 1000 #us
 
 # -1  0  0
 #  0 -1  0

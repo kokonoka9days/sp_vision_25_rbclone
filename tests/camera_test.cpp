@@ -9,7 +9,7 @@
 
 const std::string keys =
   "{help h usage ? |                     | 输出命令行参数说明}"
-  "{config-path c  | ../configs/omniperception/short_camera.yaml | yaml配置文件路径 }"
+  "{config-path c  | ../configs/camera.yaml | yaml配置文件路径 }"
   "{d display      |        1             | 显示视频流       }";
 
 int main(int argc, char * argv[])
@@ -37,7 +37,6 @@ int main(int argc, char * argv[])
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(timestamp - last_t).count()*1000000;
     tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
     last_t = timestamp;
-    tools::logger()->info("fps:: {:.2f}", fps);
 
     auto dt = tools::delta_time(timestamp, last_stamp);
     last_stamp = timestamp;

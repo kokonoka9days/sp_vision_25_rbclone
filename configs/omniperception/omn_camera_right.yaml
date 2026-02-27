@@ -6,5 +6,6 @@ gamma: 0.5
 vid_pid: "2ba2:4d55"
 flip: false
 mirror: false
+timestamp_offset_us: 1000 #us
 
 main_and_secondary: right

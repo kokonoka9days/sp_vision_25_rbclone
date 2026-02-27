@@ -215,7 +215,7 @@ int main(int argc, char * argv[])
     // 读取主相机图像
     bincameras.cameras.aim_ptr->read(img, timestamp);
 
-    auto q = gimbal.q(timestamp - 3ms);
+    auto q = gimbal.q(timestamp - bincameras.cameras.aim_ptr->timestamp_offset);
     
     
     // 获取云台欧拉角

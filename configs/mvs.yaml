@@ -43,6 +43,7 @@ gain: 16
 vid_pid: "2bdf:0001"
 flip: false
 mirror: false
+timestamp_offset_us: 1000 #us
 
 #####-----传统方法参数-----#####
 threshold: 150

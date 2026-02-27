@@ -21,7 +21,8 @@ public:
 class Camera
 {
 public:
-  std::string main_and_secondary = "main";
+  std::string main_and_secondary = "main"; //是否是主相机
+  std::chrono::microseconds timestamp_offset = std::chrono::microseconds(0); //时间戳偏移量
   Camera(const std::string & config_path);
   void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp);
 
