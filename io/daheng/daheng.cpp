@@ -306,6 +306,13 @@ bool DahengCamera::initialize_camera()
     capture_thread_ = std::thread([&]() {
         tools::logger()->info("Capture thread started.");
         while (!capture_quit_) {
+            
+            if (is_paused_) {
+                std::unique_lock<std::mutex> lock(pause_mutex_);
+                // 线程在这里完全停滞，CPU占用绝对 0%，直到 resume() 中调用 notify_all 唤醒它
+                pause_cv_.wait(lock, [this]() { return !is_paused_.load(); });
+            }
+
             cv::Mat frame = getFrame();
             if (!frame.empty()) {
                 CameraData data;
@@ -430,19 +437,18 @@ void DahengCamera::ProcessData(void *pImageBuf, void *pImageRaw8Buf, void *pImag
 }
 
 void DahengCamera::pause() {
+    is_paused_ = true; // 设置暂停标志位
     if (hDevice != nullptr) {
-        // 停止大恒相机采流
-        // 注意：如果是千兆网相机还要调 GXStreamOff(stream_handle_)
         GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_STOP);
     }
 }
 
 void DahengCamera::resume() {
+    is_paused_ = false; // 清除暂停标志位
     if (hDevice != nullptr) {
-        // 恢复大恒相机采流
-        // 注意：如果是千兆网相机还要调 GXStreamOn(stream_handle_)
         GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_START);
     }
+    pause_cv_.notify_all(); // 唤醒正在沉睡的线程
 }
 
 

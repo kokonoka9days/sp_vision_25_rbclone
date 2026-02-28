@@ -154,6 +154,12 @@ void HikRobot::capture_start()
     while (!capture_quit_) {
       std::this_thread::sleep_for(1ms);
 
+      if (is_paused_) {
+          std::unique_lock<std::mutex> lock(pause_mutex_);
+          // 线程在这里完全停滞，不往下执行，也就完美避开了 GetImageBuffer 报错退出的问题
+          pause_cv_.wait(lock, [this]() { return !is_paused_.load(); });
+      }
+
       unsigned int ret;
       unsigned int nMsec = 100;
 
@@ -299,17 +305,18 @@ void HikRobot::reset_usb() const
 }
 
 void HikRobot::pause() {
-    // 停止海康相机采流
+    is_paused_ = true; // 设置暂停标志位
     if (handle_ != nullptr) {
         MV_CC_StopGrabbing(handle_);
     }
 }
 
 void HikRobot::resume() {
-    // 恢复海康相机采流
+    is_paused_ = false; // 清除暂停标志位
     if (handle_ != nullptr) {
         MV_CC_StartGrabbing(handle_);
     }
+    pause_cv_.notify_all(); // 唤醒正在沉睡的线程
 }
 
 }  // namespace io

@@ -18,8 +18,8 @@ public:
   virtual void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) = 0;
 
   // 新增虚函数接口
-  virtual void pause() {} 
-  virtual void resume() {}
+  virtual void pause() {} //停止
+  virtual void resume() {} //开启
 };
 
 class Camera
