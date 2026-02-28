@@ -16,6 +16,10 @@ public:
 
   virtual ~CameraBase() = default;
   virtual void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) = 0;
+
+  // 新增虚函数接口
+  virtual void pause() {} 
+  virtual void resume() {}
 };
 
 class Camera
@@ -24,6 +28,10 @@ public:
   std::string main_and_secondary = "main";
   Camera(const std::string & config_path);
   void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp);
+
+  // 新增对外调用的接口
+  void pause() { if(camera_) camera_->pause(); }
+  void resume() { if(camera_) camera_->resume(); }
 
 private:
   std::unique_ptr<CameraBase> camera_;

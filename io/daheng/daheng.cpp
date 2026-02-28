@@ -429,5 +429,21 @@ void DahengCamera::ProcessData(void *pImageBuf, void *pImageRaw8Buf, void *pImag
     }
 }
 
+void DahengCamera::pause() {
+    if (hDevice != nullptr) {
+        // 停止大恒相机采流
+        // 注意：如果是千兆网相机还要调 GXStreamOff(stream_handle_)
+        GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_STOP);
+    }
+}
+
+void DahengCamera::resume() {
+    if (hDevice != nullptr) {
+        // 恢复大恒相机采流
+        // 注意：如果是千兆网相机还要调 GXStreamOn(stream_handle_)
+        GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_START);
+    }
+}
+
 
 }  // namespace io

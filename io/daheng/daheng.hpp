@@ -110,6 +110,10 @@ private:
     // 配置参数
     bool trigger_mode_ = false;
     bool auto_white_balance_ = true;
+    
+
+    void pause() override;
+    void resume() override;
 };
 
 }  // namespace io
