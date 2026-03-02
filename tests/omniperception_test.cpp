@@ -21,9 +21,9 @@
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{short_camera   | ../configs/omniperception/short_camera.yaml | 短焦相机配置文件路径 }"
-  "{long_camera    | ../configs/omniperception/long_camera.yaml  | 长焦相机配置文件路径 }"
-  "{l_cam          | ../configs/omniperception/long_camera.yaml  | 左感知相机 }"
+  "{short_camera   | ../configs/sb.yaml | 短焦相机配置文件路径 }"
+  "{long_camera    | ../configs/sb_copy.yaml  | 长焦相机配置文件路径 }"
+  "{l_cam          | ../configs/omniperception/short_camera.yaml  | 左感知相机 }"
   "{r_cam          | ../configs/omniperception/long_camera.yaml  | 右感知相机 }";
 
 using namespace std::chrono_literals;
@@ -114,8 +114,8 @@ int main(int argc, char * argv[])
   
   
   // 全向感知相机（工业相机）
-  std::string omnl_yaml_name = "../configs/omniperception/omn_camera_left.yaml";
-  std::string omnr_yaml_name = "../configs/omniperception/omn_camera_right.yaml";
+  std::string omnl_yaml_name = cli.get<std::string>("l_cam");
+  std::string omnr_yaml_name = cli.get<std::string>("r_cam");
   io::Camera omn_cam1(omnl_yaml_name);
   io::Camera omn_cam2(omnr_yaml_name);
   auto omn_l_yaml = tools::load(omnl_yaml_name);
@@ -138,14 +138,6 @@ int main(int argc, char * argv[])
   auto_aim::Aimer aimer(short_camera_config_path);
   auto_aim::Shooter shooter(short_camera_config_path);
   
-  // MPC 规划器
-  auto_aim::Planner short_camera_planner(short_camera_config_path);
-  auto_aim::Planner long_camera_planner(long_camera_config_path);
-
-  //双目切换
-  BinocularAim bincameras(short_camera, long_camera, 
-                          short_camera_solver, long_camera_solver, 
-                          short_camera_planner, long_camera_planner );
   
   // 全向感知决策器
   omniperception::Decider decider(short_camera_config_path);
@@ -154,7 +146,7 @@ int main(int argc, char * argv[])
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
   target_queue.push(std::nullopt);
   
-  cv::Mat img;
+  cv::Mat img1, img2, img3, img4;
   std::chrono::steady_clock::time_point timestamp;
   
   // 云台状态
@@ -162,139 +154,24 @@ int main(int argc, char * argv[])
   
   // 获取云台模式
   auto last_mode = io::GimbalMode::IDLE;
-  
-  // MPC 规划线程（独立线程运行MPC控制器）
-  std::atomic<bool> quit = false;
-  auto mpc_thread = std::thread([&]() {
-    auto_aim::Plan current_plan{false};
-    
-    while (!quit) {
-      if (!target_queue.empty()) {
-        auto target = target_queue.front();
-        
-        if (target.has_value()) {
-          // 使用MPC规划器计算控制指令
-          auto gs = gimbal.state();
-          current_plan = bincameras.planners.aim_ptr->plan(*target, gs.bullet_speed);
-          
-          if (current_plan.control) {
-            // 发送MPC控制指令到云台
-            gimbal.send(
-              current_plan.control,
-              current_plan.fire,
-              static_cast<float>(current_plan.yaw),
-              static_cast<float>(current_plan.yaw_vel),
-              static_cast<float>(current_plan.yaw_acc),
-              static_cast<float>(current_plan.pitch),
-              static_cast<float>(current_plan.pitch_vel),
-              static_cast<float>(current_plan.pitch_acc)
-            );
-          }
-        } 
-      }
-      std::this_thread::sleep_for(10ms);
-    }
-  });
+
 
   // 主循环
   while (!exiter.exit()) {
     // 读取云台模式
     auto mode = gimbal.mode();
-    
-    // 模式切换日志
-    if (last_mode != mode) {
-      tools::logger()->info("Switch to {}", gimbal.str(mode));
-      last_mode = mode;
-    }
-    
-    // 只处理自瞄模式
-    if (mode != io::GimbalMode::AUTO_AIM) {
-      // 非自瞄模式：发送停止指令并跳过
-      std::this_thread::sleep_for(50ms);
-      continue;
-    }
-    
-    // 读取主相机图像
-    bincameras.cameras.aim_ptr->read(img, timestamp);
-    
-    // 获取云台姿态（四元数）
-    Eigen::Quaterniond q = gimbal.q(timestamp);
-    
-    // 更新解算器姿态
-    bincameras.solvers.aim_ptr-> set_R_gimbal2world(q);
-    
-    // 获取云台欧拉角
-    gimbal_euler = tools::eulers(bincameras.solvers.aim_ptr->R_gimbal2world(), 2, 1, 0);
-    
-    // 主相机检测
-    auto armors = yolo.detect(img);
-    
-    // 更新无敌状态装甲板
-    decider.get_invincible_armor(ros2.subscribe_enemy_status());
-    
-    // 过滤装甲板
-    decider.armor_filter(armors);
-    
-    // 设置优先级
-    decider.set_priority(armors);
-    
-    // 跟踪目标
-    auto targets = tracker.track(armors, timestamp);
-    
-    // 模式判断：如果跟踪器丢失目标，切换到全向感知模式
-    if (tracker.state() == "lost") {
-      // 【新增】：唤醒全向相机（恢复底层硬件推流）
-      omn_cam1.resume();
-      omn_cam2.resume();
+    omn_cam1.read(img1, timestamp);
+    omn_cam2.read(img2, timestamp);
+    short_camera.read(img3, timestamp);
+    long_camera.read(img4, timestamp);
 
-      // 全向感知模式
-      io::sb_VisionToGimbal vision_cmd = decider.decide_g(
-        yolo, gimbal_euler, omn_cam1, omn_cam2);
-      
-      if (vision_cmd.mode != 0) {
-
-        vision_cmd.work_mode = static_cast<uint8_t>(io::WorkMode::OMNI_PERCEPTION);
-        // 全向感知找到目标，发送控制指令
-        // 使用Gimbal的send函数直接发送VisionToGimbal结构体
-        gimbal.sb_send(vision_cmd);
-        
-        // 射击判断（使用shooter_g版本）
-        bool should_shoot = shooter.shoot_g(vision_cmd, aimer, targets, gimbal_euler);
-        
-        // 如果需要射击且vision_cmd.mode是2（控制开火），则发送射击指令
-        if (should_shoot && vision_cmd.mode == 2) {
-          // 重新发送带有射击标志的指令
-          vision_cmd.mode = 2;  // 控制并开火
-          gimbal.sb_send(vision_cmd);
-        }
-        else{
-          gimbal.send(false, false, 0, 0, 0, 0, 0, 0);
-        }
-      }
-    } else {
-      // 【新增】：挂起全向相机（停止底层硬件推流，释放CPU和USB/网卡带宽）
-      omn_cam1.pause();
-      omn_cam2.pause();
-
-      // 自瞄模式 - 使用MPC
-      if (!targets.empty()) {
-        // 将目标放入队列供MPC线程处理
-        target_queue.push(targets.front());
-        bincameras.ChangeTheScope(targets.front(), tracker);
-      } else {
-        target_queue.push(std::nullopt);
-      }
-    }
-    
-    // ROS2通信 - 发布目标信息
-    Eigen::Vector4d target_info = decider.get_target_info(armors, targets);
-    ros2.publish(target_info);
-  }
-  
-  // 清理
-  quit = true;
-  if (mpc_thread.joinable()) {
-    mpc_thread.join();
+    // cv::resize(img1, img1, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    cv::imshow("omn_cam1", img1);
+    cv::imshow("omn_cam2", img2);
+    cv::imshow("short_camera", img3);
+    cv::imshow("long_camera", img4);
+    auto key = cv::waitKey(1);
+    if (key == 'q') break;
   }
   
   // 发送停止指令
