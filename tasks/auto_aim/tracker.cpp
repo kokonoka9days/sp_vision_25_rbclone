@@ -112,7 +112,7 @@ std::list<Target> Tracker::track(
     return {};
   }
   io::GimbalState g = gimbal_->state();
-  if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ? Color::blue : Color::red;
+  if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ? Color::red : Color::blue;
 
   // 时间间隔过长，说明可能发生了相机离线
   if (state_ != "lost" && dt > 0.1) {
