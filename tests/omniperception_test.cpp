@@ -20,78 +20,14 @@
 #include "tools/yaml.hpp"
 
 const std::string keys =
-  "{help h usage ? |                        | 输出命令行参数说明}"
-  "{short_camera   | ../configs/sb.yaml | 短焦相机配置文件路径 }"
-  "{long_camera    | ../configs/sb_copy.yaml  | 长焦相机配置文件路径 }"
-  "{l_cam          | ../configs/omniperception/short_camera.yaml  | 左感知相机 }"
+  "{help h usage ? |                                             | 输出命令行参数说明}"
+  "{short_camera   | ../configs/sb.yaml                          | 短焦相机配置文件路径 }"
+  "{long_camera    | ../configs/sb_copy.yaml                     | 长焦相机配置文件路径 }"
+  "{l_cam          | ../configs/omniperception/short_camera.yaml | 左感知相机 }"
   "{r_cam          | ../configs/omniperception/long_camera.yaml  | 右感知相机 }";
 
 using namespace std::chrono_literals;
 
-template<typename T> 
-class BinocularType{
-public:
-  using Ptr = T*;
-  using Address = T&;
-
-  Address short_aim, long_aim;
-  Ptr aim_ptr = nullptr;
-  BinocularType(T& short_aim_, T&long_aim_): short_aim(short_aim_), long_aim(long_aim_), aim_ptr(&short_aim_){}
-
-  void Switch(){
-    aim_ptr = aim_ptr == &short_aim ? &long_aim : &short_aim;
-  }
-};
-struct BinocularAim{
-  BinocularAim(
-        io::Camera& cam_short, io::Camera& cam_long,
-        auto_aim::Solver& solver_short, auto_aim::Solver& solver_long,
-        auto_aim::Planner& planner_short, auto_aim::Planner& planner_long
-    ) : cameras(cam_short, cam_long),
-        solvers(solver_short, solver_long),
-        planners(planner_short, planner_long) 
-    {}
-  BinocularType<io::Camera> cameras;
-  BinocularType<auto_aim::Solver> solvers;
-  BinocularType<auto_aim::Planner> planners;
-  bool is_short = true;
-
-  std::chrono::steady_clock::time_point switch_time_point;
-
-  //长短焦各射程范围 min_near到max_far
-  double short_min_near = 0, short_max_far = 3.3;
-  double long_min_near = 1.5, long_max_far = 5.5;
-
-  // 缓冲区 far2near and near2far
-  double short2long_point =  3.0;//(short_max_far + long_min_near)/2.;
-  double long2short_point = 1.7;
-
-  /// @brief 长短焦切换
-  void Switch(){
-    this->cameras.Switch();
-    this->solvers.Switch();
-    this->planners.Switch();
-    is_short = !is_short;
-    switch_time_point = std::chrono::steady_clock::now();
-  }
-
-  /// @brief 长短焦切换逻辑
-  void ChangeTheScope(auto_aim::Target target , auto_aim::Tracker& tracker){
-    const auto x_est = target.getEKFXest();
-    const double x = x_est(0), y = x_est(2), z = x_est(4);
-    double dis = sqrt( x*x + y*y + z*z);
-    
-    if(is_short && dis > short2long_point ){
-      tools::logger()->info("切换至长焦镜头");
-      Switch();
-    }else if(!is_short && dis < long2short_point){
-      tools::logger()->info("切换至短焦镜头");
-      Switch();
-    }
-
-    tracker.setSolver(*this->solvers.aim_ptr);
-  }
-};
 
 int main(int argc, char * argv[])
 {
