@@ -84,6 +84,7 @@ int main(int argc, char * argv[])
   
   cv::Mat img1, img2, img3, img4;
   std::chrono::steady_clock::time_point timestamp;
+  std::chrono::steady_clock::time_point last = std::chrono::steady_clock::now();
   
   // 云台状态
   Eigen::Vector3d gimbal_euler;
@@ -101,6 +102,11 @@ int main(int argc, char * argv[])
     short_camera.read(img3, timestamp);
     long_camera.read(img4, timestamp);
 
+    auto now = std::chrono::steady_clock::now();
+    auto dt = tools::delta_time(now, last);
+    tools::logger()->info("{:.2f} fps", 1 / dt);
+    last = now;
+
     // cv::resize(img1, img1, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
     cv::imshow("omn_cam1", img1);
     cv::imshow("omn_cam2", img2);
@@ -108,6 +114,16 @@ int main(int argc, char * argv[])
     cv::imshow("long_camera", img4);
     auto key = cv::waitKey(1);
     if (key == 'q') break;
+    if( key == 'p') {
+      // 暂停全向相机
+      omn_cam1.pause();
+      omn_cam2.pause();
+    }
+     if( key == 'r') {
+      // 恢复全向相机
+      omn_cam1.resume();
+      omn_cam2.resume();
+    }
   }
   
   // 发送停止指令
