@@ -20,7 +20,7 @@ int main() {
         
         std::vector<uint8_t> buffer;
         int frame_count = 0;
-        const size_t FRAME_SIZE = 27;  // 数据长度为42字节
+        const size_t FRAME_SIZE = 28;  // 数据长度为42字节
         
         while (true) {
             if (ser.available()) {
@@ -35,7 +35,7 @@ int main() {
                 bool found_frame = false;
                 for (size_t i = 0; i < buffer.size(); ++i) {
                     // 查找0x53帧头
-                    if (buffer[i] == 0x5a && (buffer.size() - i) >= FRAME_SIZE) {
+                    if (buffer[i] == 0x5a && (buffer.size() - i) >= FRAME_SIZE && buffer[i+1] == 0x53) {
                         found_frame = true;
                         std::cout << "\n[Frame " << ++frame_count << "] ";
                         

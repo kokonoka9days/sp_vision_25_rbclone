@@ -12,7 +12,7 @@
 const std::string keys =
   "{help h usage ? | | 输出命令行参数说明}"
   "{f              | | 是否开火}"
-  "{@config-path   | ../configs/standard3.yaml | yaml配置文件路径 }";
+  "{@config-path   | ../configs/sb.yaml | yaml配置文件路径 }";
 
 using namespace std::chrono_literals;
 
@@ -99,10 +99,15 @@ int main(int argc, char * argv[])
     data["bullet_count"] = state.bullet_count;
     data["fired"] = fired ? 1 : 0;
     data["fire"] = test_fire && fire ? 1 : 0;
-    data["t"] = tools::delta_time(t, t0);
+    auto dt = tools::delta_time(t, t0);
+    data["t"] = dt;
+    t0 = t;
     plotter.plot(data);
 
-    std::this_thread::sleep_for(9ms);
+    // tools::logger()->info("dt:: {:.4f}", dt);
+    tools::logger()->info("fps:: {:.4f}", 1./dt);
+
+    std::this_thread::sleep_for(1ms);
   }
 
   gimbal.send(false, false, 0, 0, 0, 0, 0, 0);

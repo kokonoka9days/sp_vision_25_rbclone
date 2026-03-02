@@ -147,7 +147,7 @@ std::list<Target> Tracker::track(
   {
     if (state_ == "lost") {
         found = set_target(armors, t);
-        tools::logger()->debug("按下右键，只选择正在跟踪的装甲板，跳过其他兵种，直至丢跟踪，初始化跟踪类型为 {}", ARMOR_NAMES[armors.front().name]);
+        // tools::logger()->debug("按下右键，只选择正在跟踪的装甲板，跳过其他兵种，直至丢跟踪，初始化跟踪类型为 {}", ARMOR_NAMES[armors.front().name]);
     }
     else {
       found = update_target(armors, t);

@@ -22,8 +22,8 @@
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{short_camera   | ../configs/omniperception/short_camera.yaml | 短焦相机配置文件路径 }"
-  "{long_camera    | ../configs/omniperception/long_camera.yaml  | 长焦相机配置文件路径 }";
+  "{short_camera   | ../configs/sb.yaml | 短焦相机配置文件路径 }"
+  "{long_camera    | ../configs/sb_copy.yaml  | 长焦相机配置文件路径 }";
 
 using namespace std::chrono_literals;
 
@@ -160,8 +160,8 @@ int main(int argc, char * argv[])
         auto target = target_queue.front();
         auto gs = gimbal.state();
         
-        // 使用MPC规划器计算控制指令
-        plan = bincameras.planners.aim_ptr->plan(*target, 22);
+        // // 使用MPC规划器计算控制指令
+        // plan = bincameras.planners.aim_ptr->plan(*target, 22);
           
         gimbal.send(
           plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
