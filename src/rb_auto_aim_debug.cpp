@@ -47,6 +47,7 @@ int main(int argc, char * argv[])
   auto_aim::YOLO yolo(config_path, true);
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, solver);
+  tracker.set_gimbal(&gimbal);
   auto_aim::Aimer aimer(config_path);
   auto_aim::Shooter shooter(config_path);
   auto_aim::Planner planner(config_path);
@@ -130,10 +131,17 @@ int main(int argc, char * argv[])
 
   cv::Mat img;
   std::chrono::steady_clock::time_point t;
+  std::chrono::steady_clock::time_point last_t;
 
   while (!exiter.exit()) {
     camera.read(img, t);
     auto q = gimbal.q(t - 1ms);
+
+
+    double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
+    // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
+    last_t = t;
+    tools::logger()->info("fps:: {:.2f}", fps);
 
     auto ypr = tools::eulers(q, 2, 1, 0);
 
@@ -244,6 +252,10 @@ int main(int argc, char * argv[])
     cv::imshow("reprojection", img);
     auto key = cv::waitKey(1);
     if (key == 'q') break;
+    if(key == 'r') {
+      io::GimbalState* g_demo = gimbal.set_state_();
+      g_demo->mode = !g_demo->mode;
+    }
   }
 
   quit = true;

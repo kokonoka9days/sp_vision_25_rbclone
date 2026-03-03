@@ -24,7 +24,7 @@
 
 const std::string keys =
   "{help h usage ? | | 输出命令行参数说明}"
-  "{@config-path   | configs/demo.yaml | yaml配置文件路径 }";
+  "{@config-path   | ../configs/sb.yaml | yaml配置文件路径 }";
 
 using namespace std::chrono_literals;
 
@@ -47,6 +47,7 @@ int main(int argc, char * argv[])
   auto_aim::YOLO yolo(config_path, true);
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, solver);
+  tracker.set_gimbal(&gimbal);
   auto_aim::Planner planner(config_path);
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);

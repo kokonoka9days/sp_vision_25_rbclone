@@ -12,8 +12,8 @@ using namespace std::chrono_literals;
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
   "{name n         |        video0          | 端口名称 }"
-  "{@config-path   | configs/sentry.yaml    | 位置参数，yaml配置文件路径 }"
-  "{d display      |                        | 显示视频流       }";
+  "{@config-path   | ../configs/sentry.yaml    | 位置参数，yaml配置文件路径 }"
+  "{d display      |true| 显示视频流       }";
 
 int main(int argc, char * argv[])
 {

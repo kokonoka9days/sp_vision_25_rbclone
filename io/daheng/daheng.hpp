@@ -110,6 +110,14 @@ private:
     // 配置参数
     bool trigger_mode_ = false;
     bool auto_white_balance_ = true;
+    
+
+    void pause() override;
+    void resume() override;
+
+    std::mutex pause_mutex_;
+    std::condition_variable pause_cv_;
+    std::atomic<bool> is_paused_{false};
 };
 
 }  // namespace io

@@ -25,7 +25,8 @@ enum class WorkMode : uint8_t
 struct __attribute__((packed)) GimbalToVision
 {
   uint8_t head[2] = {0x5a,0x53};
-  uint8_t mode;  // 0: 空闲, 1: 自瞄, 2: 小符, 3: 大符
+  uint8_t mode;  // 0: 空闲, 1: 自瞄, 2: 小符, 3: 大符  电控控制右键0，1
+  uint16_t color; // 0: 蓝色, 1: 红色
   float q[4];    // wxyz顺序
   float bullet_speed;
   uint16_t bullet_count;  // 子弹累计发送次数
@@ -79,6 +80,8 @@ struct GimbalState
   float yaw_vel;
   float pitch;
   float pitch_vel;
+  uint8_t mode;
+  uint8_t enemy_color; // 0: 蓝色, 1: 红色
   float bullet_speed;
   uint16_t bullet_count;
 };
@@ -106,6 +109,10 @@ public:
   void send(io::VisionToGimbal VisionToGimbal);
 
   void sb_send(io::sb_VisionToGimbal VisionToGimbal);
+
+  GimbalState* set_state_(){
+    return &state_;
+  }
 
 private:
   serial::Serial serial_;

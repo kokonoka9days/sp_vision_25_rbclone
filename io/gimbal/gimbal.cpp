@@ -19,7 +19,7 @@ Gimbal::Gimbal(const std::string & config_path)
   try {
     serial_.setPort(com_port);
     serial_.setBaudrate(460800);
-    auto timeout = serial::Timeout::simpleTimeout(10); 
+    auto timeout = serial::Timeout::simpleTimeout(1000); 
     serial_.setTimeout(timeout);
     serial_.open();
   } catch (const std::exception & e) {
@@ -175,7 +175,7 @@ bool Gimbal::read(uint8_t * buffer, size_t size)
   try {
     return serial_.read(buffer, size) == size;
   } catch (const std::exception & e) {
-    // tools::logger()->warn("[Gimbal] Failed to read serial: {}", e.what());
+    tools::logger()->warn("[Gimbal] Failed to read serial: {}", e.what());
     return false;
   }
 }
@@ -218,7 +218,7 @@ void Gimbal::read_thread()
     }
 
     if (!tools::check_crc16(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
-      // tools::logger()->debug("[Gimbal] CRC16 check failed.");
+      tools::logger()->debug("[Gimbal] CRC16 check failed.");
       continue;
     }
 
@@ -246,6 +246,8 @@ void Gimbal::read_thread()
     auto ypr_now = tools::eulers(q, 2, 1, 0);
     state_.yaw = ypr_now[0] * 57.3;
     state_.pitch = ypr_now[1] * 57.3;
+    state_.mode = rx_data_.mode;
+    state_.enemy_color = !rx_data_.color;
 
     // state_.bullet_speed = rx_data_.bullet_speed;
     state_.bullet_speed = 25;

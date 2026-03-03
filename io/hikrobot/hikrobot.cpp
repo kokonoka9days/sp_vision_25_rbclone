@@ -135,7 +135,7 @@ void HikRobot::capture_start()
   MVCC_FLOATVALUE gainRange;
   MV_CC_GetFloatValue(handle_,"AutoGainUpperLimit", &gainRange);//获取增益值范围
   set_float_value("Gain", gain_*gainRange.fMax );
-  MV_CC_SetFrameRate(handle_, 150);
+  MV_CC_SetFrameRate(handle_, 200);
 
   ret = MV_CC_StartGrabbing(handle_);
   if (ret != MV_OK) {
@@ -154,11 +154,20 @@ void HikRobot::capture_start()
     while (!capture_quit_) {
       std::this_thread::sleep_for(1ms);
 
+      if (is_paused_) {
+          std::unique_lock<std::mutex> lock(pause_mutex_);
+          // 线程在这里完全停滞，不往下执行，也就完美避开了 GetImageBuffer 报错退出的问题
+          pause_cv_.wait(lock, [this]() { return !is_paused_.load(); });
+      }
+
       unsigned int ret;
       unsigned int nMsec = 100;
 
       ret = MV_CC_GetImageBuffer(handle_, &raw, nMsec);
       if (ret != MV_OK) {
+        if (is_paused_) {
+            continue; 
+        }
         tools::logger()->warn("MV_CC_GetImageBuffer failed: {:#x}", ret);
         break;
       }
@@ -296,6 +305,21 @@ void HikRobot::reset_usb() const
     tools::logger()->info("Reset usb successfully :)");
 
   libusb_close(handle);
+}
+
+void HikRobot::pause() {
+    is_paused_ = true; // 设置暂停标志位
+    if (handle_ != nullptr) {
+        MV_CC_StopGrabbing(handle_);
+    }
+}
+
+void HikRobot::resume() {
+    is_paused_ = false; // 清除暂停标志位
+    if (handle_ != nullptr) {
+        MV_CC_StartGrabbing(handle_);
+    }
+    pause_cv_.notify_all(); // 唤醒正在沉睡的线程
 }
 
 }  // namespace io

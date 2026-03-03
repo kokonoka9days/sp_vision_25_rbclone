@@ -1,5 +1,6 @@
 # enemy_color: "red"
 enemy_color: "blue"
+# enemy_color: "auto" # 通过电控发来己方颜色判断敌方颜色，默认蓝色，红色时请改为"red"
 
 #####-----神经网络参数-----#####
 yolo_name: yolov5

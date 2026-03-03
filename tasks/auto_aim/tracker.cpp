@@ -19,7 +19,8 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
   omni_target_priority_{ArmorPriority::fifth}
 {
   auto yaml = YAML::LoadFile(config_path);
-  enemy_color_ = (yaml["enemy_color"].as<std::string>() == "red") ? Color::red : Color::blue;
+  enemy_color_str_ = yaml["enemy_color"].as<std::string>();
+  enemy_color_ = (enemy_color_str_ == "red") ? Color::red : Color::blue;
   min_detect_count_ = yaml["min_detect_count"].as<int>();
   max_temp_lost_count_ = yaml["max_temp_lost_count"].as<int>();
   outpost_max_temp_lost_count_ = yaml["outpost_max_temp_lost_count"].as<int>();
@@ -28,11 +29,18 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
 
 std::string Tracker::state() const { return state_; }
 
-std::list<Target> Tracker::track(
+std::list<Target> Tracker::sb_track(
   std::list<Armor> & armors, std::chrono::steady_clock::time_point t, bool use_enemy_color)
 {
   auto dt = tools::delta_time(t, last_timestamp_);
   last_timestamp_ = t;
+
+  if(gimbal_ == nullptr) {
+    tools::logger()->error("[Tracker] gimbal_不能为空指针，请先调用set_gimbal()设置云台指针");
+    return {};
+  }
+  io::GimbalState g = gimbal_->state();
+  if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ? Color::blue : Color::red;
 
   // 时间间隔过长，说明可能发生了相机离线
   if (state_ != "lost" && dt > 0.1) {
@@ -75,6 +83,101 @@ std::list<Target> Tracker::track(
   // 发散检测
   if (state_ != "lost" && target_.diverged()) {
     tools::logger()->debug("[Tracker] Target diverged!");
+    state_ = "lost";
+    return {};
+  }
+
+  if (
+  std::accumulate(
+    target_.ekf().recent_nis_failures.begin(), target_.ekf().recent_nis_failures.end(), 0) >=
+  (0.4 * target_.ekf().window_size)) {
+      tools::logger()->debug("[Target] Bad Converge Found!");
+      state_ = "lost";
+      return {};
+  }
+
+  if (state_ == "lost") return {};
+
+  std::list<Target> targets = {target_};
+  return targets;
+}
+
+std::list<Target> Tracker::track(
+  std::list<Armor> & armors, std::chrono::steady_clock::time_point t, bool use_enemy_color)
+{
+  auto dt = tools::delta_time(t, last_timestamp_);
+  last_timestamp_ = t;
+  if(gimbal_ == nullptr) {
+    tools::logger()->error("[Tracker] gimbal_不能为空指针，请先调用set_gimbal()设置云台指针");
+    return {};
+  }
+  io::GimbalState g = gimbal_->state();
+  if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ? Color::red : Color::blue;
+
+  // 时间间隔过长，说明可能发生了相机离线
+  if (state_ != "lost" && dt > 0.1) {
+    tools::logger()->warn("[Tracker] Large dt: {:.3f}s", dt);
+    state_ = "lost";
+  }
+  // 过滤掉非我方装甲板
+  armors.remove_if([&](const auto_aim::Armor & a) { return a.color != enemy_color_; });
+
+  // 过滤前哨站顶部装甲板
+  // armors.remove_if([this](const auto_aim::Armor & a) {
+  //   return a.name == ArmorName::outpost &&
+  //          solver_.oupost_reprojection_error(a, 27.5 * CV_PI / 180.0) <
+  //            solver_.oupost_reprojection_error(a, -15 * CV_PI / 180.0);
+  // });
+
+  // 优先选择靠近图像中心的装甲板
+  armors.sort([](const Armor & a, const Armor & b) {
+    cv::Point2f img_center(1440 / 2, 1080 / 2);  // TODO
+    auto distance_1 = cv::norm(a.center - img_center);
+    auto distance_2 = cv::norm(b.center - img_center);
+    return distance_1 < distance_2;
+  });
+
+  // 按优先级排序，优先级最高在首位(优先级越高数字越小，1的优先级最高)
+  // armors.sort(
+  //   [](const auto_aim::Armor & a, const auto_aim::Armor & b) { return a.priority < b.priority; });
+
+  bool found = 0;
+  //按下右键时，mouse为1则跟随上一次的目标，不按则瞄准最近的装甲板
+  if(g.mode == 1)
+  {
+    if (state_ == "lost") {
+        found = set_target(armors, t);
+        // tools::logger()->debug("按下右键，只选择正在跟踪的装甲板，跳过其他兵种，直至丢跟踪，初始化跟踪类型为 {}", ARMOR_NAMES[armors.front().name]);
+    }
+    else {
+      found = update_target(armors, t);
+    }
+  }else if(g.mode == 0){
+    if (state_ == "lost") {
+        found = set_target(armors, t);
+    }
+    else {
+      if(target_.name == armors.front().name 
+        && target_.armor_type == armors.front().type)
+      {
+        found = update_target(armors, t);
+      }else{
+        found = set_target(armors, t);
+        state_ = "detecting";
+        detect_count_ = 1;
+        tools::logger()->debug("不按右键，默认选中离图像中心最近的兵种，切换至： {}, 跟踪器重置", ARMOR_NAMES[armors.front().name]);
+      }
+
+     
+    }
+  }
+  // found = set_target(armors, t);
+
+  state_machine(found);
+
+  // 发散检测
+  if (state_ != "lost" && target_.diverged()) {
+    // tools::logger()->debug("[Tracker] Target diverged!");
     state_ = "lost";
     return {};
   }

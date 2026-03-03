@@ -22,9 +22,11 @@
 #include "tools/yaml.hpp"
 
 const std::string keys =
-  "{help h usage ? |                        | 输出命令行参数说明}"
-  "{short_camera   | ../configs/omniperception/short_camera.yaml | 短焦相机配置文件路径 }"
-  "{long_camera    | ../configs/omniperception/long_camera.yaml  | 长焦相机配置文件路径 }";
+  "{help h usage ? |                                             | 输出命令行参数说明}"
+  "{short_camera   | ../configs/sb.yaml                          | 短焦相机配置文件路径 }"
+  "{long_camera    | ../configs/sb_copy.yaml                     | 长焦相机配置文件路径 }"
+  "{l_cam          | ../configs/omniperception/short_camera.yaml | 左感知相机 }"
+  "{r_cam          | ../configs/omniperception/long_camera.yaml  | 右感知相机 }";
 
 using namespace std::chrono_literals;
 
@@ -116,8 +118,8 @@ int main(int argc, char * argv[])
   
   
   // 全向感知相机（工业相机）
-  std::string omnl_yaml_name = "configs/omniperception/omn_camera_left.yaml";
-  std::string omnr_yaml_name = "configs/omniperception/omn_camera_right.yaml";
+   std::string omnl_yaml_name = cli.get<std::string>("l_cam");
+  std::string omnr_yaml_name = cli.get<std::string>("r_cam");
   io::Camera omn_cam1(omnl_yaml_name);
   io::Camera omn_cam2(omnr_yaml_name);
   auto omn_l_yaml = tools::load(omnl_yaml_name);
@@ -136,6 +138,7 @@ int main(int argc, char * argv[])
   auto_aim::Solver long_camera_solver(long_camera_config_path);
 
   auto_aim::Tracker tracker(short_camera_config_path, short_camera_solver);//默认短焦
+  tracker.set_gimbal(&gimbal);
   auto_aim::Aimer aimer(short_camera_config_path);
   auto_aim::Shooter shooter(short_camera_config_path);
   
@@ -244,6 +247,10 @@ int main(int argc, char * argv[])
     
     // 模式判断：如果跟踪器丢失目标，切换到全向感知模式
     if (tracker.state() == "lost") {
+      // 【新增】：唤醒全向相机（恢复底层硬件推流）
+      omn_cam1.resume();
+      omn_cam2.resume();
+
       // 全向感知模式
       io::sb_VisionToGimbal vision_cmd = decider.decide_g(
         yolo, gimbal_euler, omn_cam1, omn_cam2);
@@ -269,6 +276,10 @@ int main(int argc, char * argv[])
         }
       }
     } else {
+      // 【新增】：挂起全向相机（停止底层硬件推流，释放CPU和USB/网卡带宽）
+      omn_cam1.pause();
+      omn_cam2.pause();
+
       // 自瞄模式 - 使用MPC
       if (!targets.empty()) {
         // 将目标放入队列供MPC线程处理

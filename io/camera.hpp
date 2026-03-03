@@ -16,6 +16,10 @@ public:
 
   virtual ~CameraBase() = default;
   virtual void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) = 0;
+
+  // 新增虚函数接口
+  virtual void pause() {} //停止
+  virtual void resume() {} //开启
 };
 
 class Camera
@@ -25,6 +29,12 @@ public:
   std::chrono::microseconds timestamp_offset = std::chrono::microseconds(0); //时间戳偏移量
   Camera(const std::string & config_path);
   void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp);
+
+  // 新增对外调用的接口
+  void pause() { if(camera_) camera_->pause(); }
+  void resume() { if(camera_) camera_->resume(); }
+
+  
 
 private:
   std::unique_ptr<CameraBase> camera_;
