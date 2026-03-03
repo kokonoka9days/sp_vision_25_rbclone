@@ -21,9 +21,11 @@
 #include "tools/img_tools.hpp"
 
 const std::string keys =
-  "{help h usage ? |                        | 输出命令行参数说明}"
-  "{short_camera   | ../configs/omniperception/omn_camera_left.yaml | 短焦相机配置文件路径 }"
-  "{long_camera    | ../configs/omniperception/omn_camera_right.yaml  | 长焦相机配置文件路径 }";
+  "{help h usage ? |                                             | 输出命令行参数说明}"
+  "{short_camera   | ../configs/sb.yaml                          | 短焦相机配置文件路径 }"
+  "{long_camera    | ../configs/sb_copy.yaml                     | 长焦相机配置文件路径 }"
+  "{l_cam          | ../configs/omniperception/short_camera.yaml | 左感知相机 }"
+  "{r_cam          | ../configs/omniperception/long_camera.yaml  | 右感知相机 }";
 
 
 using namespace std::chrono_literals;
@@ -157,7 +159,7 @@ int main(int argc, char * argv[])
     tools::logger()->info("当前使用 {} 焦镜头", bincameras.is_short ? "短" : "长");
     // 读取主相机图像
     bincameras.cameras.aim_ptr->read(img, timestamp);
-    
+    // short_camera.read(img, timestamp);
     
     // // 获取云台欧拉角
     gimbal_euler = tools::eulers(bincameras.solvers.aim_ptr->R_gimbal2world(), 2, 1, 0);

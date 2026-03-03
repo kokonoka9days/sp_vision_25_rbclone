@@ -21,15 +21,15 @@ roi:
 use_roi: false
 
 # #####-----传统方法参数-----#####
-# threshold: 150
-# max_angle_error: 45 # degree
-# min_lightbar_ratio: 1.5
-# max_lightbar_ratio: 20
-# min_lightbar_length: 8
-# min_armor_ratio: 1
-# max_armor_ratio: 5
-# max_side_ratio: 1.5
-# max_rectangular_error: 25 # degree
+threshold: 150
+max_angle_error: 45 # degree
+min_lightbar_ratio: 1.5
+max_lightbar_ratio: 20
+min_lightbar_length: 8
+min_armor_ratio: 1
+max_armor_ratio: 5
+max_side_ratio: 1.5
+max_rectangular_error: 25 # degree
 # min_confidence: 0.8
 
 #####-----tracker参数-----#####
@@ -126,7 +126,7 @@ send_canid: 0xff
 can_interface: "can0"
 
 #####-----gimbal参数-----#####
-com_port: "/dev/ttyACM1"
+com_port: "/dev/ttyACM0"
 # 陀螺仪是否装错, 编号012分别代表电控坐标系ypr，想换旋转轴只需要对编号进行互换即可，负号就是对当前值取负，交换完再取负
 # 上车前记得对齐电控坐标系和济瞄惯性系
 gimbal_y1: 1

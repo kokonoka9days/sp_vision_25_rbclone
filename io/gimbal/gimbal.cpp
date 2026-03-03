@@ -19,7 +19,7 @@ Gimbal::Gimbal(const std::string & config_path)
   try {
     serial_.setPort(com_port);
     serial_.setBaudrate(460800);
-    auto timeout = serial::Timeout::simpleTimeout(1000); 
+    auto timeout = serial::Timeout::simpleTimeout(100); 
     serial_.setTimeout(timeout);
     serial_.open();
   } catch (const std::exception & e) {
@@ -202,7 +202,7 @@ void Gimbal::read_thread()
 
     if (rx_data_.head[0] != 0x5a || rx_data_.head[1] != 0x53){
       // error_count++;
-      // tools::logger()->warn("找不到帧头");
+      tools::logger()->warn("找不到帧头");
       continue;
     } 
 
