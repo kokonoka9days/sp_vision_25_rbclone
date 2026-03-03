@@ -101,15 +101,15 @@ int main(int argc, char * argv[])
     short_camera.read(img3, timestamp);
     // long_camera.read(img4, timestamp);
 
-    auto now = std::chrono::steady_clock::now();
-    auto dt = tools::delta_time(now, last_t);
+    // auto now = std::chrono::steady_clock::now();
+    // auto dt = tools::delta_time(now, last_t);
     // tools::logger()->info("{:.2f} fps", 1 / dt);
-    last_t = now;
+    // last_t = now;
 
-    nlohmann::json data;
-      data["t"] = 1 / dt;
+    // nlohmann::json data;
+    //   data["t"] = 1 / dt;
 
-      plotter.plot(data);
+    //   plotter.plot(data);
 
     i++;
     if(i == 100)
@@ -146,10 +146,14 @@ int main(int argc, char * argv[])
     }
     if( key == 'r') {
       // 恢复全向相机
+      last_t = std::chrono::steady_clock::now();
       long_camera.resume();
       omn_cam1.resume();
       omn_cam2.resume();
       is_omn_paused = false; // 更新状态标志
+      auto now = std::chrono::steady_clock::now();
+      auto dt = tools::delta_time(now, last_t);
+      tools::logger()->info("{:.2f} s",dt);
     }
 }
 }
