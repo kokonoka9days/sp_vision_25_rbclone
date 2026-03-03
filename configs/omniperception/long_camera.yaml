@@ -46,7 +46,7 @@ usb_gain: 10 #0-96
 
 camera_name: "daheng"
 camera_sn: "KE0210030295"
-exposure_us: 4000
+exposure_us: 3000
 gain: 0.5
 gamma: 0.5
 vid_pid: "2ba2:4d55"

@@ -135,7 +135,7 @@ void HikRobot::capture_start()
   MVCC_FLOATVALUE gainRange;
   MV_CC_GetFloatValue(handle_,"AutoGainUpperLimit", &gainRange);//获取增益值范围
   set_float_value("Gain", gain_*gainRange.fMax );
-  MV_CC_SetFrameRate(handle_, 150);
+  MV_CC_SetFrameRate(handle_, 200);
 
   ret = MV_CC_StartGrabbing(handle_);
   if (ret != MV_OK) {
@@ -165,6 +165,9 @@ void HikRobot::capture_start()
 
       ret = MV_CC_GetImageBuffer(handle_, &raw, nMsec);
       if (ret != MV_OK) {
+        if (is_paused_) {
+            continue; 
+        }
         tools::logger()->warn("MV_CC_GetImageBuffer failed: {:#x}", ret);
         break;
       }
