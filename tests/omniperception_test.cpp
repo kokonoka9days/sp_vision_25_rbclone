@@ -43,7 +43,6 @@ int main(int argc, char * argv[])
   auto short_camera_config_path = cli.get<std::string>("short_camera");
   auto long_camera_config_path = cli.get<std::string>("long_camera");
 
-  
   // 主相机（工业相机）
   io::Camera short_camera(short_camera_config_path);
   io::Camera long_camera(long_camera_config_path);
@@ -59,7 +58,7 @@ int main(int argc, char * argv[])
   omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
   omn_cam2.main_and_secondary = tools::read<std::string>(omn_r_yaml, "main_and_secondary");
   // io::Camera back_camera("configs/camera.yaml");
-  
+  tools::logger()->info("初始化");
   // 改为使用Gimbal串口通信（替代CBoard）
   io::Gimbal gimbal(short_camera_config_path);
   
@@ -75,15 +74,9 @@ int main(int argc, char * argv[])
   auto_aim::Shooter shooter(short_camera_config_path);
   
   
-  // 全向感知决策器
-  omniperception::Decider decider(short_camera_config_path);
-  
-  // 线程安全队列（用于MPC规划线程）
-  tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
-  target_queue.push(std::nullopt);
-  
   cv::Mat img1, img2, img3, img4;
   std::chrono::steady_clock::time_point timestamp;
+  std::chrono::steady_clock::time_point last_t;
   
   // 云台状态
   Eigen::Vector3d gimbal_euler;
@@ -101,6 +94,11 @@ int main(int argc, char * argv[])
     short_camera.read(img3, timestamp);
     long_camera.read(img4, timestamp);
 
+    auto now = std::chrono::steady_clock::now();
+    auto dt = tools::delta_time(now, last_t);
+    tools::logger()->info("{:.2f} fps", 1 / dt);
+    last_t = now;
+
     // cv::resize(img1, img1, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
     cv::imshow("omn_cam1", img1);
     cv::imshow("omn_cam2", img2);
@@ -109,9 +107,10 @@ int main(int argc, char * argv[])
     auto key = cv::waitKey(1);
     if (key == 'q') break;
   }
+  cv::destroyAllWindows();
   
   // 发送停止指令
-  gimbal.send(false, false, 0, 0, 0, 0, 0, 0);
+  // gimbal.send(false, false, 0, 0, 0, 0, 0, 0);
   
   return 0;
 }

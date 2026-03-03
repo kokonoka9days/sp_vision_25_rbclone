@@ -57,7 +57,7 @@ auto_fire: true # 是否由自瞄控制射击
 # vid_pid: "2bdf:0001"
 
 camera_name: "daheng"
-camera_sn: "FDN24040486"
+camera_sn: "KE0210010003"
 exposure_us: 4000
 gain: 0.5
 gamma: 0.5
@@ -124,3 +124,8 @@ model: "assets/yolo11_buff_int8.xml"
 #####-----buff_aimer参数-----#####
 fire_gap_time: 0.700   # s
 predict_time: 0.120    # s
+
+
+
+
+main_and_secondary: left

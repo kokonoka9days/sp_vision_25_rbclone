@@ -33,6 +33,8 @@ public:
   void pause() { if(camera_) camera_->pause(); }
   void resume() { if(camera_) camera_->resume(); }
 
+  
+
 private:
   std::unique_ptr<CameraBase> camera_;
 };

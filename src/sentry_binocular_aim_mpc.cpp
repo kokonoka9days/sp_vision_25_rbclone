@@ -22,9 +22,11 @@
 #include "tools/yaml.hpp"
 
 const std::string keys =
-  "{help h usage ? |                        | 输出命令行参数说明}"
-  "{short_camera   | ../configs/omniperception/short_camera.yaml | 短焦相机配置文件路径 }"
-  "{long_camera    | ../configs/omniperception/long_camera.yaml  | 长焦相机配置文件路径 }";
+  "{help h usage ? |                                             | 输出命令行参数说明}"
+  "{short_camera   | ../configs/sb.yaml                          | 短焦相机配置文件路径 }"
+  "{long_camera    | ../configs/sb_copy.yaml                     | 长焦相机配置文件路径 }"
+  "{l_cam          | ../configs/omniperception/short_camera.yaml | 左感知相机 }"
+  "{r_cam          | ../configs/omniperception/long_camera.yaml  | 右感知相机 }";
 
 using namespace std::chrono_literals;
 
@@ -116,8 +118,8 @@ int main(int argc, char * argv[])
   
   
   // 全向感知相机（工业相机）
-  std::string omnl_yaml_name = "../configs/omniperception/omn_camera_left.yaml";
-  std::string omnr_yaml_name = "../configs/omniperception/omn_camera_right.yaml";
+   std::string omnl_yaml_name = cli.get<std::string>("l_cam");
+  std::string omnr_yaml_name = cli.get<std::string>("r_cam");
   io::Camera omn_cam1(omnl_yaml_name);
   io::Camera omn_cam2(omnr_yaml_name);
   auto omn_l_yaml = tools::load(omnl_yaml_name);
