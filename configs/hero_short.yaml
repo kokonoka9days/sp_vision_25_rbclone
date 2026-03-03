@@ -1,5 +1,5 @@
-# enemy_color: "red"
-enemy_color: "blue"
+enemy_color: "red"
+# enemy_color: "blue"
 
 #####-----神经网络参数-----#####
 yolo_name: yolov8
@@ -39,12 +39,12 @@ outpost_max_temp_lost_count: 75
 
 #####-----aimer参数-----#####
 yaw_offset: 0 # degree -2.5
-pitch_offset: 5 # degree 2
+pitch_offset: 1 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
 high_speed_delay_time: 0.09 # s
-low_speed_delay_time: 0.09 # s
+low_speed_delay_time: 0.6 # s
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree
@@ -109,9 +109,9 @@ gimbal_r3: -2
 
 #####-----planner-----#####
 fire_thresh: 0.003 # 
-small_armor_tolerance: 0.12
+small_armor_tolerance: 0.05
 big_armor_tolerance: 0.22
-gimbal_control_delay: 0.08
+gimbal_control_delay: 0.15
 tower_pitch_prediction_time: 0.05
 
 max_yaw_acc: 50

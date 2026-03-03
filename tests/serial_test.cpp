@@ -20,7 +20,7 @@ int main() {
         
         std::vector<uint8_t> buffer;
         int frame_count = 0;
-        const size_t FRAME_SIZE = 28;  // 数据长度为42字节
+        const size_t FRAME_SIZE = 29;  // 数据长度为42字节
         
         while (true) {
             if (ser.available()) {

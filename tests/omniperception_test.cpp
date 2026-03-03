@@ -61,7 +61,7 @@ int main(int argc, char * argv[])
   // io::Camera back_camera("configs/camera.yaml");
   tools::logger()->info("初始化");
   // 改为使用Gimbal串口通信（替代CBoard）
-  io::Gimbal gimbal(short_camera_config_path);
+  // io::Gimbal gimbal(short_camera_config_path);
   
   // 视觉模块
   auto_aim::YOLO yolo(short_camera_config_path, false);  // 主相机YOLO
@@ -69,8 +69,8 @@ int main(int argc, char * argv[])
   auto_aim::Solver short_camera_solver(short_camera_config_path);
   auto_aim::Solver long_camera_solver(long_camera_config_path);
 
-  auto_aim::Tracker tracker(short_camera_config_path, short_camera_solver);//默认短焦
-  tracker.set_gimbal(&gimbal);
+  // auto_aim::Tracker tracker(short_camera_config_path, short_camera_solver);//默认短焦
+  // tracker.set_gimbal(&gimbal);
   auto_aim::Aimer aimer(short_camera_config_path);
   auto_aim::Shooter shooter(short_camera_config_path);
   
@@ -89,7 +89,7 @@ int main(int argc, char * argv[])
   // 主循环
   while (!exiter.exit()) {
     // 读取云台模式
-    auto mode = gimbal.mode();
+    // auto mode = gimbal.mode();
     
     // 如果没有暂停，才去读取全向相机图像
     if (!is_omn_paused) {

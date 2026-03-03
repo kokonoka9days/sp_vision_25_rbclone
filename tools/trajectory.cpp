@@ -1,6 +1,7 @@
 #include "trajectory.hpp"
 
 #include <cmath>
+#include <iostream>
 
 namespace tools
 {
@@ -18,6 +19,7 @@ TrajectoryV1::TrajectoryV1(const double v0, const double d, const double h)
     unsolvable = true;
     return;
   }
+  // std::cout<<"delta :"<<delta<<std::endl;
 
   unsolvable = false;
   auto tan_pitch_1 = (-b + std::sqrt(delta)) / (2 * a);

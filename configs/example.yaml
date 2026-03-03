@@ -36,6 +36,7 @@ gamma: 0.5
 vid_pid: "f622:d13a"
 flip: false
 mirror: false
+timestamp_offset_us: 1000 #us
 
 #####-----传统方法参数-----#####
 threshold: 150

@@ -6,9 +6,9 @@
 #include "tools/math_tools.hpp"
 
 
-constexpr double TOWTER_ARMOR_DH = 0.1;//前哨站两个装甲板之间的最短高低差m
+constexpr double TOWTER_ARMOR_DH = 0.108;//前哨站两个装甲板之间的最短高低差m
 constexpr double TOWER_ARMOR_DTB = 0.16;//前哨装甲大跳变m
-constexpr double TOWER_ARMOR_XTB = 0.06;//前哨装甲小跳变m
+constexpr double TOWER_ARMOR_XTB = 0.05;//前哨装甲小跳变m
 
 
 namespace auto_aim
@@ -37,7 +37,27 @@ Target::Target(
   auto center_x = xyz[0] + r * std::cos(ypr[0]);
   auto center_y = xyz[1] + r * std::sin(ypr[0]);
   auto center_z = xyz[2];
-  tower_armor_hs[0] = center_z;
+  
+
+  if(name == ArmorName::outpost){
+    tower_armor_hs[0] = center_z;
+    // for(int id = 0; id < 3; id++){
+    //   double dz = tower_armor_hs[id] - tower_armor_hs[0];
+    //   int dz_px = dz > 0 ? 1 : -1;
+    //   int dz_mu;
+    //   if(abs(dz) > 0.16){
+    //     dz_mu = 2;
+    //   }else if(abs(dz) < 0.16 && abs(dz) > 0.05){
+    //     dz_mu = 1;
+    //   }else if(abs(dz) < 0.05){
+    //     dz_mu = 0;
+    //   }
+    //   double armor_z = center_z + TOWTER_ARMOR_DH * dz_px * dz_mu;
+    //   tower_armor_hs_datas[id];
+    // }    
+  }
+
+  
 
   // x vx y vy z vz a w r l h
   // a: angle
@@ -175,7 +195,6 @@ void Target::update(const Armor & armor)
                         std::abs(tools::limit_rad(armor.ypd_in_world[0] - ypd[0]));
 
       
-
       if (std::abs(angle_error) < std::abs(min_angle_error)) {
         id = xyza_i_list[i].second;//获得当前观察装甲板id
         min_angle_error = angle_error;
@@ -184,24 +203,49 @@ void Target::update(const Armor & armor)
 
     if (id != 0) jumped = true;
     // 
+    if(name == ArmorName::outpost){
+      double a = 0.1;
+      tower_armor_h = a*armor.xyz_in_world[2] + (1-a)*last_tower_armor_h[id];
+      // if(tower_armor_hs_datas_ptr < 20 && update_count_ > 800){
+      //   // if(! (abs(tower_armor_hs[id] - tower_armor_h) > 0.1)){
+      //   //   tower_armor_hs_datas[id] += tower_armor_h;
+      //   //   last_tower_armor_h[id] = tower_armor_h;
+      //   //   tower_armor_hs_datas_ptr++;            
+      //   // }
+      //   int min_absdz_id = 0;
+      //   for(int index = 0; index < 3; index ++){
+      //     double z_diff = abs(tower_armor_hs[index] - tower_armor_h);
+          
+      //     if(z_diff < min_absdz_id){
+      //       min_absdz_id = index;
+      //     }
+      //   }
+      //   if(min_absdz_id == id){
+      //     tower_armor_hs_datas[id] += tower_armor_h;
+      //     last_tower_armor_h[id] = tower_armor_h;
+      //     tower_armor_hs_datas_ptr++;  
+      //   } 
+      // }else{
+ 
+   
+      // }
+        tower_armor_hs_datas[id] += tower_armor_h;
+        last_tower_armor_h[id] = tower_armor_h;
+        tower_armor_hs_datas_ptr++;     
+    }
+    std::cout<<"update_count_ :"<<update_count_<<std::endl;
+
+    // if(tower_armor_hs_datas_ptr > 39) tower_armor_hs_datas_ptr = 0;
     
     if (id != last_id) {
+      
       is_switch_ = true;
-      tower_armor_hs[id] = armor.xyz_in_world[2];
       if(name == ArmorName::outpost){
-        double dz = tower_armor_hs[id] - tower_armor_hs[0];
-        int dz_px = dz > 0 ? 1 : -1;
-        int dz_mu;
-        if(abs(dz) > 0.16){
-          dz_mu = 2;
-        }else if(abs(dz) < 0.16 && abs(dz) > 0.05){
-          dz_mu = 1;
-        }else if(abs(dz) < 0.05){
-          dz_mu = 0;
-        }
-        double zc = armor.xyz_in_world[2] - TOWTER_ARMOR_DH * dz_px * dz_mu;
-        this->ekf_x()(4) = zc;
+        tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / (tower_armor_hs_datas_ptr + 1);//armor.xyz_in_world[2];
+        tower_armor_hs_datas_ptr = 0;
+        tower_armor_hs_datas[last_id] = 0;        
       }
+
     } else {
       is_switch_ = false;
     }

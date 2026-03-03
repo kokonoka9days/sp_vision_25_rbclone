@@ -27,7 +27,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/hero_short.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/hero_long.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -65,7 +65,7 @@ int main(int argc, char * argv[])
       auto gs = gimbal.state();
 
       
-      auto plan = planner.plan(target, gs.bullet_speed, gs.yaw, auto_aim::Planner::ShootStrategy::rbHero);
+      auto plan = planner.plan(target, 11.8, gs.yaw, auto_aim::Planner::ShootStrategy::rbHero);
       gimbal.send(
         plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
         plan.pitch_acc);
@@ -101,6 +101,7 @@ int main(int argc, char * argv[])
       data["target_yaw"] = plan.target_yaw;
       data["target_pitch"] = plan.target_pitch;
 
+      data["plan_mode"] = plan.control ? (plan.fire ? 2 : 1) : 0;
       data["plan_yaw"] = plan.yaw * 57.3;
       data["plan_yaw_vel"] = plan.yaw_vel;
       data["plan_yaw_acc"] = plan.yaw_acc;
@@ -115,6 +116,10 @@ int main(int argc, char * argv[])
       if (target.has_value()) {
         data["target_z"] = target->ekf_x()[4];   //z
         data["target_vz"] = target->ekf_x()[5];  //vz
+        data["tower_h1"] = target->tower_armor_hs[0];
+        data["tower_h2"] = target->tower_armor_hs[1];
+        data["tower_h3"] = target->tower_armor_hs[2];
+        data["tower_armor_h"] = target->tower_armor_h;
       }
 
       if (target.has_value()) {
@@ -135,12 +140,12 @@ int main(int argc, char * argv[])
 
   while (!exiter.exit()) {
     camera.read(img, t);
-    auto q = gimbal.q(t - 3ms);
+    auto q = gimbal.q(t - 3800us);
 
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
-    tools::draw_text(img, "fps: "+fmt::format("{:.2f}",fps), cv::Point(40, 130));
+    tools::draw_text(img, "fps: "+ fmt::format("{:.2f}",fps), cv::Point(40, 130));
     last_t = t;
-    tools::logger()->info("fps:: {:.2f}", fps);
+    // tools::logger()->info("fps:: {:.2f}", fps);
     auto ypr = tools::eulers(q, 2, 1, 0);
 
     float yaw_deg = ypr[0] * 180.0 / M_PI;
@@ -149,7 +154,7 @@ int main(int argc, char * argv[])
         
     // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
     // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
-    if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
+    // if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
      tools::draw_text(img, fmt::format("DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 0, 255});
       tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
     // std::cout << "Roll: " << roll_deg << std::endl;

@@ -27,7 +27,7 @@ add_subdirectory(io)
 add_subdirectory(tasks/auto_aim)
 add_subdirectory(tasks/auto_buff)
 add_subdirectory(tasks/omniperception)
-add_subdirectory(sp_ws/src)
+# add_subdirectory(sp_ws/src)
 
 ####################src###################
 add_executable(standard src/standard.cpp)
@@ -112,7 +112,7 @@ target_link_libraries(binocular_camera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp too
 add_executable(gimbal_test tests/gimbal_test.cpp)
 target_link_libraries(gimbal_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
 
-add_executable(serial_test tests/test_serial.cpp)
+add_executable(serial_test tests/serial_test.cpp)
 target_link_libraries(serial_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
 
 add_executable(planner_test tests/planner_test.cpp)

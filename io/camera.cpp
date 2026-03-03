@@ -14,6 +14,8 @@ Camera::Camera(const std::string & config_path)
   auto yaml = tools::load(config_path);
   auto camera_name = tools::read<std::string>(yaml, "camera_name");
   auto exposure_us = tools::read<double>(yaml, "exposure_us");
+  auto timestamp_offset_us = tools::read<int>(yaml, "timestamp_offset_us");
+  timestamp_offset = std::chrono::microseconds(timestamp_offset_us);
 
   bool flip = tools::read<bool>(yaml, "flip");
   bool mirror = tools::read<bool>(yaml, "mirror");

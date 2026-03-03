@@ -22,8 +22,8 @@
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{short_camera   | ../configs/sb.yaml | 短焦相机配置文件路径 }"
-  "{long_camera    | ../configs/sb_copy.yaml  | 长焦相机配置文件路径 }";
+  "{short_camera   | ../configs/omniperception/omn_camera_left.yaml | 短焦相机配置文件路径 }"
+  "{long_camera    | ../configs/omniperception/omn_camera_right.yaml  | 长焦相机配置文件路径 }";
 
 using namespace std::chrono_literals;
 
@@ -216,7 +216,7 @@ int main(int argc, char * argv[])
     // 读取主相机图像
     bincameras.cameras.aim_ptr->read(img, timestamp);
 
-    auto q = gimbal.q(timestamp - 3ms);
+    auto q = gimbal.q(timestamp - bincameras.cameras.aim_ptr->timestamp_offset);
     
     
     // 获取云台欧拉角

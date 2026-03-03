@@ -43,6 +43,7 @@ int main(int argc, char * argv[])
 
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
+  // io::Camera camera1("../configs/sb_copy.yaml");
 
   auto_aim::YOLO yolo(config_path, true);
   auto_aim::Solver solver(config_path);

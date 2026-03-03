@@ -77,7 +77,7 @@ public:
     
   }
   Plan rbplan(Target target, double bullet_speed, double gimbal_yaw);
-  bool rbShoot(Target target, double gimbal_yaw);
+  bool rbShoot(Target target, double gimbal_yaw,  bool tower_fixed_pitch = false);
   Plan rbHeroplan(Target target, double bullet_speed, double gimbal_yaw); 
 private:
   double yaw_offset_;

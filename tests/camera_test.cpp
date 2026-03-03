@@ -34,10 +34,9 @@ int main(int argc, char * argv[])
   while (!exiter.exit()) {
     camera.read(img, timestamp);
 
-    // double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(timestamp - last_t).count()*1000000;
-    // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
-    // last_t = timestamp;
-    // tools::logger()->info("fps:: {:.2f}", fps);
+    double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(timestamp - last_t).count()*1000000;
+    tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
+    last_t = timestamp;
 
     auto dt = tools::delta_time(timestamp, last_stamp);
     last_stamp = timestamp;

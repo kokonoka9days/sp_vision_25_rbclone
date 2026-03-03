@@ -21,9 +21,12 @@
 #include "tools/img_tools.hpp"
 
 const std::string keys =
-  "{help h usage ? |                        | 输出命令行参数说明}"
-  "{short_camera   | ../configs/sb.yaml | 短焦相机配置文件路径 }"
-  "{long_camera    | ../configs/sb_copy.yaml  | 长焦相机配置文件路径 }";
+  "{help h usage ? |                                             | 输出命令行参数说明}"
+  "{short_camera   | ../configs/sb.yaml                          | 短焦相机配置文件路径 }"
+  "{long_camera    | ../configs/sb_copy.yaml                     | 长焦相机配置文件路径 }"
+  "{l_cam          | ../configs/omniperception/short_camera.yaml | 左感知相机 }"
+  "{r_cam          | ../configs/omniperception/long_camera.yaml  | 右感知相机 }";
+
 
 using namespace std::chrono_literals;
 
@@ -141,82 +144,41 @@ int main(int argc, char * argv[])
   
   cv::Mat img;
   std::chrono::steady_clock::time_point timestamp;
+  std::chrono::steady_clock::time_point last_t;
   
   // 云台状态
   Eigen::Vector3d gimbal_euler;
   
-  // 获取云台模式
-  auto last_mode = io::GimbalMode::IDLE;
   
   // MPC 规划线程（独立线程运行MPC控制器）
   std::atomic<bool> quit = false;
-  auto mpc_thread = std::thread([&]() {
-    auto_aim::Plan plan{false};
-    
-    while (!quit) {
-        auto target = target_queue.front();
-        
-        // 使用MPC规划器计算控制指令
-        // plan = bincameras.planners.aim_ptr->plan(*target, 22);
-          
-
-        nlohmann::json data;
-        // data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);
-
-
-        data["target_yaw"] = plan.target_yaw;
-        data["target_pitch"] = plan.target_pitch;
-
-        data["plan_yaw"] = plan.yaw;
-        data["plan_yaw_vel"] = plan.yaw_vel;
-        data["plan_yaw_acc"] = plan.yaw_acc;
-
-        data["plan_pitch"] = plan.pitch;
-        data["plan_pitch_vel"] = plan.pitch_vel;
-        data["plan_pitch_acc"] = plan.pitch_acc;
-
-        if (target.has_value()) {
-            data["target_z"] = target->ekf_x()[4];   //z
-            data["target_vz"] = target->ekf_x()[5];  //vz
-        }
-
-        if (target.has_value()) {
-            data["w"] = target->ekf_x()[7];
-        } else {
-            data["w"] = 0.0;
-        }
-
-        plotter.plot(data);
-
-      
-        std::this_thread::sleep_for(10ms);
-    }
-  });
 
   // 主循环
   while (!exiter.exit()) {
-    
-    
+    static int count = 0;
+    tools::logger()->info("当前使用 {} 焦镜头", bincameras.is_short ? "短" : "长");
     // 读取主相机图像
     bincameras.cameras.aim_ptr->read(img, timestamp);
+    // short_camera.read(img, timestamp);
     
-    
-    // 获取云台欧拉角
+    // // 获取云台欧拉角
     gimbal_euler = tools::eulers(bincameras.solvers.aim_ptr->R_gimbal2world(), 2, 1, 0);
     
     // 主相机检测
     auto armors = yolo.detect(img);
     
     // 跟踪目标
-    auto targets = tracker.track(armors, timestamp);
+    auto targets = tracker.sb_track(armors, timestamp);
+    double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - last_t).count()*1000000;
+    tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
+    last_t = std::chrono::steady_clock::now();
+    tools::logger()->info("fps:: {:.2f}", fps);
      
-    // 自瞄模式 - 使用MPC
+    // 自瞄模式
     if (!targets.empty()) {
         // 将目标放入队列供MPC线程处理
         target_queue.push(targets.front());
         
-
-
         auto& target = targets.front();
         
             // 获取EKF状态向量
@@ -312,9 +274,6 @@ int main(int argc, char * argv[])
   
   // 清理
   quit = true;
-  if (mpc_thread.joinable()) {
-    mpc_thread.join();
-  }
   
   
   return 0;
