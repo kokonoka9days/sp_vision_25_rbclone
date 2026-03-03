@@ -35,12 +35,13 @@ std::list<Target> Tracker::sb_track(
   auto dt = tools::delta_time(t, last_timestamp_);
   last_timestamp_ = t;
 
-  if(gimbal_ == nullptr) {
-    tools::logger()->error("[Tracker] gimbal_不能为空指针，请先调用set_gimbal()设置云台指针");
-    return {};
-  }
-  io::GimbalState g = gimbal_->state();
-  if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ? Color::blue : Color::red;
+  // TODO
+  // if(gimbal_ == nullptr) {
+  //   tools::logger()->error("[Tracker] gimbal_不能为空指针，请先调用set_gimbal()设置云台指针");
+  //   return {};
+  // }
+  // io::GimbalState g = gimbal_->state();
+  // if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ? Color::blue : Color::red;
 
   // 时间间隔过长，说明可能发生了相机离线
   if (state_ != "lost" && dt > 0.1) {

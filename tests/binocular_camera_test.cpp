@@ -22,8 +22,9 @@
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{short_camera   | ../configs/sb.yaml | 短焦相机配置文件路径 }"
-  "{long_camera    | ../configs/sb_copy.yaml  | 长焦相机配置文件路径 }";
+  "{short_camera   | ../configs/omniperception/omn_camera_left.yaml | 短焦相机配置文件路径 }"
+  "{long_camera    | ../configs/omniperception/omn_camera_right.yaml  | 长焦相机配置文件路径 }";
+
 
 using namespace std::chrono_literals;
 
@@ -146,8 +147,6 @@ int main(int argc, char * argv[])
   // 云台状态
   Eigen::Vector3d gimbal_euler;
   
-  // 获取云台模式
-  auto last_mode = io::GimbalMode::IDLE;
   
   // MPC 规划线程（独立线程运行MPC控制器）
   std::atomic<bool> quit = false;
@@ -155,19 +154,19 @@ int main(int argc, char * argv[])
   // 主循环
   while (!exiter.exit()) {
     static int count = 0;
-    // tools::logger()->info("当前使用 {} 焦镜头", bincameras.is_short ? "短" : "长");
-    // // 读取主相机图像
+    tools::logger()->info("当前使用 {} 焦镜头", bincameras.is_short ? "短" : "长");
+    // 读取主相机图像
     bincameras.cameras.aim_ptr->read(img, timestamp);
     
     
     // // 获取云台欧拉角
-    // gimbal_euler = tools::eulers(bincameras.solvers.aim_ptr->R_gimbal2world(), 2, 1, 0);
+    gimbal_euler = tools::eulers(bincameras.solvers.aim_ptr->R_gimbal2world(), 2, 1, 0);
     
     // 主相机检测
     auto armors = yolo.detect(img);
     
     // 跟踪目标
-    auto targets = tracker.track(armors, timestamp);
+    auto targets = tracker.sb_track(armors, timestamp);
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - last_t).count()*1000000;
     tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
     last_t = std::chrono::steady_clock::now();
@@ -178,8 +177,6 @@ int main(int argc, char * argv[])
         // 将目标放入队列供MPC线程处理
         target_queue.push(targets.front());
         
-
-
         auto& target = targets.front();
         
             // 获取EKF状态向量
@@ -264,13 +261,13 @@ int main(int argc, char * argv[])
     }
 
     
-    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    // cv::imshow("reprojection", img);
-    // auto key = cv::waitKey(1);
-    // if (key == 'q') break;
-    // if (key == 'c'){// 强制切换
-    //     bincameras.Switch();
-    // }
+    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    cv::imshow("reprojection", img);
+    auto key = cv::waitKey(1);
+    if (key == 'q') break;
+    if (key == 'c'){// 强制切换
+        bincameras.Switch();
+    }
   }
   
   // 清理
