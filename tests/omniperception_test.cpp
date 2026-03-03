@@ -106,6 +106,16 @@ int main(int argc, char * argv[])
     cv::imshow("long_camera", img4);
     auto key = cv::waitKey(1);
     if (key == 'q') break;
+    if( key == 'p') {
+      // 暂停全向相机
+      omn_cam1.pause();
+      omn_cam2.pause();
+    }
+     if( key == 'r') {
+      // 恢复全向相机
+      omn_cam1.resume();
+      omn_cam2.resume();
+    }
   }
   cv::destroyAllWindows();
   
