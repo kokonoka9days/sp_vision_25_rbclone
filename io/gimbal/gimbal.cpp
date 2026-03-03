@@ -193,18 +193,44 @@ void Gimbal::read_thread()
       continue;
     }
 
-    if (!read(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_.head))) {
-       tools::logger()->warn("[Gimbal] 1");
+    // if (!read(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_.head))) {
+    //    tools::logger()->warn("[Gimbal] 1");
+    //   error_count++;
+    //    tools::logger()->warn("[Gimbal] 1");
+    //   continue;
+    // }
+
+    // if (rx_data_.head[0] != 0x5a || rx_data_.head[1] != 0x53){
+    //   // error_count++;
+    //   tools::logger()->warn("找不到帧头");
+    //   continue;
+    // } 
+
+    uint8_t first_byte;
+    // 1. 逐个字节读取，直到找到 0x5A
+    if (!read(&first_byte, 1)) {
       error_count++;
-       tools::logger()->warn("[Gimbal] 1");
+      continue;
+    }
+    
+    if (first_byte != 0x5a) {
+      // 还没找到正确的起始字节，继续找
+      // tools::logger()->warn("寻找帧头 0x5A 中...");
       continue;
     }
 
-    if (rx_data_.head[0] != 0x5a || rx_data_.head[1] != 0x53){
-      // error_count++;
-      // tools::logger()->warn("找不到帧头");
+    // 2. 找到了 0x5A，检查紧接着的下一个字节是不是 0x53
+    uint8_t second_byte;
+    if (!read(&second_byte, 1)) {
+      error_count++;
       continue;
-    } 
+    }
+
+    if (second_byte != 0x53) {
+      // 找到了 0x5a 但下一个不是 0x53，说明找错了，重新开始
+      tools::logger()->warn("找到 0x5a，但下一个不是 0x53");
+      continue;
+    }
 
     auto t = std::chrono::steady_clock::now();
 
