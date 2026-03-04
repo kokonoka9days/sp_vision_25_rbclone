@@ -24,7 +24,7 @@ Decider::Decider(const std::string & config_path) : detector_(config_path), coun
   mode_ = yaml["mode"].as<double>();
 }
 
-io::sb_VisionToGimbal Decider::decide_g(
+io::VisionToGimbal Decider::decide_g(
   auto_aim::YOLO & yolo, const Eigen::Vector3d & gimbal_pos, io::Camera & omn_cam1_l,
   io::Camera & omn_cam2_r)
 {
@@ -58,10 +58,9 @@ io::sb_VisionToGimbal Decider::decide_g(
     count_ = (count_ + 1) % 2;
 
     // 创建 VisionToGimbal 结构体
-    io::sb_VisionToGimbal vision_cmd;
-    vision_cmd.mode = 1;  // 控制云台但不开火
-    vision_cmd.work_mode = static_cast<uint8_t>(io::WorkMode::OMNI_PERCEPTION);
-    vision_cmd.yaw = static_cast<float>(tools::limit_rad(gimbal_pos[0] + delta_angle[0] / 57.3));
+    io::VisionToGimbal vision_cmd;
+    vision_cmd.mode = 3;  // 全向感知模式识别到目标，控制大云台
+    vision_cmd.yaw = static_cast<float>(delta_angle[0] / 57.3);
     vision_cmd.yaw_vel = 0.0f;  // 角速度设为0，可根据需要计算
     vision_cmd.yaw_acc = 0.0f;  // 角加速度设为0
     vision_cmd.pitch = tools::limit_rad(delta_angle[1] / 57.3);
@@ -73,9 +72,8 @@ io::sb_VisionToGimbal Decider::decide_g(
 
   count_ = (count_ + 1) % 2;
   // 如果没有找到目标，返回不控制的指令
-  io::sb_VisionToGimbal vision_cmd;
+  io::VisionToGimbal vision_cmd;
   vision_cmd.mode = 0;  // 不控制
-  vision_cmd.work_mode = static_cast<uint8_t>(io::WorkMode::IDLE);
   vision_cmd.yaw = 0.0f;
   vision_cmd.yaw_vel = 0.0f;
   vision_cmd.yaw_acc = 0.0f;

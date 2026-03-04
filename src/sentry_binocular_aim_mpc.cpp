@@ -118,7 +118,7 @@ int main(int argc, char * argv[])
   
   
   // 全向感知相机（工业相机）
-   std::string omnl_yaml_name = cli.get<std::string>("l_cam");
+  std::string omnl_yaml_name = cli.get<std::string>("l_cam");
   std::string omnr_yaml_name = cli.get<std::string>("r_cam");
   io::Camera omn_cam1(omnl_yaml_name);
   io::Camera omn_cam2(omnr_yaml_name);
@@ -250,30 +250,22 @@ int main(int argc, char * argv[])
       // 【新增】：唤醒全向相机（恢复底层硬件推流）
       omn_cam1.resume();
       omn_cam2.resume();
+      if(!bincameras.is_short){
+        tools::logger()->info("进入全向感知模式，切换至短焦镜头");
+        bincameras.Switch();
+      }
 
       // 全向感知模式
-      io::sb_VisionToGimbal vision_cmd = decider.decide_g(
+      io::VisionToGimbal vision_cmd = decider.decide_g(
         yolo, gimbal_euler, omn_cam1, omn_cam2);
       
-      if (vision_cmd.mode != 0) {
+      if (vision_cmd.mode == 3) {
 
-        vision_cmd.work_mode = static_cast<uint8_t>(io::WorkMode::OMNI_PERCEPTION);
+      
         // 全向感知找到目标，发送控制指令
         // 使用Gimbal的send函数直接发送VisionToGimbal结构体
-        gimbal.sb_send(vision_cmd);
+        gimbal.send(vision_cmd);
         
-        // 射击判断（使用shooter_g版本）
-        bool should_shoot = shooter.shoot_g(vision_cmd, aimer, targets, gimbal_euler);
-        
-        // 如果需要射击且vision_cmd.mode是2（控制开火），则发送射击指令
-        if (should_shoot && vision_cmd.mode == 2) {
-          // 重新发送带有射击标志的指令
-          vision_cmd.mode = 2;  // 控制并开火
-          gimbal.sb_send(vision_cmd);
-        }
-        else{
-          gimbal.send(false, false, 0, 0, 0, 0, 0, 0);
-        }
       }
     } else {
       // 【新增】：挂起全向相机（停止底层硬件推流，释放CPU和USB/网卡带宽）

@@ -22,7 +22,7 @@ class Decider
 public:
   Decider(const std::string & config_path);
 
-  io::sb_VisionToGimbal decide_g(
+  io::VisionToGimbal decide_g(
   auto_aim::YOLO & yolo, const Eigen::Vector3d & gimbal_pos, io::Camera & omn_cam1_l,
   io::Camera & omn_cam2_r);
   
