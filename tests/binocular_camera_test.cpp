@@ -89,7 +89,7 @@ struct BinocularAim{
       Switch();
     }
 
-    tracker.setSolver(*this->solvers.aim_ptr);
+    tracker.setSolver(this->solvers.aim_ptr);
   }
 };
 
@@ -124,7 +124,7 @@ int main(int argc, char * argv[])
   auto_aim::Solver short_camera_solver(short_camera_config_path);
   auto_aim::Solver long_camera_solver(long_camera_config_path);
 
-  auto_aim::Tracker tracker(short_camera_config_path, short_camera_solver);//默认短焦
+  auto_aim::Tracker tracker(short_camera_config_path, &short_camera_solver);//默认短焦
   
   // MPC 规划器
   auto_aim::Planner short_camera_planner(short_camera_config_path);

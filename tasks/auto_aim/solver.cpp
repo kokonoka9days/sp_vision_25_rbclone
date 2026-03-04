@@ -87,6 +87,34 @@ void Solver::solve(Armor & armor) const
   optimize_yaw(armor);
 }
 
+void Solver::omn_dig_yaw_solve(Armor & armor) const{
+  cv::Vec3d rvec, tvec;
+
+  const auto & object_points =
+  (armor.type == auto_aim::ArmorType::big) ? auto_aim::BIG_ARMOR_POINTS : SMALL_ARMOR_POINTS;
+
+  cv::solvePnP(
+    object_points, armor.points, camera_matrix_, distort_coeffs_, rvec, tvec, false,
+    cv::SOLVEPNP_IPPE);
+
+
+  Eigen::Vector3d xyz_in_camera;
+  cv::cv2eigen(tvec, xyz_in_camera);
+  armor.xyz_in_gimbal = R_camera2gimbal_ * xyz_in_camera + t_camera2gimbal_;
+  // armor.xyz_in_world = R_gimbal2world_ * armor.xyz_in_gimbal;
+
+  cv::Mat rmat;
+  cv::Rodrigues(rvec, rmat);
+  Eigen::Matrix3d R_armor2camera;
+  cv::cv2eigen(rmat, R_armor2camera);
+  Eigen::Matrix3d R_armor2gimbal = R_camera2gimbal_ * R_armor2camera;
+  // Eigen::Matrix3d R_armor2world = R_gimbal2world_ * R_armor2gimbal;
+  armor.ypr_in_gimbal = tools::eulers(R_armor2gimbal, 2, 1, 0);
+  // armor.ypr_in_world = tools::eulers(R_armor2world, 2, 1, 0);
+
+  // armor.ypd_in_world = tools::xyz2ypd(armor.xyz_in_world);
+}
+
 std::vector<cv::Point2f> Solver::reproject_armor(
   const Eigen::Vector3d & xyz_in_world, double yaw, ArmorType type, ArmorName name) const
 {

@@ -24,7 +24,7 @@ struct TrajectoryV2 : TrajectoryV1{
 };
 
 
-using Trajectory = TrajectoryV2;
+using Trajectory = TrajectoryV1;
 
 }  // namespace tools
 

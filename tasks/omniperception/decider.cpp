@@ -7,6 +7,7 @@
 
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
+#include "tasks/auto_aim/armor.hpp"
 
 namespace omniperception
 {
@@ -234,7 +235,7 @@ Eigen::Vector2d Decider::delta_angle(
   if (camera == "left") {
     delta_angle[0] = 120 + (new_fov_h_ / 2) - armors.front().center_norm.x * new_fov_h_;
     delta_angle[1] = armors.front().center_norm.y * new_fov_v_ - new_fov_v_ / 2;
-    return delta_angle;
+    return delta_angle;        
   }
 
   else if (camera == "right") {
@@ -250,6 +251,51 @@ Eigen::Vector2d Decider::delta_angle(
   }
 
 }
+
+
+Eigen::Vector2d Decider::delta_angle_3d(
+    std::list<auto_aim::Armor> & armors, const std::string & camera, const auto_aim::Solver & solver ){
+     
+  Eigen::Vector2d delta_angle;
+  if(armors.empty()){
+    tools::logger()->debug("[Decider] armors 为空，有bug！！！");
+  }
+  // solver.solve(armors.front());
+
+  // auto digger_yaw_solver = [] (const auto_aim::Solver & solver,
+  //   auto_aim::Armor& armor )
+  //   -> Eigen::Vector3d {
+  //   cv::Vec3d rvec, tvec;
+
+    // const auto & object_points =
+    // (armor.type == auto_aim::ArmorType::big) ? auto_aim::BIG_ARMOR_POINTS : SMALL_ARMOR_POINTS;
+
+    // cv::solvePnP(
+    //   object_points, armor.points, camera_matrix_, distort_coeffs_, rvec, tvec, false,
+    //   cv::SOLVEPNP_IPPE);
+  // };
+
+  //TUDO:计算大yaw旋转角度
+  if (camera == "left") {
+    delta_angle[0] = 120 + (new_fov_h_ / 2) - armors.front().center_norm.x * new_fov_h_;
+    delta_angle[1] = armors.front().center_norm.y * new_fov_v_ - new_fov_v_ / 2;
+    return delta_angle;        
+  }
+
+  else if (camera == "right") {
+    delta_angle[0] = -120 + (new_fov_h_ / 2) - armors.front().center_norm.x * new_fov_h_;
+    delta_angle[1] = armors.front().center_norm.y * new_fov_v_ - new_fov_v_ / 2;
+    return delta_angle;
+  }
+
+  else {
+    delta_angle[0] = 170 + (54.2 / 2) - armors.front().center_norm.x * 54.2;
+    delta_angle[1] = armors.front().center_norm.y * 44.5 - 44.5 / 2;
+    return delta_angle;
+  }
+
+}
+
 
 bool Decider::armor_filter(std::list<auto_aim::Armor> & armors)
 {

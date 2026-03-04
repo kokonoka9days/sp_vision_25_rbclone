@@ -1,3 +1,7 @@
+pattern_cols: 11      # 棋盘格每行的内角点数（格子数-1）
+pattern_rows: 8      # 棋盘格每列的内角点数（格子数-1）
+square_size_mm: 30   # 棋盘格方块大小（毫米）
+
 # enemy_color: "red"
 enemy_color: "auto"
 
@@ -47,8 +51,8 @@ outpost_max_temp_lost_count: 75
 # low_speed_delay_time: 0.093 # s
 
 #####-----aimer参数-----##### 12mm
-yaw_offset: -2.5 # degree -2.5
-pitch_offset: 0 # degree 2
+yaw_offset: -2 # degree -2.5
+pitch_offset: 10 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
@@ -62,24 +66,25 @@ judge_distance: 2 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
 # #12mm camera
-camera_name: "hikrobot"
-camera_sn: "DA7188447"
-exposure_us: 5000
-gain: 0.7
-vid_pid: "2bdf:0001"
-flip: true
-mirror: true
-timestamp_offset_us: 1000 #us
-
-# 6mm camera
 # camera_name: "hikrobot"
-# camera_sn: "DA7188471"
-# exposure_us: 9000
-# gain: 0.5
+# camera_sn: "DA7188447"
+# exposure_us: 5000
+# gain: 0.7
 # vid_pid: "2bdf:0001"
 # flip: true
 # mirror: true
 # timestamp_offset_us: 1000 #us
+
+# 6mm camera
+camera_name: "daheng"
+camera_sn: "FDN21050087"
+exposure_us: 4000
+gain: 0.5
+gamma: 0.5
+vid_pid: "2bdf:0001"
+flip: true
+mirror: true
+timestamp_offset_us: 2318 #us 2300
 
 # camera_name: "daheng"
 # camera_sn: "FDN24040486"
@@ -95,17 +100,20 @@ timestamp_offset_us: 1000 #us
 #  0 -1  0
 #  0  0  1
 # R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
-R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
+# R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 
 #6mm camera
-# 重投影误差: 0.0787px
-camera_matrix: [1809.564717217451, 0, 706.3327817682249, 0, 1805.15500074533, 538.4969433458281, 0, 0, 1]
-distort_coeffs: [-0.07041439840690113, 0.151412749802884, 0.0007210441135535533, -0.0006368697407199156, -0.03172837319091361]
-# 相机同理想情况的偏角: yaw-1.74 pitch-1.63 roll1.35 degree
-# 标定板到世界坐标系原点的水平距离: 2.17 m
-# 标定板同竖直摆放时的偏角: yaw-0.69 pitch16.89 roll-2.66 degree
-R_camera2gimbal: [0.029716925347032186, -0.02905823526614317, 0.9991358883110625, -0.9992825867505816, 0.02261477470051248, 0.030379002325802554, -0.023477993206084943, -0.9993218655310523, -0.028365346931643467]
-t_camera2gimbal: [0.09950350840289986, -0.0178102433697989, 0.042332935712018425]
+R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
+
+# 相机同理想情况的偏角: yaw-2.11 pitch-10.07 roll4.23 degree
+# 标定板到世界坐标系原点的水平距离: 2.07 m
+# 标定板同竖直摆放时的偏角: yaw154.47 pitch13.82 roll2.89 degree
+R_camera2gimbal: [0.02388754640281707, -0.1769736608617867, 0.9839256620741379, -0.9970773397188691, 0.06722509901308757, 0.03629827381327414, -0.07256833845415031, -0.9819170583220653, -0.17485058430027053]
+t_camera2gimbal: [0.128501035122418, 0.04346160775084312, 0.01194559626745868]
+# 重投影误差: 0.0859px
+camera_matrix: [1794.7187330883828, 0, 699.7622672423851, 0, 1789.6017187595758, 536.6853118936033, 0, 0, 1]
+distort_coeffs: [-0.06556457781220619, 0.10304292310453342, 0.0035082365546658368, -7.636838968409379e-05, 0.08855478914497823]
+
 # _camera2gimbal第一位调yaw
 # _camera2gimbal第二位调yaw
 # _camera2gimbal第三位调pitch

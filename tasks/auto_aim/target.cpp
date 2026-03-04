@@ -233,7 +233,7 @@ void Target::update(const Armor & armor)
         last_tower_armor_h[id] = tower_armor_h;
         tower_armor_hs_datas_ptr++;     
     }
-    std::cout<<"update_count_ :"<<update_count_<<std::endl;
+    // std::cout<<"update_count_ :"<<update_count_<<std::endl;
 
     // if(tower_armor_hs_datas_ptr > 39) tower_armor_hs_datas_ptr = 0;
     
@@ -252,7 +252,7 @@ void Target::update(const Armor & armor)
     // for(auto it :tower_armor_hs){
     //   std::cout<<"it :"<<it;
     // }
-    std::cout<<std::endl;
+    // std::cout<<std::endl;
     if (is_switch_) switch_count_++;
 
     last_id = id;

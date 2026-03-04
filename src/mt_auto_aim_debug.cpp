@@ -44,7 +44,7 @@ int main(int argc, char * argv[])
 
   auto_aim::multithread::MultiThreadDetector detector(config_path, true);
   auto_aim::Solver solver(config_path);
-  auto_aim::Tracker tracker(config_path, solver);
+  auto_aim::Tracker tracker(config_path, &solver);
   auto_aim::Aimer aimer(config_path);
   auto_aim::Shooter shooter(config_path);
   auto_aim::multithread::CommandGener commandgener(shooter, aimer, cboard, plotter, true);

@@ -14,6 +14,7 @@
 #include "tasks/auto_aim/armor.hpp"
 #include "tasks/auto_aim/target.hpp"
 #include "tasks/auto_aim/yolo.hpp"
+#include "tasks/auto_aim/solver.hpp"
 
 namespace omniperception
 {
@@ -37,6 +38,9 @@ public:
 
   Eigen::Vector2d delta_angle(
     const std::list<auto_aim::Armor> & armors, const std::string & camera);
+
+  Eigen::Vector2d delta_angle_3d(
+     std::list<auto_aim::Armor> & armors, const std::string & camera, const auto_aim::Solver & solver );
 
   bool armor_filter(std::list<auto_aim::Armor> & armors);
 

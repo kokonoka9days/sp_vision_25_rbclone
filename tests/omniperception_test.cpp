@@ -89,7 +89,7 @@ int main(int argc, char * argv[])
     nlohmann::json data;
 
     data["mode"] = vision_cmd.mode;
-    // data["yaw"] = vision_cmd.yaw;
+    data["yaw"] =(float)vision_cmd.yaw;
 
     plotter.plot(data);
     

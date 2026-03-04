@@ -9,7 +9,7 @@
 
 namespace auto_aim
 {
-Tracker::Tracker(const std::string & config_path, Solver & solver)
+Tracker::Tracker(const std::string & config_path, Solver * solver)
 : solver_{solver},
   detect_count_(0),
   temp_lost_count_(0),
@@ -336,7 +336,7 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
   if (armors.empty()) return false;
 
   auto & armor = armors.front();
-  solver_.solve(armor);
+  solver_->solve(armor);
 
   // 根据兵种优化初始化参数
   auto is_balance = (armor.type == ArmorType::big) &&
@@ -387,7 +387,7 @@ bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock
     )
       continue;
 
-    solver_.solve(armor);
+    solver_->solve(armor);
 
     target_.update(armor);
     break; // 找到第一个匹配的就退出

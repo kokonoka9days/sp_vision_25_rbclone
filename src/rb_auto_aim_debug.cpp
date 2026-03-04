@@ -47,7 +47,7 @@ int main(int argc, char * argv[])
 
   auto_aim::YOLO yolo(config_path, true);
   auto_aim::Solver solver(config_path);
-  auto_aim::Tracker tracker(config_path, solver);
+  auto_aim::Tracker tracker(config_path, &solver);
   tracker.set_gimbal(&gimbal);
   auto_aim::Aimer aimer(config_path);
   auto_aim::Shooter shooter(config_path);

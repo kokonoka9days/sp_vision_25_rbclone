@@ -38,7 +38,7 @@ public:
   BinocularType(T& short_aim_, T&long_aim_): short_aim(short_aim_), long_aim(long_aim_), aim_ptr(&short_aim_){}
 
   void Switch(){
-    aim_ptr = aim_ptr == &short_aim ? &long_aim : &short_aim;
+    aim_ptr = aim_ptr == &short_aim ? & long_aim: &short_aim;
   }
 };
 struct BinocularAim{
@@ -62,33 +62,36 @@ struct BinocularAim{
   double long_min_near = 1.5, long_max_far = 5.5;
 
   // 缓冲区 far2near and near2far
-  double short2long_point =  3.0;//(short_max_far + long_min_near)/2.;
-  double long2short_point = 1.7;
+  double short2long_point =  3.4;//(short_max_far + long_min_near)/2.;
+  double long2short_point = 2.5;
 
-  /// @brief 长短焦切换
-  void Switch(){
+  /// @brief 长短焦强制切换
+  void Switch(auto_aim::Tracker& tracker){
     this->cameras.Switch();
     this->solvers.Switch();
     this->planners.Switch();
     is_short = !is_short;
     switch_time_point = std::chrono::steady_clock::now();
+    tracker.setSolver(this->solvers.aim_ptr);
   }
 
-  /// @brief 长短焦切换逻辑
+  /// @brief 长短焦自动切换逻辑
   void ChangeTheScope(auto_aim::Target target , auto_aim::Tracker& tracker){
     const auto x_est = target.getEKFXest();
     const double x = x_est(0), y = x_est(2), z = x_est(4);
     double dis = sqrt( x*x + y*y + z*z);
+
+    // if(is_short ) dis -= 1.16;
+
+    tools::logger()->info("dis = {}", dis);
     
     if(is_short && dis > short2long_point ){
-      tools::logger()->info("切换至长焦镜头");
-      Switch();
+      tools::logger()->info("切换至长焦镜头, dis = {}", dis);
+      Switch(tracker);
     }else if(!is_short && dis < long2short_point){
-      tools::logger()->info("切换至短焦镜头");
-      Switch();
+      tools::logger()->info("切换至短焦镜头 dis = {}", dis);
+      Switch(tracker);
     }
-
-    tracker.setSolver(*this->solvers.aim_ptr);
   }
 };
 
@@ -123,7 +126,7 @@ int main(int argc, char * argv[])
   auto_aim::Solver short_camera_solver(short_camera_config_path);
   auto_aim::Solver long_camera_solver(long_camera_config_path);
 
-  auto_aim::Tracker tracker(short_camera_config_path, short_camera_solver);//默认短焦
+  auto_aim::Tracker tracker(short_camera_config_path, &short_camera_solver);//默认短焦
   tracker.set_gimbal(&gimbal);
   
   // MPC 规划器
@@ -163,6 +166,9 @@ int main(int argc, char * argv[])
         // // 使用MPC规划器计算控制指令
         // plan = bincameras.planners.aim_ptr->plan(*target, 22);
           
+        //MPC预测以及+自家火控
+        auto_aim::Planner * plan_short_or_long = target->cam_is_short ? &bincameras.planners.short_aim : &bincameras.planners.long_aim;
+        auto plan =  plan_short_or_long->plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
         gimbal.send(
           plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
           plan.pitch_acc);
@@ -173,7 +179,6 @@ int main(int argc, char * argv[])
         data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);
 
         data["gimbal_yaw"] = gs.yaw;
-        data["`"] = gs.yaw_vel;
         data["gimbal_pitch"] = gs.pitch;
         data["gimbal_pitch_vel"] = gs.pitch_vel;
 
@@ -217,6 +222,9 @@ int main(int argc, char * argv[])
     bincameras.cameras.aim_ptr->read(img, timestamp);
 
     auto q = gimbal.q(timestamp - bincameras.cameras.aim_ptr->timestamp_offset);
+
+
+    // tools::logger()->info("当前使用 {} 焦镜头", bincameras.is_short ? "短" : "长");
     
     
     // 获取云台欧拉角
@@ -238,11 +246,13 @@ int main(int argc, char * argv[])
     auto armors = yolo.detect(img);
     
     // 跟踪目标
+    
     auto targets = tracker.track(armors, timestamp);
      
     // 自瞄模式 - 使用MPC
     if (!targets.empty()) {
         // 将目标放入队列供MPC线程处理
+        targets.front().cam_is_short = bincameras.is_short;
         target_queue.push(targets.front());
         
         auto& target = targets.front();
@@ -335,7 +345,7 @@ int main(int argc, char * argv[])
     auto key = cv::waitKey(1);
     if (key == 'q') break;
     if (key == 'c'){// 强制切换长短焦
-        bincameras.Switch();
+        bincameras.Switch(tracker);
     }
   }
   

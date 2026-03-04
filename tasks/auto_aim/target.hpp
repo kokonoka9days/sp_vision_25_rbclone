@@ -60,6 +60,8 @@ public:
   double last_tower_armor_h[3] = {0,0,0};
   int tower_armor_hs_datas_ptr = 0;
 
+  //长短焦
+  bool cam_is_short;
 private:
   int armor_num_;
   int switch_count_;

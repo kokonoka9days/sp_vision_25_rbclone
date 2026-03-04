@@ -1,8 +1,12 @@
-enemy_color: "red"
+pattern_cols: 11      # 棋盘格每行的内角点数（格子数-1）
+pattern_rows: 8      # 棋盘格每列的内角点数（格子数-1）
+square_size_mm: 30   # 棋盘格方块大小（毫米）
+
+enemy_color: "auto"
 # enemy_color: "blue"
 
 #####-----神经网络参数-----#####
-yolo_name: yolov5
+yolo_name: yolov8
 classify_model: ../assets/tiny_resnet.onnx
 yolo11_model_path: ../assets/yolo11.xml
 yolov8_model_path: ../assets/yolov8.xml
@@ -21,15 +25,15 @@ roi:
 use_roi: false
 
 # #####-----传统方法参数-----#####
-# threshold: 150
-# max_angle_error: 45 # degree
-# min_lightbar_ratio: 1.5
-# max_lightbar_ratio: 20
-# min_lightbar_length: 8
-# min_armor_ratio: 1
-# max_armor_ratio: 5
-# max_side_ratio: 1.5
-# max_rectangular_error: 25 # degree
+threshold: 150
+max_angle_error: 45 # degree
+min_lightbar_ratio: 1.5
+max_lightbar_ratio: 20
+min_lightbar_length: 8
+min_armor_ratio: 1
+max_armor_ratio: 5
+max_side_ratio: 1.5
+max_rectangular_error: 25 # degree
 # min_confidence: 0.8
 
 #####-----tracker参数-----#####
@@ -47,8 +51,8 @@ outpost_max_temp_lost_count: 75
 # low_speed_delay_time: 0.093 # s
 
 #####-----aimer参数-----##### 12mm
-yaw_offset: -2.5 # degree 
-pitch_offset: 0 # degree 2
+yaw_offset: 0 # degree 
+pitch_offset: 1 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
@@ -64,7 +68,7 @@ auto_fire: true # 是否由自瞄控制射击
 #12mm camera
 camera_name: "hikrobot"
 camera_sn: "DA7188471"
-exposure_us: 5000
+exposure_us: 4000
 gain: 0.5
 vid_pid: "2bdf:0001"
 flip: true
@@ -110,14 +114,18 @@ R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 # # _camera2gimbal第三位调pitch
 
 # #12mm camera
-# # 重投影误差: 0.0601px 12mm
-camera_matrix: [3575.595557186291, 0, 660.6522530192485, 0, 3548.6107025779365, 630.7246558819783, 0, 0, 1]
-distort_coeffs: [0.007593315540968868, -0.09500492030732975, 0.005121307769025103, -0.0003827026956162613, 3.422331685386428]
-# # # 相机同理想情况的偏角: yaw-3.03 pitch0.26 roll0.84 degree
-# # # 标定板到世界坐标系原点的水平距离: 3.39 m
-# # # 标定板同竖直摆放时的偏角: yaw10.51 pitch6.93 roll-1.85 degree
-R_camera2gimbal: [0.05293871277740374, 0.003752714924705188, 0.9985907118635569, -0.9984910777682651, 0.014815900448325254, 0.052877752515340645, -0.014596585444543545, -0.9998831962907464, 0.004531387068098422]
-t_camera2gimbal: [0.19936918316981864, 0.031528539583439465, 0.003809688002070062]
+# 重投影误差: 0.0642px
+camera_matrix: [3501.660843586916, 0, 710.0477300738894, 0, 3492.8987326243055, 389.5497953999983, 0, 0, 1]
+distort_coeffs: [-0.0005313899442528695, -0.26802058008466606, -0.010675046297510609, -0.008169900883847562, 5.2742461116651835]
+# 相机同理想情况的偏角: yaw-1.47 pitch-0.35 roll2.75 degree
+# 标定板到世界坐标系原点的水平距离: 3.17 m
+# 标定板同竖直摆放时的偏角: yaw54.84 pitch11.37 roll177.54 degree
+R_camera2gimbal: [0.025346033542738095, -0.00726326580127892, 0.9996523513469822, -0.9985251663247955, 0.04784137270838066, 0.025665059388541453, -0.048011152867744655, -0.9988285378518567, -0.006039964654885988]
+t_camera2gimbal: [0.20588573426930395, -0.0737782046536316, 0.12397839818905962]
+
+gimbal_y1: 1
+gimbal_p2: 2
+gimbal_r3: -3
 #####-----cboard参数-----#####
 quaternion_canid: 0x100
 bullet_speed_canid: 0x101

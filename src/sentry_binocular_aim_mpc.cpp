@@ -91,7 +91,7 @@ struct BinocularAim{
       Switch();
     }
 
-    tracker.setSolver(*this->solvers.aim_ptr);
+    tracker.setSolver(this->solvers.aim_ptr);
   }
 };
 
@@ -137,7 +137,7 @@ int main(int argc, char * argv[])
   auto_aim::Solver short_camera_solver(short_camera_config_path);
   auto_aim::Solver long_camera_solver(long_camera_config_path);
 
-  auto_aim::Tracker tracker(short_camera_config_path, short_camera_solver);//默认短焦
+  auto_aim::Tracker tracker(short_camera_config_path, &short_camera_solver);//默认短焦
   tracker.set_gimbal(&gimbal);
   auto_aim::Aimer aimer(short_camera_config_path);
   auto_aim::Shooter shooter(short_camera_config_path);
@@ -258,15 +258,8 @@ int main(int argc, char * argv[])
       // 全向感知模式
       io::VisionToGimbal vision_cmd = decider.decide_g(
         yolo, gimbal_euler, omn_cam1, omn_cam2);
-      
-      if (vision_cmd.mode == 3) {
-
-      
-        // 全向感知找到目标，发送控制指令
-        // 使用Gimbal的send函数直接发送VisionToGimbal结构体
-        gimbal.send(vision_cmd);
         
-      }
+      gimbal.send(vision_cmd);
     } else {
       // 【新增】：挂起全向相机（停止底层硬件推流，释放CPU和USB/网卡带宽）
       omn_cam1.pause();

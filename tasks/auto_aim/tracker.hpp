@@ -18,7 +18,7 @@ namespace auto_aim
 class Tracker
 {
 public:
-  Tracker(const std::string & config_path, Solver & solver);
+  Tracker(const std::string & config_path, Solver * solver);
 
   std::string state() const;
 
@@ -35,10 +35,10 @@ public:
     const std::vector<omniperception::DetectionResult> & detection_queue, std::list<Armor> & armors,
     std::chrono::steady_clock::time_point t, bool use_enemy_color = true);
 
-  inline void setSolver(Solver & solver__){this->solver_ = solver__; }
+  inline void setSolver(Solver * solver__){this->solver_ = solver__; }
   void set_gimbal(io::Gimbal* gimbal) { gimbal_ = gimbal; }
 private:
-  Solver & solver_;
+  Solver * solver_;
   io::Gimbal* gimbal_ = nullptr; // 新增一个云台指针，默认为空
   Color enemy_color_;
   std::string enemy_color_str_;
