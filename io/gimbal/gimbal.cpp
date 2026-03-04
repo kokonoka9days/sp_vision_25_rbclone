@@ -228,7 +228,7 @@ void Gimbal::read_thread()
 
     if (second_byte != 0x53) {
       // 找到了 0x5a 但下一个不是 0x53，说明找错了，重新开始
-      tools::logger()->warn("找到 0x5a，但下一个不是 0x53");
+      // tools::logger()->warn("找到 0x5a，但下一个不是 0x53");
       continue;
     }
 
@@ -244,7 +244,7 @@ void Gimbal::read_thread()
     }
 
     if (!tools::check_crc16(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
-      tools::logger()->debug("[Gimbal] CRC16 check failed.");
+      // tools::logger()->debug("[Gimbal] CRC16 check failed.");
       continue;
     }
 

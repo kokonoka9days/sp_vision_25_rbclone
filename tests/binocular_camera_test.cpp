@@ -23,9 +23,7 @@
 const std::string keys =
   "{help h usage ? |                                             | 输出命令行参数说明}"
   "{short_camera   | ../configs/sb.yaml                          | 短焦相机配置文件路径 }"
-  "{long_camera    | ../configs/sb_copy.yaml                     | 长焦相机配置文件路径 }"
-  "{l_cam          | ../configs/omniperception/short_camera.yaml | 左感知相机 }"
-  "{r_cam          | ../configs/omniperception/long_camera.yaml  | 右感知相机 }";
+  "{long_camera    | ../configs/sb_copy.yaml                     | 长焦相机配置文件路径 }";
 
 
 using namespace std::chrono_literals;

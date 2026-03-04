@@ -36,17 +36,16 @@ io::VisionToGimbal Decider::decide_g(
   if (count_ < 0 || count_ > 2) {
     throw std::runtime_error("count_ out of valid range [0,2]");
   }
-  // if (count_ == 2) {
-  //   back_camera.read(omn_img, timestamp);
-  // } else {
-  //   cams[count_]->read(omn_img, timestamp);
-  // }
   cams[count_]->read(omn_img, timestamp);
   auto armors = yolo.detect(omn_img);
   auto empty = armor_filter(armors);
 
-  if (!empty) {
-    
+  io::VisionToGimbal vision_cmd;
+
+  count_ = (count_ + 1) % 2;
+
+
+  if(!empty){
     delta_angle = this->delta_angle(armors, cams[count_]->main_and_secondary);
     
 
@@ -55,33 +54,93 @@ io::VisionToGimbal Decider::decide_g(
       ( cams[count_]->main_and_secondary), delta_angle[0], delta_angle[1],
       armors.size(), auto_aim::ARMOR_NAMES[armors.front().name]);
 
-    count_ = (count_ + 1) % 2;
 
-    // 创建 VisionToGimbal 结构体
-    io::VisionToGimbal vision_cmd;
+      
+    if(abs(delta_angle[0]) < 95){
+      delta_angle[0] > 0 ? 95 : -95;
+    }
+    
     vision_cmd.mode = 3;  // 全向感知模式识别到目标，控制大云台
-    vision_cmd.yaw = static_cast<float>(delta_angle[0] / 57.3);
+    vision_cmd.yaw = static_cast<float>(-delta_angle[0] / 57.3);
     vision_cmd.yaw_vel = 0.0f;  // 角速度设为0，可根据需要计算
     vision_cmd.yaw_acc = 0.0f;  // 角加速度设为0
-    vision_cmd.pitch = tools::limit_rad(delta_angle[1] / 57.3);
+    vision_cmd.pitch = tools::limit_rad((delta_angle[1] + 15 )/ 57.3);
     vision_cmd.pitch_vel = 0.0f;
     vision_cmd.pitch_acc = 0.0f;
+
+    last_count_ = count_;
+    last_vision_cmd = vision_cmd;
     
+    return vision_cmd;
+  }else{
+    // 如果没有找到目标，返回不控制的指令
+    vision_cmd.mode = 0;  // 不控制
+    vision_cmd.yaw = 0.0f;
+    vision_cmd.yaw_vel = 0.0f;
+    vision_cmd.yaw_acc = 0.0f;
+    vision_cmd.pitch = 0.0f;
+    vision_cmd.pitch_vel = 0.0f;
+    vision_cmd.pitch_acc = 0.0f;    
+    last_vision_cmd = vision_cmd;
+
+    tools::logger()->debug("全向感知未识别到目标");
     return vision_cmd;
   }
 
-  count_ = (count_ + 1) % 2;
-  // 如果没有找到目标，返回不控制的指令
-  io::VisionToGimbal vision_cmd;
-  vision_cmd.mode = 0;  // 不控制
-  vision_cmd.yaw = 0.0f;
-  vision_cmd.yaw_vel = 0.0f;
-  vision_cmd.yaw_acc = 0.0f;
-  vision_cmd.pitch = 0.0f;
-  vision_cmd.pitch_vel = 0.0f;
-  vision_cmd.pitch_acc = 0.0f;
+  // if (!empty && last_vision_cmd.mode == 0) {
+    
+  //   delta_angle = this->delta_angle(armors, cams[count_]->main_and_secondary);
+    
+
+  //   tools::logger()->debug(
+  //     "[{} camera] delta yaw:{:.2f},target pitch:{:.2f},armor number:{},armor name:{}",
+  //     ( cams[count_]->main_and_secondary), delta_angle[0], delta_angle[1],
+  //     armors.size(), auto_aim::ARMOR_NAMES[armors.front().name]);
+
+    
+  //   vision_cmd.mode = 3;  // 全向感知模式识别到目标，控制大云台
+  //   vision_cmd.yaw = static_cast<float>(delta_angle[0] / 57.3);
+  //   vision_cmd.yaw_vel = 0.0f;  // 角速度设为0，可根据需要计算
+  //   vision_cmd.yaw_acc = 0.0f;  // 角加速度设为0
+  //   vision_cmd.pitch = tools::limit_rad((delta_angle[1] + 15 )/ 57.3);
+  //   vision_cmd.pitch_vel = 0.0f;
+  //   vision_cmd.pitch_acc = 0.0f;
+
+  //   last_count_ = count_;
+  //   last_vision_cmd = vision_cmd;
+    
+  //   return vision_cmd;
+  // }else if((empty && last_vision_cmd.mode == 3) 
+  //  || (last_vision_cmd.mode == 3 && !empty) )
+  // {
+  //   return last_vision_cmd;
+  // }
+  // else if(last_vision_cmd.mode == 0 && empty){
+    
+  //   // 如果没有找到目标，返回不控制的指令
+  //   vision_cmd.mode = 0;  // 不控制
+  //   vision_cmd.yaw = 0.0f;
+  //   vision_cmd.yaw_vel = 0.0f;
+  //   vision_cmd.yaw_acc = 0.0f;
+  //   vision_cmd.pitch = 0.0f;
+  //   vision_cmd.pitch_vel = 0.0f;
+  //   vision_cmd.pitch_acc = 0.0f;    
+  //   last_vision_cmd = vision_cmd;
+
+  //   tools::logger()->debug("全向感知未识别到目标");
+  //   return vision_cmd;
+  // }else {
+  //   tools::logger()->debug("全向感知，发生其他情况，需排除");
+  //   return last_vision_cmd;
+  // }
   
-  return vision_cmd;
+
+
+
+
+
+ 
+  
 }
 
 io::Command Decider::decide(
@@ -202,9 +261,9 @@ bool Decider::armor_filter(std::list<auto_aim::Armor> & armors)
   armors.remove_if([&](const auto_aim::Armor & a) { return a.name == auto_aim::ArmorName::five; });
   // 不打工程
   // armors.remove_if([&](const auto_aim::Armor & a) { return a.name == auto_aim::ArmorName::two; });
-  // 不打前哨站
-  armors.remove_if(
-    [&](const auto_aim::Armor & a) { return a.name == auto_aim::ArmorName::outpost; });
+  // // 不打前哨站
+  // armors.remove_if(
+  //   [&](const auto_aim::Armor & a) { return a.name == auto_aim::ArmorName::outpost; });
 
   // 过滤掉刚复活无敌的装甲板
   armors.remove_if([&](const auto_aim::Armor & a) {

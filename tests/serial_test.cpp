@@ -9,7 +9,7 @@ int main() {
     serial::Serial ser;
     
     try {
-        ser.setPort("/dev/ttyACM0");
+        ser.setPort("/dev/ttyACM1");
         ser.setBaudrate(460800);
         
         serial::Timeout timeout = serial::Timeout::simpleTimeout(1000);
@@ -35,7 +35,7 @@ int main() {
                 bool found_frame = false;
                 for (size_t i = 0; i < buffer.size(); ++i) {
                     // 查找0x53帧头
-                    if (buffer[i] == 0x5a && (buffer.size() - i) >= FRAME_SIZE && buffer[i+1] == 0x53) {
+                    if (1) {
                         found_frame = true;
                         std::cout << "\n[Frame " << ++frame_count << "] ";
                         

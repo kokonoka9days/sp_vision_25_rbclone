@@ -59,6 +59,8 @@ private:
   double fov_v_, new_fov_v_;
   int mode_;
   int count_;
+  int last_count_ = -1;
+  io::VisionToGimbal last_vision_cmd; 
 
   auto_aim::Color enemy_color_;
   auto_aim::YOLO detector_;

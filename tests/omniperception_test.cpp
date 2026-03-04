@@ -67,8 +67,7 @@ int main(int argc, char * argv[])
   // 全向感知决策器
   omniperception::Decider decider(omnl_yaml_name);
   
-  // 获取云台模式
-  auto last_mode = io::GimbalMode::IDLE;
+
 
   // 新增一个变量用于记录全向相机是否处于暂停状态
   bool is_omn_paused = false; 
@@ -81,19 +80,20 @@ int main(int argc, char * argv[])
 
     // 获取云台欧拉角
     auto gimbal_euler = tools::eulers(solver.R_gimbal2world(), 2, 1, 0);
-
+    static io::VisionToGimbal last_vision_cmd;
     // cv::imshow("long_camera", img4);
     // 全向感知模式
     io::VisionToGimbal vision_cmd = decider.decide_g(
       yolo, gimbal_euler, omn_cam1, omn_cam2);
     
-    if (vision_cmd.mode == 3) {
+    nlohmann::json data;
+
+    data["mode"] = vision_cmd.mode;
+    // data["yaw"] = vision_cmd.yaw;
+
+    plotter.plot(data);
     
-      // 全向感知找到目标，发送控制指令
-      // 使用Gimbal的send函数直接发送VisionToGimbal结构体
-      gimbal.send(vision_cmd);
-      
-    }
+    gimbal.send(vision_cmd);
 
     cv::imshow("img1", img1);
     cv::imshow("img2", img2);
