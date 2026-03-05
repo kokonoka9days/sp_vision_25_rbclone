@@ -25,23 +25,27 @@ Tracker::Tracker(const std::string & config_path, Solver * solver)
   max_temp_lost_count_ = yaml["max_temp_lost_count"].as<int>();
   outpost_max_temp_lost_count_ = yaml["outpost_max_temp_lost_count"].as<int>();
   normal_temp_lost_count_ = max_temp_lost_count_;
+
+  last_cam_is_short = true;
 }
 
 std::string Tracker::state() const { return state_; }
 
 std::list<Target> Tracker::sb_track(
-  std::list<Armor> & armors, std::chrono::steady_clock::time_point t, bool use_enemy_color)
+  std::list<Armor> & armors, std::chrono::steady_clock::time_point t,bool cam_is_short, bool use_enemy_color)
 {
   auto dt = tools::delta_time(t, last_timestamp_);
   last_timestamp_ = t;
 
   // TODO
-  // if(gimbal_ == nullptr) {
-  //   tools::logger()->error("[Tracker] gimbal_不能为空指针，请先调用set_gimbal()设置云台指针");
-  //   return {};
-  // }
-  // io::GimbalState g = gimbal_->state();
-  // if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ? Color::blue : Color::red;
+  if(gimbal_ == nullptr) {
+    tools::logger()->error("[Tracker] gimbal_不能为空指针，请先调用set_gimbal()设置云台指针");
+    return {};
+  }
+  io::GimbalState g = gimbal_->state();
+  if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ? Color::blue : Color::red;
+
+  target_.cam_is_short = cam_is_short;
 
   // 时间间隔过长，说明可能发生了相机离线
   if (state_ != "lost" && dt > 0.1) {
@@ -104,7 +108,7 @@ std::list<Target> Tracker::sb_track(
 }
 
 std::list<Target> Tracker::track(
-  std::list<Armor> & armors, std::chrono::steady_clock::time_point t, bool use_enemy_color)
+  std::list<Armor> & armors, std::chrono::steady_clock::time_point t, bool cam_is_short, bool use_enemy_color)
 {
   auto dt = tools::delta_time(t, last_timestamp_);
   last_timestamp_ = t;
@@ -114,6 +118,8 @@ std::list<Target> Tracker::track(
   }
   io::GimbalState g = gimbal_->state();
   if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ? Color::red : Color::blue;
+
+  target_.cam_is_short = cam_is_short;
 
   // 时间间隔过长，说明可能发生了相机离线
   if (state_ != "lost" && dt > 0.1) {
@@ -193,6 +199,8 @@ std::list<Target> Tracker::track(
   }
 
   if (state_ == "lost") return {};
+
+  
 
   std::list<Target> targets = {target_};
   return targets;

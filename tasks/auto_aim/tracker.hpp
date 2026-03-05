@@ -24,10 +24,12 @@ public:
 
   std::list<Target> sb_track(
     std::list<Armor> & armors, std::chrono::steady_clock::time_point t,
+    bool cam_is_short = true,
     bool use_enemy_color = true);
 
   std::list<Target> track(
-    std::list<Armor> & armors, std::chrono::steady_clock::time_point t,
+    std::list<Armor> & armors, std::chrono::steady_clock::time_point t, 
+    bool cam_is_short = true,
     bool use_enemy_color = true);
 
 
@@ -52,6 +54,7 @@ private:
   Target target_;
   std::chrono::steady_clock::time_point last_timestamp_;
   ArmorPriority omni_target_priority_;
+  bool cam_is_switch = false, last_cam_is_short = true;
 
   void state_machine(bool found);
 

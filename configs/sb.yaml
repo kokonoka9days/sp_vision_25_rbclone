@@ -84,7 +84,7 @@ gamma: 0.5
 vid_pid: "2bdf:0001"
 flip: true
 mirror: true
-timestamp_offset_us: 2318 #us 2300
+timestamp_offset_us: 4318 #us 2300
 
 # camera_name: "daheng"
 # camera_sn: "FDN24040486"

@@ -57,6 +57,9 @@ Target::Target(
     // }    
   }
 
+
+  cam_is_switch_time_point = std::chrono::steady_clock::time_point{};
+
   
 
   // x vx y vy z vz a w r l h
@@ -129,6 +132,8 @@ void Target::predict(double dt)
     v1 = 100;  // 加速度方差
     v2 = 400;  // 角加速度方差
   }
+
+
   auto a = dt * dt * dt * dt / 4;
   auto b = dt * dt * dt / 2;
   auto c = dt * dt;
@@ -258,9 +263,11 @@ void Target::update(const Armor & armor)
     last_id = id;
     update_count_++;    
   
-
+    xyz_in_world = armor.xyz_in_world;
 
   update_ypda(armor, id);
+
+  
 }
 
 void Target::update_ypda(const Armor & armor, int id)
@@ -270,9 +277,33 @@ void Target::update_ypda(const Armor & armor, int id)
   // Eigen::VectorXd R_dig{{4e-3, 4e-3, 1, 9e-2}};
   auto center_yaw = std::atan2(armor.xyz_in_world[1], armor.xyz_in_world[0]);
   auto delta_angle = tools::limit_rad(armor.ypr_in_world[0] - center_yaw);
+
+  auto r2_azimuth = 4e-3;
+  auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2;
+  auto r2_d = log(std::abs(delta_angle) + 1) + 1;
+  
+  if(last_cam_is_short != cam_is_short){
+    cam_is_switch_time_point = std::chrono::steady_clock::now();
+    last_cam_is_short = cam_is_short;
+    tools::logger()->info("[Target] last_cam_is_short != cam_is_short {}", (bool)(last_cam_is_short != cam_is_short));
+  }
+  auto now = std::chrono::steady_clock::now();
+  double cam_is_switch_lter_dt = tools::delta_time(now, cam_is_switch_time_point);
+  if(cam_is_switch_lter_dt < 0.7 && update_count_ > 50){
+    // tools::logger()->info("[Target] 高过程噪声持续时间");
+    r2_azimuth = 4e+4;
+    r2_angle *= 300;
+    r2_d *= 300;
+  }
+  // tools::logger()->info("[Target] cam_is_switch_lter_dt ：{}", cam_is_switch_lter_dt);
+  //  tools::logger()->info("[Target] last_cam_is_short ：{}， cam_is_short： {}", last_cam_is_short,cam_is_short);
+  // std::cout<<"r2_azimuth "<<r2_azimuth<<std::endl<<"    cam_is_switch_lter_dt "<<cam_is_switch_lter_dt<<std::endl;
+  // std::cout<<"cam_is_short "<<cam_is_short<<std::endl;
+  // std::cout<<"last_cam_is_short != cam_is_short "<<(bool)(last_cam_is_short != cam_is_short)<<std::endl;
+  
   Eigen::VectorXd R_dig{
-    {4e-3, 4e-3, log(std::abs(delta_angle) + 1) + 1,
-     log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2}};
+    {r2_azimuth, r2_azimuth, r2_d,
+     r2_angle}};
 
   //测量过程噪声偏差的方差
   Eigen::MatrixXd R = R_dig.asDiagonal();

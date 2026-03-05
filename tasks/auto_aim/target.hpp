@@ -22,6 +22,7 @@ public:
   ArmorPriority priority;
   bool jumped;
   int last_id;  // debug only
+  Eigen::Vector3d xyz_in_world;
 
   Target() = default;
   Target(
@@ -61,7 +62,10 @@ public:
   int tower_armor_hs_datas_ptr = 0;
 
   //长短焦
-  bool cam_is_short;
+  bool cam_is_short = true;
+  bool last_cam_is_short = true;
+  std::chrono::steady_clock::time_point cam_is_switch_time_point;//相机切换时间点；
+
 private:
   int armor_num_;
   int switch_count_;
