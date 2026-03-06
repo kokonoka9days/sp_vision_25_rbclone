@@ -26,8 +26,10 @@ Decider::Decider(const std::string & config_path) : detector_(config_path), coun
 }
 
 io::VisionToGimbal Decider::decide_g(
-  auto_aim::YOLO & yolo, const Eigen::Vector3d & gimbal_pos, io::Camera & omn_cam1_l,
-  io::Camera & omn_cam2_r)
+  auto_aim::YOLO & yolo, const Eigen::Vector3d & gimbal_pos,
+   io::Camera & omn_cam1_l, io::Camera & omn_cam2_r,
+  const auto_aim::Solver & left_solver, const auto_aim::Solver & right_solver
+  )
 {
   Eigen::Vector2d delta_angle;
   io::Camera * cams[] = {&omn_cam1_l, &omn_cam2_r};
@@ -47,7 +49,7 @@ io::VisionToGimbal Decider::decide_g(
 
 
   if(!empty){
-    delta_angle = this->delta_angle(armors, cams[count_]->main_and_secondary);
+    delta_angle = this->delta_angle_3d(armors, cams[count_]->main_and_secondary, left_solver, right_solver);
     
 
     tools::logger()->debug(
@@ -254,37 +256,30 @@ Eigen::Vector2d Decider::delta_angle(
 
 
 Eigen::Vector2d Decider::delta_angle_3d(
-    std::list<auto_aim::Armor> & armors, const std::string & camera, const auto_aim::Solver & solver ){
+    std::list<auto_aim::Armor> & armors, const std::string & camera, const auto_aim::Solver & left_solver, const auto_aim::Solver & right_solver ){
      
   Eigen::Vector2d delta_angle;
   if(armors.empty()){
     tools::logger()->debug("[Decider] armors 为空，有bug！！！");
   }
-  // solver.solve(armors.front());
+  
 
-  // auto digger_yaw_solver = [] (const auto_aim::Solver & solver,
-  //   auto_aim::Armor& armor )
-  //   -> Eigen::Vector3d {
-  //   cv::Vec3d rvec, tvec;
-
-    // const auto & object_points =
-    // (armor.type == auto_aim::ArmorType::big) ? auto_aim::BIG_ARMOR_POINTS : SMALL_ARMOR_POINTS;
-
-    // cv::solvePnP(
-    //   object_points, armor.points, camera_matrix_, distort_coeffs_, rvec, tvec, false,
-    //   cv::SOLVEPNP_IPPE);
-  // };
 
   //TUDO:计算大yaw旋转角度
   if (camera == "left") {
-    delta_angle[0] = 120 + (new_fov_h_ / 2) - armors.front().center_norm.x * new_fov_h_;
-    delta_angle[1] = armors.front().center_norm.y * new_fov_v_ - new_fov_v_ / 2;
+    left_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0, 105.0 * CV_PI / 180.0), Eigen::Vector3d(-0.127611, -0.136932, -0.08) );
+    auto ypd_angle = tools::xyz2ypd(armors.front().xyz_in_gimbal)* 57.3;
+    delta_angle[0] = 120 - ypd_angle(0) * 57.3;
+    delta_angle[1] = ypd_angle(1) * 57.3;
     return delta_angle;        
   }
 
   else if (camera == "right") {
-    delta_angle[0] = -120 + (new_fov_h_ / 2) - armors.front().center_norm.x * new_fov_h_;
-    delta_angle[1] = armors.front().center_norm.y * new_fov_v_ - new_fov_v_ / 2;
+    right_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0, 105.0 * CV_PI / 180.0), Eigen::Vector3d(-0.127611, 0.136932, -0.08) );
+    // delta_angle[0] = -120 - tools::xyz2ypd(armors.front().xyz_in_gimbal)[0]* 57.3;
+    auto ypd_angle = tools::xyz2ypd(armors.front().xyz_in_gimbal)* 57.3;
+    delta_angle[0] = 120 - ypd_angle(0) * 57.3;
+    delta_angle[1] = ypd_angle(1) * 57.3;
     return delta_angle;
   }
 

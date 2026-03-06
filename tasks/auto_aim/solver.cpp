@@ -87,7 +87,7 @@ void Solver::solve(Armor & armor) const
   optimize_yaw(armor);
 }
 
-void Solver::omn_dig_yaw_solve(Armor & armor) const{
+void Solver::omn_dig_yaw_solve(Armor & armor, Eigen::Vector3d R_camera2biggimbal_ypr, Eigen::Vector3d t_camera2biggimbal ) const{
   cv::Vec3d rvec, tvec;
 
   const auto & object_points =
@@ -100,16 +100,20 @@ void Solver::omn_dig_yaw_solve(Armor & armor) const{
 
   Eigen::Vector3d xyz_in_camera;
   cv::cv2eigen(tvec, xyz_in_camera);
-  armor.xyz_in_gimbal = R_camera2gimbal_ * xyz_in_camera + t_camera2gimbal_;
+
+  Eigen::Vector3d R_camera2biggimbal_ypr = Eigen::Vector3d(0,0, 105.0 * CV_PI / 180.0);
+  Eigen::Matrix3d R_camera2biggimbal = tools::rotation_matrix(R_camera2biggimbal_ypr);
+  Eigen::Vector3d t_camera2biggimbal = Eigen::Vector3d(0.0, 0.0, 0.0);
+  armor.xyz_in_gimbal = R_camera2biggimbal * xyz_in_camera + t_camera2biggimbal;
   // armor.xyz_in_world = R_gimbal2world_ * armor.xyz_in_gimbal;
 
-  cv::Mat rmat;
-  cv::Rodrigues(rvec, rmat);
-  Eigen::Matrix3d R_armor2camera;
-  cv::cv2eigen(rmat, R_armor2camera);
-  Eigen::Matrix3d R_armor2gimbal = R_camera2gimbal_ * R_armor2camera;
-  // Eigen::Matrix3d R_armor2world = R_gimbal2world_ * R_armor2gimbal;
-  armor.ypr_in_gimbal = tools::eulers(R_armor2gimbal, 2, 1, 0);
+  // cv::Mat rmat;
+  // cv::Rodrigues(rvec, rmat);
+  // Eigen::Matrix3d R_armor2camera;
+  // cv::cv2eigen(rmat, R_armor2camera);
+  // Eigen::Matrix3d R_armor2gimbal = R_camera2gimbal_ * R_armor2camera;
+  // // Eigen::Matrix3d R_armor2world = R_gimbal2world_ * R_armor2gimbal;
+  // armor.ypr_in_gimbal = tools::eulers(R_armor2gimbal, 2, 1, 0);
   // armor.ypr_in_world = tools::eulers(R_armor2world, 2, 1, 0);
 
   // armor.ypd_in_world = tools::xyz2ypd(armor.xyz_in_world);

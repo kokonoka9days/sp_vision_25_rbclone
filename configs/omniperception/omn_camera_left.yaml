@@ -1,6 +1,5 @@
-# enemy_color: "red"
-enemy_color: "blue"
-# enemy_color: "auto" # 通过电控发来己方颜色判断敌方颜色，默认蓝色，红色时请改为"red"
+enemy_color: "red"
+# enemy_color: "blue"
 
 #####-----神经网络参数-----#####
 yolo_name: yolov8
@@ -21,7 +20,23 @@ roi:
 
 use_roi: false
 
+#####-----decider参数-----#####
+mode: 1
 
+#####-----USB相机参数-----#####
+image_width: 1280
+image_height: 720
+
+fov_h: 57.7 #87.7
+fov_v: 56.7 
+
+
+new_fov_h: 63.133 #67
+new_fov_v: 75.0484
+usb_frame_rate: 120
+usb_exposure: 50 #1-80000______250
+usb_gamma: 0.5
+usb_gain: 5 #0-96
 
 #####-----传统方法参数-----#####
 threshold: 150
@@ -33,35 +48,20 @@ min_armor_ratio: 1
 max_armor_ratio: 5
 max_side_ratio: 1.5
 max_rectangular_error: 25 # degree
-min_confidence: 0.8
-
-camera_name: "daheng"
-camera_sn: "KE0210030295"
-exposure_us: 4000
-gain: 0.5
-gamma: 0.5
-vid_pid: "2ba2:4d55"
-flip: false
-mirror: false
-timestamp_offset_us: 1000 #us
-
-main_and_secondary: left
-
 
 #####-----tracker参数-----#####
 min_detect_count: 5
-max_temp_lost_count: 11
+max_temp_lost_count: 15
 outpost_max_temp_lost_count: 75
 
-
 #####-----aimer参数-----#####
-yaw_offset: 0 # degree -2.5
-pitch_offset: 0 # degree 2
-comming_angle: 60 # degree
+yaw_offset: 2 # degree -2.5
+pitch_offset: 6.5 # degree 2
+comming_angle: 55 # degree
 leaving_angle: 20 # degree
-decision_speed: 8 # rad/s
-high_speed_delay_time: 0.030 # s
-low_speed_delay_time: 0.015 # s
+decision_speed: 7 # rad/s
+high_speed_delay_time: 0.0 # s
+low_speed_delay_time: 0.0 # s planner use this value
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree
@@ -69,27 +69,42 @@ second_tolerance: 2 # 远距离射击容差，degree
 judge_distance: 2 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
-# -1  0  0
-#  0 -1  0
+# camera_name: "hikrobot"
+# exposure_us: 2500
+# gain: 16.9
+# vid_pid: "2bdf:0001"
+# timestamp_offset_us: 1000 #us
+
+camera_name: "daheng"
+camera_sn: "KE0210010003"
+exposure_us: 5000
+gain: 0.5
+gamma: 0.5
+vid_pid: "2ba2:4d55"
+flip: false
+mirror: false
+timestamp_offset_us: 1000 #us
+
+#  1  0  0
+#  0  1  0
 #  0  0  1
-# R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
-R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
-# 重投影误差: 0.1097px
-camera_matrix: [7436.82530173308, 0, 641.6137728139532, 0, 7371.169612386191, 612.8070726845115, 0, 0, 1]
-distort_coeffs: [0.24524539325486833, 23.946446836447926, 0.010652980745599585, 0.00605912301403457, -1539.2994128016512]
+R_gimbal2imubody: [1, 0, 0, 0, 1, 0, 0, 0, 1]
 
-# 相机同理想情况的偏角: yaw2.25 pitch-19.63 roll-1.03 degree
-R_camera2gimbal: [-0.03320966758804644, -0.3362678745663748, 0.941180659869987, -0.999303974889463, -0.004837077567438897, -0.03698876114073242, 0.016990695948401722, -0.941753958959143, -0.3358731859436974]
-t_camera2gimbal: [0.2848053347395876, -0.032947220867480725, 0.036076337084379476]
+# 重投影误差: 0.0876px
+camera_matrix: [867.1212929204472, 0, 638.992118381067, 0, 867.319631850981, 499.7928117831896, 0, 0, 1]
+distort_coeffs: [-0.10070284545816677, 0.10824716882445257, 0.0004277256938665403, 0.0003978653115716787, -0.02321486496512053]
 
+# 相机同理想情况的偏角: yaw1.44 pitch-7.28 roll0.96 degree
+# 标定板到世界坐标系原点的水平距离: 1.13 m
+# 标定板同竖直摆放时的偏角: yaw7.61 pitch13.92 roll-0.46 degree
+R_camera2gimbal: [-0.027182119030230909, -0.12616154330853446, 0.99163723074269183, -0.99949106557517331, 0.019998323121329122, -0.024853106601381177, -0.016695575474690555, -0.99180811252093692, -0.12664093215554434]
+t_camera2gimbal: [0.13160669975045827, 0.10377721766577375, 0.024908271912914642]
 
 #####-----cboard参数-----#####
 quaternion_canid: 0x100
 bullet_speed_canid: 0x101
 send_canid: 0xff
 can_interface: "can0"
-
-
 
 #####-----gimbal参数-----#####
 com_port: "/dev/ttyACM0"
@@ -103,10 +118,13 @@ gimbal_r3: -2
 #      \ |
 #       \|
 # y_ _ _ 0   z:yaw   x:roll   y:pitch
-
+yaw_kp: 0
+yaw_kd: 0
+pitch_kp: 0
+pitch_kd: 0
 
 #####-----planner-----#####
-fire_thresh: 0.003
+fire_thresh: 0.0035
 small_armor_tolerance: 0.12
 big_armor_tolerance: 0.22
 gimbal_control_delay: 0.08
@@ -117,38 +135,17 @@ Q_yaw: [9e6, 0]
 R_yaw: [1]
 
 max_pitch_acc: 100
-Q_pitch: [9e6,0]
+Q_pitch: [9e6, 0]
 R_pitch: [1]
 
-
 #####-----buff_detector参数-----#####
-detect:
-  contrast: 1
-  brightness: 
-    blue: -120
-    red: -100
-  brightness_threshold:
-    blue: 120
-    red: 40
-  morphology_size:
-    blue: 3
-    red: 3
-  dilate_size: 2
-  # canny_low_threshold: 100
-  # canny_high_threshold: 180
-  # approx_epsilon: 1.0
-  R_contours_min_area: 200
-  R_contours_max_area: 600
-  fanblades_head_contours_min_area: 3000
-  fanblades_head_contours_max_area: 8000
-  fanblades_body_contours_min_area: 1000
-  fanblades_body_contours_max_area: 4000
-  standard_fanblade_path: ./assets/standard_fanblade.jpg
-
 model: "assets/yolo11_buff_int8.xml"
+
 #####-----buff_aimer参数-----#####
-aim_time: 0.150         # s
-wait_time: 0.300        # s
-command_fire_gap: 0.080 # s
 fire_gap_time: 0.700   # s
 predict_time: 0.120    # s
+
+
+
+
+main_and_secondary: left

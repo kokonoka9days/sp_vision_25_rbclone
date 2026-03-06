@@ -20,7 +20,7 @@ public:
 
   void solve(Armor & armor) const;
 
-  void omn_dig_yaw_solve(Armor & armor) const;
+  void omn_dig_yaw_solve(Armor & armor,  Eigen::Vector3d R_camera2biggimbal_ypr, Eigen::Vector3d t_camera2biggimbal ) const;
 
   std::vector<cv::Point2f> reproject_armor(
     const Eigen::Vector3d & xyz_in_world, double yaw, ArmorType type, ArmorName name) const;

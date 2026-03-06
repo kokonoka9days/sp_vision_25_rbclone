@@ -165,6 +165,8 @@ int main(int argc, char * argv[])
                           short_camera_planner, long_camera_planner );
   
   // 全向感知决策器
+  auto_aim::Solver left_solver(omnl_yaml_name);
+  auto_aim::Solver  right_solver(omnr_yaml_name);
   omniperception::Decider decider(omnl_yaml_name);
   
   // 线程安全队列（用于MPC规划线程）
@@ -242,7 +244,7 @@ int main(int argc, char * argv[])
         std::this_thread::sleep_for(10ms);
     }
   });
-  std::chrono::steady_clock::time_point last;
+  std::chrono::steady_clock::time_point last, last_lost_point = std::chrono::steady_clock::now();
   // 主循环
   while (!exiter.exit()) {
     // 读取云台模式
@@ -305,8 +307,10 @@ int main(int argc, char * argv[])
     auto targets = tracker.track(armors, timestamp);
     
     // 模式判断：如果跟踪器丢失目标，切换到全向感知模式
-    if (tracker.state() == "lost") {
+    if (tracker.state() == "lost" 
+      && tools::delta_time(std::chrono::steady_clock::now(), last_lost_point) > 1) {
       // 【新增】：唤醒全向相机（恢复底层硬件推流）
+      last_lost_point = std::chrono::steady_clock::now();
       omn_cam1.resume();
       omn_cam2.resume();
       if(!bincameras.is_short){
@@ -316,11 +320,12 @@ int main(int argc, char * argv[])
 
       // 全向感知模式
       io::VisionToGimbal vision_cmd = decider.decide_g(
-        yolo, gimbal_euler, omn_cam1, omn_cam2);
+        yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
         
       gimbal.send(vision_cmd);
     } else {
         // 【新增】：挂起全向相机（停止底层硬件推流，释放CPU和USB/网卡带宽）
+        
         omn_cam1.pause();
         omn_cam2.pause();      
     }

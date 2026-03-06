@@ -25,7 +25,7 @@ public:
 
   io::VisionToGimbal decide_g(
   auto_aim::YOLO & yolo, const Eigen::Vector3d & gimbal_pos, io::Camera & omn_cam1_l,
-  io::Camera & omn_cam2_r);
+  io::Camera & omn_cam2_r, const auto_aim::Solver & left_solver, const auto_aim::Solver & right_solver);
   
   io::Command decide(
   auto_aim::YOLO & yolo, const Eigen::Vector3d & gimbal_pos, io::USBCamera & usbcam1,
@@ -40,7 +40,8 @@ public:
     const std::list<auto_aim::Armor> & armors, const std::string & camera);
 
   Eigen::Vector2d delta_angle_3d(
-     std::list<auto_aim::Armor> & armors, const std::string & camera, const auto_aim::Solver & solver );
+     std::list<auto_aim::Armor> & armors, const std::string & camera, 
+            const auto_aim::Solver & left_solver, const auto_aim::Solver & right_solver  );
 
   bool armor_filter(std::list<auto_aim::Armor> & armors);
 
