@@ -307,22 +307,29 @@ int main(int argc, char * argv[])
     auto targets = tracker.track(armors, timestamp);
     
     // 模式判断：如果跟踪器丢失目标，切换到全向感知模式
-    if (tracker.state() == "lost" 
-      && tools::delta_time(std::chrono::steady_clock::now(), last_lost_point) > 1) {
+    if (tracker.state() == "lost"  ) {
       // 【新增】：唤醒全向相机（恢复底层硬件推流）
-      last_lost_point = std::chrono::steady_clock::now();
-      omn_cam1.resume();
-      omn_cam2.resume();
+
+      if(tools::delta_time(std::chrono::steady_clock::now(), last_lost_point) > 1){
+        last_lost_point = std::chrono::steady_clock::now();
+        omn_cam1.resume();
+        omn_cam2.resume();        
+      }
+
       if(!bincameras.is_short){
         tools::logger()->info("进入全向感知模式，切换至短焦镜头");
         bincameras.Switch(tracker);
       }
 
       // 全向感知模式
-      io::VisionToGimbal vision_cmd = decider.decide_g(
-        yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
+      if(omn_cam1.is_paused() && omn_cam2.is_paused()){
+        io::VisionToGimbal vision_cmd = decider.decide_g(
+          yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
+          gimbal.send(vision_cmd);;        
+      }
+
         
-      gimbal.send(vision_cmd);
+      
     } else {
         // 【新增】：挂起全向相机（停止底层硬件推流，释放CPU和USB/网卡带宽）
         

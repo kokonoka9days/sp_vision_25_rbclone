@@ -308,14 +308,14 @@ void HikRobot::reset_usb() const
 }
 
 void HikRobot::pause() {
-    is_paused_ = true; // 设置暂停标志位
+    this->is_paused_ = true; // 设置暂停标志位
     if (handle_ != nullptr) {
         MV_CC_StopGrabbing(handle_);
     }
 }
 
 void HikRobot::resume() {
-    is_paused_ = false; // 清除暂停标志位
+    this->is_paused_ = false; // 清除暂停标志位
     if (handle_ != nullptr) {
         MV_CC_StartGrabbing(handle_);
     }

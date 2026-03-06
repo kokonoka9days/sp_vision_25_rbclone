@@ -117,7 +117,6 @@ private:
 
     std::mutex pause_mutex_;
     std::condition_variable pause_cv_;
-    std::atomic<bool> is_paused_{false};
 };
 
 }  // namespace io
