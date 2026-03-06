@@ -20,6 +20,7 @@
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
 #include "tools/thread_safe_queue.hpp"
+#include "tools/recorder.hpp"
 
 using namespace std::chrono_literals;
 using namespace tools;
@@ -52,6 +53,8 @@ int main(int argc, char * argv[])
   auto_aim::Aimer aimer(config_path);
   auto_aim::Shooter shooter(config_path);
   auto_aim::Planner planner(config_path);
+  tools::Recorder recor(90);
+  bool stopkey = false;
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
   target_queue.push(std::nullopt);
@@ -62,14 +65,25 @@ int main(int argc, char * argv[])
     uint16_t last_bullet_count = 0;
 
     while (!quit) {
-      auto target = target_queue.front();
+      auto target = target_queue.front(); 
       auto gs = gimbal.state();
 
       //MPC预测以及+自家火控
       auto plan = planner.plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
-      gimbal.send(
+      if (stopkey == true)
+      {
+         gimbal.send(
+        plan.control, 0, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
+        plan.pitch_acc);
+      }
+      else if (stopkey == false)
+      {
+         gimbal.send(
         plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
         plan.pitch_acc);
+      }
+      
+     
 
       // //command预测以及火控
       // io::Command command{false, false, 0, 0};
@@ -94,6 +108,7 @@ int main(int argc, char * argv[])
       nlohmann::json data;
       data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);
 
+      data["stopkey"] = stopkey;
       data["gimbal_yaw"] = gs.yaw;
       data["gimbal_yaw_vel"] = gs.yaw_vel;
       data["gimbal_pitch"] = gs.pitch;
@@ -153,13 +168,14 @@ int main(int argc, char * argv[])
     // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
     // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
     if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
-     tools::draw_text(img, fmt::format( "DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 0, 255});
-      tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
+     tools::draw_text(img, fmt::format( "DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 255, 255});
+      tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 255, 255});
     // std::cout << "Roll: " << roll_deg << std::endl;
 
     solver.set_R_gimbal2world(q);
     auto armors = yolo.detect(img);
     auto targets = tracker.track(armors, t);
+    recor.record(img, q, t);
 
 
     if (!targets.empty()){
@@ -257,8 +273,10 @@ int main(int argc, char * argv[])
       io::GimbalState* g_demo = gimbal.set_state_();
       g_demo->mode = !g_demo->mode;
     }
+    if(key == 's') {
+      stopkey = !stopkey;
+    }
   }
-
   quit = true;
   if (plan_thread.joinable()) plan_thread.join();
   gimbal.send(false, false, 0, 0, 0, 0, 0, 0);

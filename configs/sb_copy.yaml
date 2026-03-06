@@ -51,13 +51,13 @@ outpost_max_temp_lost_count: 75
 # low_speed_delay_time: 0.093 # s
 
 #####-----aimer参数-----##### 12mm
-yaw_offset: -1.5 # degree 
-pitch_offset: 1.2 # degree 2
+yaw_offset: -2.9 # degree 
+pitch_offset: 0.2 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
-high_speed_delay_time: 0.17 # s   远 0.25
-low_speed_delay_time: 0.17 # s    远 0.25
+high_speed_delay_time: 0.1 # s   远 0.25
+low_speed_delay_time: 0.07 # s    远 0.25
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree
@@ -68,8 +68,8 @@ auto_fire: true # 是否由自瞄控制射击
 #12mm camera
 camera_name: "hikrobot"
 camera_sn: "DA7188471"
-exposure_us: 5000
-gain: 0.6
+exposure_us: 8000
+gain: 0.5
 vid_pid: "2bdf:0001"
 flip: true
 mirror: true
@@ -114,14 +114,14 @@ R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 # # _camera2gimbal第三位调pitch
 
 # #12mm camera
-# 重投影误差: 0.0642px
-camera_matrix: [3501.660843586916, 0, 710.0477300738894, 0, 3492.8987326243055, 389.5497953999983, 0, 0, 1]
-distort_coeffs: [-0.0005313899442528695, -0.26802058008466606, -0.010675046297510609, -0.008169900883847562, 5.2742461116651835]
-# 相机同理想情况的偏角: yaw-1.47 pitch-0.35 roll2.75 degree
-# 标定板到世界坐标系原点的水平距离: 3.17 m
-# 标定板同竖直摆放时的偏角: yaw54.84 pitch11.37 roll177.54 degree
-R_camera2gimbal: [0.025346033542738095, -0.00726326580127892, 0.9996523513469822, -0.9985251663247955, 0.04784137270838066, 0.025665059388541453, -0.048011152867744655, -0.9988285378518567, -0.006039964654885988]
-t_camera2gimbal: [0.20588573426930395, -0.0737782046536316, 0.12397839818905962]
+# 重投影误差: 0.0627px
+camera_matrix: [3538.0117411538668, 0, 654.4558723889344, 0, 3518.768912785231, 615.4100166170041, 0, 0, 1]
+distort_coeffs: [-0.0005368398852492678, -0.01934205142390006, 0.0037876089294317664, -0.0009831802700540143, 2.8484992350832807]
+
+# 标定板到世界坐标系原点的水平距离: 3.54 m
+# 相机同理想情况的偏角: yaw-3.38 pitch-1.22 roll4.18 degree
+R_camera2gimbal: [0.057231248589082684, -0.025488014772086353, 0.9980355430984973, -0.9957009523362221, 0.07146850109197644, 0.0589225497446118, -0.07282992312006595, -0.9971171518205089, -0.021288209029442173]
+t_camera2gimbal: [0.22070774162491796, 0.037140038185779455, 0.007361375321235563]
 
 gimbal_y1: 1
 gimbal_p2: 2
@@ -137,14 +137,14 @@ com_port: "/dev/ttyACM0"
 
 #####-----planner-----#####
 fire_thresh: 0.003 # 
-small_armor_tolerance: 0.12
+small_armor_tolerance: 0.05
 big_armor_tolerance: 0.22
-gimbal_control_delay: 0
-tower_pitch_prediction_time: 0.05
+gimbal_control_delay: 0.06
+tower_pitch_prediction_time: 0.3
 
 max_yaw_acc: 50
 Q_yaw: [9e6, 0]
-R_yaw: [1900]
+R_yaw: [1]
 
 max_pitch_acc: 100
 Q_pitch: [9e6,0]

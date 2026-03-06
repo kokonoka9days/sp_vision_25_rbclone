@@ -126,9 +126,9 @@ bool Planner::rbShoot(Target target, double gimbal_yaw, bool tower_fixed_pitch){
     }
   }
 
-  double target_yaw = target_armor_xyza(3);
+  double target_yaw = target_armor_xyza(3) ;
 
-  aim_target_yaw = atan2(target_armor_xyza(1), target_armor_xyza(0));
+  aim_target_yaw = atan2(target_armor_xyza(1), target_armor_xyza(0));//+ 0.3/57.3;
   // feedback_yaw = gimbal_yaw;
 
   double shoot_range = target.armor_type == ArmorType::big ? big_armor_tolerance : small_armor_tolerance;
