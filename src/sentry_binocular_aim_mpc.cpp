@@ -322,7 +322,7 @@ int main(int argc, char * argv[])
       }
 
       // 全向感知模式
-      if(omn_cam1.is_paused() && omn_cam2.is_paused()){
+      if(!omn_cam1.is_paused() && !omn_cam2.is_paused()){
         io::VisionToGimbal vision_cmd = decider.decide_g(
           yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
           gimbal.send(vision_cmd);;        
