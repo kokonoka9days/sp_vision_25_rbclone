@@ -248,13 +248,30 @@ int main(int argc, char * argv[])
   // 主循环
 
 
-  // std::atomic<bool> omn_is_paused{false};//全向感知相机是否挂起
-  // auto resume_omncamera_thread = std::thread([&]() {
-  //    while (!quit){
+  std::atomic<bool> need_omni_perception{false};
+  auto resume_omncamera_thread = std::thread([&]() {
+     while (!quit){
+      bool is_currently_paused = false; // 记录当前硬件状态，减少重复调用
+        if (need_omni_perception && is_currently_paused) {
+            // 需要感知且当前是挂起状态 -> 恢复
+            omn_cam1.resume();
+            omn_cam2.resume();
+            is_currently_paused = false;
+            tools::logger()->info("Omni-camera hardware: RESUMED");
+        } 
+        else if (!need_omni_perception && !is_currently_paused) {
+            // 不需要感知且当前是工作状态 -> 挂起
+            omn_cam1.pause();
+            omn_cam2.pause();
+            is_currently_paused = true;
+            tools::logger()->info("Omni-camera hardware: PAUSED");
+        }
 
-  //     std::this_thread::sleep_for(10ms);
-  //    }
-  // });
+      std::this_thread::sleep_for(10ms);
+     }
+  });
+
+
   while (!exiter.exit()) {
     // 读取云台模式
     auto mode = gimbal.mode();
@@ -317,33 +334,27 @@ int main(int argc, char * argv[])
     
     // 模式判断：如果跟踪器丢失目标，切换到全向感知模式
     if (tracker.state() == "lost") {
-      //  唤醒全向相机（恢复底层硬件推流）
+      // 发现目标丢失，通知线程开启相机
+      need_omni_perception = true;
 
-      if(tools::delta_time(std::chrono::steady_clock::now(), last_lost_point) > 1){
-        last_lost_point = std::chrono::steady_clock::now();
-        omn_cam1.resume();
-        omn_cam2.resume();        
-      }
-
+      // 自动切换至短焦（用于全向感知后的接力）
       if(!bincameras.is_short){
-        tools::logger()->info("进入全向感知模式，切换至短焦镜头");
-        bincameras.Switch(tracker);
+          tools::logger()->info("进入全向感知模式，切换至短焦镜头");
+          bincameras.Switch(tracker);
       }
 
-      // 全向感知模式
+      // 全向感知决策（非阻塞判断）
       if(!omn_cam1.is_paused() && !omn_cam2.is_paused()){
-        io::VisionToGimbal vision_cmd = decider.decide_g(
-          yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
-          gimbal.send(vision_cmd);;        
+          io::VisionToGimbal vision_cmd = decider.decide_g(
+              yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
+          gimbal.send(vision_cmd);
       }
-
-        
       
     } else {
         // 挂起全向相机
-        
-        omn_cam1.pause();
-        omn_cam2.pause();      
+        need_omni_perception = true;
+        // omn_cam1.pause();
+        // omn_cam2.pause();      
     }
 
     {
