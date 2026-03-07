@@ -249,7 +249,6 @@ int main(int argc, char * argv[])
   // 主循环
 
 
-  std::atomic<bool> need_omni_perception{false};
   auto resume_omncamera_thread = std::thread([&]() {
     bool is_currently_paused = true; // 记录当前硬件状态，减少重复调用
      while (!quit){
@@ -260,7 +259,7 @@ int main(int argc, char * argv[])
         // bool r1 = omn_cam1.read(img1, ts1);
         // bool r2 = omn_cam2.read(img2, ts2);
 
-        if (need_omni_perception && tracker.state() == "lost") {
+        if (tracker.state() == "lost") {
             // 只有需要时才执行重负载的 YOLO 和 决策
             io::VisionToGimbal vision_cmd = decider.decide_g(
                 omn_yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
