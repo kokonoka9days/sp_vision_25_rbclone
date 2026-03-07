@@ -270,7 +270,7 @@ int main(int argc, char * argv[])
             }
         } else {
             // 不需要感知时，稍微 sleep 释放 CPU，但保持读取频率
-            std::this_thread::sleep_for(20ms);
+            std::this_thread::sleep_for(10ms);
         }
 
 
@@ -453,10 +453,10 @@ int main(int argc, char * argv[])
     }
 
 
-    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    cv::imshow("reprojection", img);
-    auto key = cv::waitKey(1);
-    if (key == 'q') break;
+    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    // cv::imshow("reprojection", img);
+    // auto key = cv::waitKey(1);
+    // if (key == 'q') break;
     // if (key == 'c'){// 强制切换长短焦
     //     bincameras.Switch(tracker);
     // }
