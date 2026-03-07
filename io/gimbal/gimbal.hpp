@@ -40,8 +40,8 @@ struct __attribute__((packed)) VisionToGimbal
   uint8_t head = {0x66};
   uint8_t mode = 0;  // 0: 不控制, 1: 控制云台但不开火，2:控制云台开火                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
   float yaw = 0;
-  float yaw_vel;
-  float yaw_acc;
+  float yaw_vel = 0;
+  float yaw_acc = 0;
   float pitch = 0;
   float pitch_vel = 0;
   float pitch_acc = 0;

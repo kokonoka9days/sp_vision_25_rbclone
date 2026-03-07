@@ -146,7 +146,7 @@ int main(int argc, char * argv[])
   
   // 视觉模块
   auto_aim::YOLO yolo(short_camera_config_path, false);  // 主相机YOLO
-  auto_aim::YOLO omn_yolo(short_camera_config_path, false);  // 主相机YOLO
+  // auto_aim::YOLO omn_yolo(short_camera_config_path, false);  // 主相机YOLO
 
   auto_aim::Solver short_camera_solver(short_camera_config_path);
   auto_aim::Solver long_camera_solver(long_camera_config_path);
@@ -262,11 +262,16 @@ int main(int argc, char * argv[])
         if (tracker.state() == "lost") {
             // 只有需要时才执行重负载的 YOLO 和 决策
             io::VisionToGimbal vision_cmd = decider.decide_g(
-                omn_yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
-            
+                yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
+              
+            static size_t omn_detect_num = 0;
+            if(vision_cmd.mode == 3) omn_detect_num++;
             // 只有在 lost 状态下才发送全向指令，避免干扰主线程控制
-            if (tracker.state() == "lost") {
-                gimbal.send(vision_cmd);
+            if (tracker.state() == "lost" 
+              // && omn_detect_num == 3
+            ) {
+              omn_detect_num = 0;
+              gimbal.send(vision_cmd);
             }
         } else {
             // 不需要感知时，稍微 sleep 释放 CPU，但保持读取频率
@@ -291,12 +296,12 @@ int main(int argc, char * argv[])
     //   last_mode = mode;
     // }
     
-    // 只处理自瞄模式
-    if (mode != io::GimbalMode::AUTO_AIM) {
-      // 非自瞄模式：发送停止指令并跳过
-      std::this_thread::sleep_for(50ms);
-      continue;
-    }
+    // // 只处理自瞄模式
+    // if (mode != io::GimbalMode::AUTO_AIM) {
+    //   // 非自瞄模式：发送停止指令并跳过
+    //   std::this_thread::sleep_for(50ms);
+    //   continue;
+    // }
     
     // 读取主相机图像
     bincameras.cameras.aim_ptr->read(img, timestamp);
@@ -337,6 +342,23 @@ int main(int argc, char * argv[])
     
     // 跟踪目标
     auto targets = tracker.track(armors, timestamp);
+
+    if (tracker.state() == "lost") {
+        // 只有需要时才执行重负载的 YOLO 和 决策
+        io::VisionToGimbal vision_cmd = decider.decide_g(
+            yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
+          
+        static size_t omn_detect_num = 0;
+        if(vision_cmd.mode == 3) omn_detect_num++;
+        // 只有在 lost 状态下才发送全向指令，避免干扰主线程控制
+        if (tracker.state() == "lost" 
+          // && omn_detect_num == 3
+        ) {
+          omn_detect_num = 0;
+          gimbal.send(vision_cmd);
+        }
+    } 
+
     
     // // 模式判断：如果跟踪器丢失目标，切换到全向感知模式
     // if (tracker.state() == "lost") {
