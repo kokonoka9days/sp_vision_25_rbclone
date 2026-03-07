@@ -91,12 +91,17 @@ private:
   TinySolver * yaw_solver_;
   TinySolver * pitch_solver_;
 
+  int last_selected_idx = -1;
+  Eigen::Vector3d last_selected_xyz = Eigen::Vector3d::Zero();
+
   void setup_yaw_solver(const std::string & config_path);
   void setup_pitch_solver(const std::string & config_path);
 
   Eigen::Matrix<double, 2, 1> aim(const Target & target, double bullet_speed);
+  Eigen::Matrix<double, 2, 1> rbaim(const Target & target, double bullet_speed);
   Eigen::Matrix<double, 2, 1> heroaim(const Target & target, double bullet_speed, double gimbal_yaw);
   Trajectory get_trajectory(Target  target, double yaw0, double bullet_speed);
+  Trajectory rbget_trajectory(Target target, double yaw0, double bullet_speed);
 };
 
 }  // namespace auto_aim
