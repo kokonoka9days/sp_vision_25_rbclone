@@ -21,8 +21,8 @@
 
 const std::string keys =
   "{help h usage ? |                                             | 输出命令行参数说明}"
-  "{l_cam          | ../configs/omniperception/short_camera.yaml | 左感知相机 }"
-  "{r_cam          | ../configs/omniperception/long_camera.yaml  | 右感知相机 }";
+  "{l_cam          | ../configs/omniperception/omn_camera_left.yaml | 左感知相机 }"
+  "{r_cam          | ../configs/omniperception/omn_camera_right.yaml  | 右感知相机 }";
 
 using namespace std::chrono_literals;
 
@@ -56,7 +56,7 @@ int main(int argc, char * argv[])
   // io::Camera back_camera("configs/camera.yaml");
   tools::logger()->info("初始化");
   // 改为使用Gimbal串口通信（替代CBoard）
-  io::Gimbal gimbal(omnl_yaml_name);
+  // io::Gimbal gimbal(omnl_yaml_name);
 
   auto_aim::Solver solver(omnl_yaml_name);
   
@@ -84,7 +84,6 @@ int main(int argc, char * argv[])
     // 获取云台欧拉角
     auto gimbal_euler = tools::eulers(solver.R_gimbal2world(), 2, 1, 0);
     static io::VisionToGimbal last_vision_cmd;
-    // cv::imshow("long_camera", img4);
     // 全向感知模式
     io::VisionToGimbal vision_cmd = decider.decide_g(
       yolo, gimbal_euler, omn_caml, omn_camr, left_solver, right_solver);
@@ -96,10 +95,10 @@ int main(int argc, char * argv[])
 
     plotter.plot(data);
     
-    gimbal.send(vision_cmd);
+    // gimbal.send(vision_cmd);
 
-    cv::imshow("img1", img1);
-    cv::imshow("img2", img2);
+    cv::imshow("l_cam", img1);
+    cv::imshow("r_cam", img2);
     auto key = cv::waitKey(1);
     if (key == 'q') break;
     

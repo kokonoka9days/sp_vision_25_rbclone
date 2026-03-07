@@ -64,7 +64,7 @@ io::VisionToGimbal Decider::decide_g(
     }
     
     vision_cmd.mode = 3;  // 全向感知模式识别到目标，控制大云台
-    vision_cmd.yaw = static_cast<float>(delta_angle[0] / 57.3);
+    vision_cmd.yaw = static_cast<float>(-delta_angle[0] / 57.3);
     vision_cmd.yaw_vel = 0.0f;  // 角速度设为0，可根据需要计算
     vision_cmd.yaw_acc = 0.0f;  // 角加速度设为0
     vision_cmd.pitch = tools::limit_rad((delta_angle[1])/ 57.3);
@@ -86,7 +86,7 @@ io::VisionToGimbal Decider::decide_g(
     vision_cmd.pitch_acc = 0.0f;    
     last_vision_cmd = vision_cmd;
 
-    tools::logger()->debug("全向感知未识别到目标");
+    // tools::logger()->debug("全向感知未识别到目标");
     return vision_cmd;
   }
 
@@ -271,8 +271,9 @@ Eigen::Vector2d Decider::delta_angle_3d(
 
   //TUDO:计算大yaw旋转角度
   if (camera == "left") {
-    left_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0,105 * CV_PI / 180.0), Eigen::Vector3d(-0.127611, -0.136932, -0.08) );
+    left_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0,-(105 * CV_PI / 180.0)), Eigen::Vector3d(-0.127611, -0.136932, 0.16) );
     auto xyz = armors.front().xyz_in_gimbal;
+    tools::logger()->info("omn_xyz :x{}, y{} ,z{}", xyz(0), xyz(1), xyz(2));
     auto ypd_angle = 120 - std::atan2(xyz(0), xyz(1))* 57.3;
     delta_angle[0] = ypd_angle;
     delta_angle[1] =std::atan2(xyz(2), std::sqrt(xyz(0) * xyz(0) + xyz(1) * xyz(1)))* 57.3; 
@@ -280,8 +281,9 @@ Eigen::Vector2d Decider::delta_angle_3d(
   }
 
   else if (camera == "right") {
-    right_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0, 105.0 * CV_PI / 180.0), Eigen::Vector3d(-0.127611, 0.136932, -0.08) );
+    right_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0, -(105.0 * CV_PI / 180.0)), Eigen::Vector3d(-0.127611, 0.136932, 0.16) );
     auto xyz = armors.front().xyz_in_gimbal;
+    tools::logger()->info("omn_xyz :x{}, y{} ,z{}", xyz(0), xyz(1), xyz(2));
     auto ypd_angle = -120 - std::atan2(xyz(0), xyz(1))* 57.3;
     delta_angle[0] = ypd_angle;
     delta_angle[1] =std::atan2(xyz(2), std::sqrt(xyz(0) * xyz(0) + xyz(1) * xyz(1)))* 57.3; 

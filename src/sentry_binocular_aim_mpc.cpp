@@ -246,6 +246,15 @@ int main(int argc, char * argv[])
   });
   std::chrono::steady_clock::time_point last, last_lost_point = std::chrono::steady_clock::now();
   // 主循环
+
+
+  // std::atomic<bool> omn_is_paused{false};//全向感知相机是否挂起
+  // auto resume_omncamera_thread = std::thread([&]() {
+  //    while (!quit){
+
+  //     std::this_thread::sleep_for(10ms);
+  //    }
+  // });
   while (!exiter.exit()) {
     // 读取云台模式
     auto mode = gimbal.mode();
@@ -307,7 +316,7 @@ int main(int argc, char * argv[])
     auto targets = tracker.track(armors, timestamp);
     
     // 模式判断：如果跟踪器丢失目标，切换到全向感知模式
-    if (tracker.state() == "lost"  ) {
+    if (tracker.state() == "lost") {
       //  唤醒全向相机（恢复底层硬件推流）
 
       if(tools::delta_time(std::chrono::steady_clock::now(), last_lost_point) > 1){
@@ -401,6 +410,7 @@ int main(int argc, char * argv[])
         }
         // 将目标放入队列供MPC线程处理
         target_queue.push(targets.front());
+        //自动切换相机
         bincameras.ChangeTheScope(targets.front(), tracker);
       } else {
         target_queue.push(std::nullopt);
@@ -447,7 +457,9 @@ int main(int argc, char * argv[])
   if (mpc_thread.joinable()) {
     mpc_thread.join();
   }
-  
+  if (resume_omncamera_thread.joinable()) {
+    resume_omncamera_thread.join();
+  }
   // 发送停止指令
   gimbal.send(false, false, 0, 0, 0, 0, 0, 0);
   
