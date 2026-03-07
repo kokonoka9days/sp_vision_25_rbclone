@@ -146,6 +146,7 @@ int main(int argc, char * argv[])
   
   // 视觉模块
   auto_aim::YOLO yolo(short_camera_config_path, false);  // 主相机YOLO
+  auto_aim::YOLO omn_yolo(short_camera_config_path, false);  // 主相机YOLO
 
   auto_aim::Solver short_camera_solver(short_camera_config_path);
   auto_aim::Solver long_camera_solver(long_camera_config_path);
@@ -253,22 +254,27 @@ int main(int argc, char * argv[])
     bool is_currently_paused = true; // 记录当前硬件状态，减少重复调用
      while (!quit){
       
-        if (need_omni_perception ) {
-            // 需要感知且当前是挂起状态 -> 恢复
-            omn_cam1.resume();
-            omn_cam2.resume();
-            is_currently_paused = false;
-            // tools::logger()->info("Omni-camera hardware: RESUMED");
-        } 
-        else if (!need_omni_perception ) {
-            // 不需要感知且当前是工作状态 -> 挂起
-            omn_cam1.pause();
-            omn_cam2.pause();
-            is_currently_paused = true;
-            // tools::logger()->info("Omni-camera hardware: PAUSED");
+        // cv::Mat img1, img2;
+        // std::chrono::steady_clock::time_point ts1, ts2;
+        
+        // bool r1 = omn_cam1.read(img1, ts1);
+        // bool r2 = omn_cam2.read(img2, ts2);
+
+        if (need_omni_perception && tracker.state() == "lost") {
+            // 只有需要时才执行重负载的 YOLO 和 决策
+            io::VisionToGimbal vision_cmd = decider.decide_g(
+                omn_yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
+            
+            // 只有在 lost 状态下才发送全向指令，避免干扰主线程控制
+            if (tracker.state() == "lost") {
+                gimbal.send(vision_cmd);
+            }
+        } else {
+            // 不需要感知时，稍微 sleep 释放 CPU，但保持读取频率
+            std::this_thread::sleep_for(20ms);
         }
 
-      std::this_thread::sleep_for(3ms);
+
      }
   });
 
@@ -333,30 +339,30 @@ int main(int argc, char * argv[])
     // 跟踪目标
     auto targets = tracker.track(armors, timestamp);
     
-    // 模式判断：如果跟踪器丢失目标，切换到全向感知模式
-    if (tracker.state() == "lost") {
-      // 发现目标丢失，通知线程开启相机
-      need_omni_perception = true;
+    // // 模式判断：如果跟踪器丢失目标，切换到全向感知模式
+    // if (tracker.state() == "lost") {
+    //   // 发现目标丢失，通知线程开启相机
+    //   need_omni_perception = true;
 
-      // 自动切换至短焦（用于全向感知后的接力）
-      if(!bincameras.is_short){
-          tools::logger()->info("进入全向感知模式，切换至短焦镜头");
-          bincameras.Switch(tracker);
-      }
+    //   // 自动切换至短焦（用于全向感知后的接力）
+    //   if(!bincameras.is_short){
+    //       tools::logger()->info("进入全向感知模式，切换至短焦镜头");
+    //       bincameras.Switch(tracker);
+    //   }
 
-      // 全向感知决策（非阻塞判断）
-      if(!omn_cam1.is_paused() && !omn_cam2.is_paused()){
-          io::VisionToGimbal vision_cmd = decider.decide_g(
-              yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
-          gimbal.send(vision_cmd);
-      }
+    //   // 全向感知决策（非阻塞判断）
+    //   if(!omn_cam1.is_paused() && !omn_cam2.is_paused()){
+    //       io::VisionToGimbal vision_cmd = decider.decide_g(
+    //           yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
+    //       gimbal.send(vision_cmd);
+    //   }
       
-    } else {
-        // 挂起全向相机
-        need_omni_perception = false;
-        // omn_cam1.pause();
-        // omn_cam2.pause();      
-    }
+    // } else {
+    //     // 挂起全向相机
+    //     need_omni_perception = false;
+    //     // omn_cam1.pause();
+    //     // omn_cam2.pause();      
+    // }
 
     {
       // 自瞄模式 - 使用MPC
