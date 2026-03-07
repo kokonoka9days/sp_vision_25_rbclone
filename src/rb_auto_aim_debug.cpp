@@ -53,7 +53,7 @@ int main(int argc, char * argv[])
   auto_aim::Aimer aimer(config_path);
   auto_aim::Shooter shooter(config_path);
   auto_aim::Planner planner(config_path);
-  tools::Recorder recor(90);
+  // tools::Recorder recor(90);
   bool stopkey = true;
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
@@ -141,7 +141,7 @@ int main(int argc, char * argv[])
 
       plotter.plot(data);
 
-      std::this_thread::sleep_for(10ms);
+      std::this_thread::sleep_for(5ms);
     }
   });
 
@@ -175,7 +175,7 @@ int main(int argc, char * argv[])
     solver.set_R_gimbal2world(q);
     auto armors = yolo.detect(img);
     auto targets = tracker.track(armors, t);
-    recor.record(img, q, t);
+    // recor.record(img, q, t);
 
 
     if (!targets.empty()){
