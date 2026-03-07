@@ -44,12 +44,15 @@ int main(int argc, char * argv[])
   // 全向感知相机（工业相机）
   std::string omnl_yaml_name = cli.get<std::string>("l_cam");
   std::string omnr_yaml_name = cli.get<std::string>("r_cam");
-  io::Camera omn_cam1(omnl_yaml_name);
-  io::Camera omn_cam2(omnr_yaml_name);
+  io::Camera omn_caml(omnl_yaml_name);
+  io::Camera omn_camr(omnr_yaml_name);
+  // 全向感知决策器
+  auto_aim::Solver left_solver(omnl_yaml_name);
+  auto_aim::Solver  right_solver(omnr_yaml_name);
   auto omn_l_yaml = tools::load(omnl_yaml_name);
   auto omn_r_yaml = tools::load(omnr_yaml_name);
-  omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
-  omn_cam2.main_and_secondary = tools::read<std::string>(omn_r_yaml, "main_and_secondary");
+  omn_caml.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
+  omn_camr.main_and_secondary = tools::read<std::string>(omn_r_yaml, "main_and_secondary");
   // io::Camera back_camera("configs/camera.yaml");
   tools::logger()->info("初始化");
   // 改为使用Gimbal串口通信（替代CBoard）
@@ -75,16 +78,16 @@ int main(int argc, char * argv[])
   // 主循环
   while (!exiter.exit()) {
 
-    omn_cam1.read(img1, t1);
-    omn_cam2.read(img2, t2);
+    omn_caml.read(img1, t1);
+    omn_camr.read(img2, t2);
 
     // 获取云台欧拉角
     auto gimbal_euler = tools::eulers(solver.R_gimbal2world(), 2, 1, 0);
     static io::VisionToGimbal last_vision_cmd;
     // cv::imshow("long_camera", img4);
     // 全向感知模式
-    // io::VisionToGimbal vision_cmd = decider.decide_g(
-    //   yolo, gimbal_euler, omn_cam1, omn_cam2);
+    io::VisionToGimbal vision_cmd = decider.decide_g(
+      yolo, gimbal_euler, omn_caml, omn_camr, left_solver, right_solver);
     
     nlohmann::json data;
 
@@ -93,7 +96,7 @@ int main(int argc, char * argv[])
 
     plotter.plot(data);
     
-    // gimbal.send(vision_cmd);
+    gimbal.send(vision_cmd);
 
     cv::imshow("img1", img1);
     cv::imshow("img2", img2);

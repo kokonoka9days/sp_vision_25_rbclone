@@ -308,7 +308,7 @@ int main(int argc, char * argv[])
     
     // 模式判断：如果跟踪器丢失目标，切换到全向感知模式
     if (tracker.state() == "lost"  ) {
-      // 【新增】：唤醒全向相机（恢复底层硬件推流）
+      //  唤醒全向相机（恢复底层硬件推流）
 
       if(tools::delta_time(std::chrono::steady_clock::now(), last_lost_point) > 1){
         last_lost_point = std::chrono::steady_clock::now();
@@ -331,7 +331,7 @@ int main(int argc, char * argv[])
         
       
     } else {
-        // 【新增】：挂起全向相机（停止底层硬件推流，释放CPU和USB/网卡带宽）
+        // 挂起全向相机
         
         omn_cam1.pause();
         omn_cam2.pause();      
