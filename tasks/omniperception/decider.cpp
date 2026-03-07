@@ -60,7 +60,7 @@ io::VisionToGimbal Decider::decide_g(
 
       
     if(abs(delta_angle[0]) < 95){
-      delta_angle[0] > 0 ? 95 : -95;
+      delta_angle[0] = delta_angle[0] > 0 ? 95 : -95;
     }
     
     vision_cmd.mode = 3;  // 全向感知模式识别到目标，控制大云台

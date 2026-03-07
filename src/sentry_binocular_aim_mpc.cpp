@@ -250,24 +250,25 @@ int main(int argc, char * argv[])
 
   std::atomic<bool> need_omni_perception{false};
   auto resume_omncamera_thread = std::thread([&]() {
+    bool is_currently_paused = true; // 记录当前硬件状态，减少重复调用
      while (!quit){
-      bool is_currently_paused = false; // 记录当前硬件状态，减少重复调用
-        if (need_omni_perception && is_currently_paused) {
+      
+        if (need_omni_perception ) {
             // 需要感知且当前是挂起状态 -> 恢复
             omn_cam1.resume();
             omn_cam2.resume();
             is_currently_paused = false;
-            tools::logger()->info("Omni-camera hardware: RESUMED");
+            // tools::logger()->info("Omni-camera hardware: RESUMED");
         } 
-        else if (!need_omni_perception && !is_currently_paused) {
+        else if (!need_omni_perception ) {
             // 不需要感知且当前是工作状态 -> 挂起
             omn_cam1.pause();
             omn_cam2.pause();
             is_currently_paused = true;
-            tools::logger()->info("Omni-camera hardware: PAUSED");
+            // tools::logger()->info("Omni-camera hardware: PAUSED");
         }
 
-      std::this_thread::sleep_for(10ms);
+      std::this_thread::sleep_for(3ms);
      }
   });
 
@@ -277,7 +278,7 @@ int main(int argc, char * argv[])
     auto mode = gimbal.mode();
     auto now = std::chrono::steady_clock::now();
     auto dt = tools::delta_time(now, last);
-    // tools::logger()->info("{:.2f} fps", 1 / dt);
+    tools::logger()->info("{:.2f} fps", 1 / dt);
     last = now;
     // // 模式切换日志
     // if (last_mode != mode) {
@@ -352,7 +353,7 @@ int main(int argc, char * argv[])
       
     } else {
         // 挂起全向相机
-        need_omni_perception = true;
+        need_omni_perception = false;
         // omn_cam1.pause();
         // omn_cam2.pause();      
     }
