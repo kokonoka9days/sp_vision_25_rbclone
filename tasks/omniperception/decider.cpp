@@ -64,7 +64,7 @@ io::VisionToGimbal Decider::decide_g(
     }
     
     vision_cmd.mode = 3;  // 全向感知模式识别到目标，控制大云台
-    vision_cmd.yaw = static_cast<float>(-delta_angle[0] / 57.3);
+    vision_cmd.yaw = static_cast<float>(delta_angle[0] / 57.3);
     vision_cmd.yaw_vel = 0.0f;  // 角速度设为0，可根据需要计算
     vision_cmd.yaw_acc = 0.0f;  // 角加速度设为0
     vision_cmd.pitch = tools::limit_rad((delta_angle[1] + 15 )/ 57.3);
@@ -236,12 +236,16 @@ Eigen::Vector2d Decider::delta_angle(
   //TUDO:计算大yaw旋转角度
   if (camera == "left") {
     delta_angle[0] = 120 + (new_fov_h_ / 2) - armors.front().center_norm.x * new_fov_h_;
+    tools::logger()->info("left");
+    // delta_angle[0] = 120;
     delta_angle[1] = armors.front().center_norm.y * new_fov_v_ - new_fov_v_ / 2;
     return delta_angle;        
   }
 
   else if (camera == "right") {
     delta_angle[0] = -120 + (new_fov_h_ / 2) - armors.front().center_norm.x * new_fov_h_;
+      tools::logger()->info("right");
+    // delta_angle[0] = 120;
     delta_angle[1] = armors.front().center_norm.y * new_fov_v_ - new_fov_v_ / 2;
     return delta_angle;
   }
@@ -267,9 +271,10 @@ Eigen::Vector2d Decider::delta_angle_3d(
 
   //TUDO:计算大yaw旋转角度
   if (camera == "left") {
-    left_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0, 105.0 * CV_PI / 180.0), Eigen::Vector3d(-0.127611, -0.136932, -0.08) );
-    auto ypd_angle = tools::xyz2ypd(armors.front().xyz_in_gimbal)* 57.3;
-    delta_angle[0] = 120 - ypd_angle(0) * 57.3;
+    left_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0,105 * CV_PI / 180.0), Eigen::Vector3d(-0.127611, -0.136932, -0.08) );
+    auto ypd_angle = tools::xyz2ypd(armors.front().xyz_in_gimbal);
+    delta_angle[0] = (CV_PI/2 - ypd_angle(0)) * 57.3;
+    // delta_angle[0] = 120;
     delta_angle[1] = ypd_angle(1) * 57.3;
     return delta_angle;        
   }
@@ -277,8 +282,9 @@ Eigen::Vector2d Decider::delta_angle_3d(
   else if (camera == "right") {
     right_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0, 105.0 * CV_PI / 180.0), Eigen::Vector3d(-0.127611, 0.136932, -0.08) );
     // delta_angle[0] = -120 - tools::xyz2ypd(armors.front().xyz_in_gimbal)[0]* 57.3;
-    auto ypd_angle = tools::xyz2ypd(armors.front().xyz_in_gimbal)* 57.3;
-    delta_angle[0] = 120 - ypd_angle(0) * 57.3;
+    auto ypd_angle = tools::xyz2ypd(armors.front().xyz_in_gimbal);
+    delta_angle[0] = ypd_angle(0) * 57.3;
+    // delta_angle[0] = -120;
     delta_angle[1] = ypd_angle(1) * 57.3;
     return delta_angle;
   }

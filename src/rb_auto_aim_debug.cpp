@@ -54,7 +54,7 @@ int main(int argc, char * argv[])
   auto_aim::Shooter shooter(config_path);
   auto_aim::Planner planner(config_path);
   tools::Recorder recor(90);
-  bool stopkey = false;
+  bool stopkey = true;
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
   target_queue.push(std::nullopt);

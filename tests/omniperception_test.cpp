@@ -83,17 +83,17 @@ int main(int argc, char * argv[])
     static io::VisionToGimbal last_vision_cmd;
     // cv::imshow("long_camera", img4);
     // 全向感知模式
-    io::VisionToGimbal vision_cmd = decider.decide_g(
-      yolo, gimbal_euler, omn_cam1, omn_cam2);
+    // io::VisionToGimbal vision_cmd = decider.decide_g(
+    //   yolo, gimbal_euler, omn_cam1, omn_cam2);
     
     nlohmann::json data;
 
-    data["mode"] = vision_cmd.mode;
-    data["yaw"] =(float)vision_cmd.yaw;
+    // data["mode"] = vision_cmd.mode;
+    // data["yaw"] =(float)vision_cmd.yaw;
 
     plotter.plot(data);
     
-    gimbal.send(vision_cmd);
+    // gimbal.send(vision_cmd);
 
     cv::imshow("img1", img1);
     cv::imshow("img2", img2);

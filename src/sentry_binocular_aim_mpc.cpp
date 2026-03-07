@@ -26,8 +26,8 @@ const std::string keys =
   "{help h usage ? |                                             | 输出命令行参数说明}"
   "{short_camera   | ../configs/sb.yaml                          | 短焦相机配置文件路径 }"
   "{long_camera    | ../configs/sb_copy.yaml                     | 长焦相机配置文件路径 }"
-  "{l_cam          | ../configs/omniperception/short_camera.yaml | 左感知相机 }"
-  "{r_cam          | ../configs/omniperception/long_camera.yaml  | 右感知相机 }";
+  "{l_cam          | ../configs/omniperception/omn_camera_left.yaml | 左感知相机 }"
+  "{r_cam          | ../configs/omniperception/omn_camera_right.yaml  | 右感知相机 }";
 
 using namespace std::chrono_literals;
 
@@ -215,7 +215,7 @@ int main(int argc, char * argv[])
         data["target_yaw"] = plan.target_yaw;
         data["target_pitch"] = plan.target_pitch;
 
-        data["plan_yaw"] = plan.yaw;
+        data["plan_yaw"] = plan.yaw*57.3;
         data["plan_yaw_vel"] = plan.yaw_vel;
         data["plan_yaw_acc"] = plan.yaw_acc;
 
@@ -251,7 +251,7 @@ int main(int argc, char * argv[])
     auto mode = gimbal.mode();
     auto now = std::chrono::steady_clock::now();
     auto dt = tools::delta_time(now, last);
-    tools::logger()->info("{:.2f} fps", 1 / dt);
+    // tools::logger()->info("{:.2f} fps", 1 / dt);
     last = now;
     // // 模式切换日志
     // if (last_mode != mode) {

@@ -101,9 +101,9 @@ void Solver::omn_dig_yaw_solve(Armor & armor, Eigen::Vector3d R_camera2biggimbal
   Eigen::Vector3d xyz_in_camera;
   cv::cv2eigen(tvec, xyz_in_camera);
 
-  Eigen::Vector3d R_camera2biggimbal_ypr = Eigen::Vector3d(0,0, 105.0 * CV_PI / 180.0);
+  // R_camera2biggimbal_ypr = Eigen::Vector3d(0,0, 105.0);
   Eigen::Matrix3d R_camera2biggimbal = tools::rotation_matrix(R_camera2biggimbal_ypr);
-  Eigen::Vector3d t_camera2biggimbal = Eigen::Vector3d(0.0, 0.0, 0.0);
+  // Eigen::Vector3d t_camera2biggimbal = Eigen::Vector3d(0.0, 0.0, 0.0);
   armor.xyz_in_gimbal = R_camera2biggimbal * xyz_in_camera + t_camera2biggimbal;
   // armor.xyz_in_world = R_gimbal2world_ * armor.xyz_in_gimbal;
 

@@ -1,6 +1,8 @@
 #ifndef IO__CAMERA_HPP
 #define IO__CAMERA_HPP
 
+
+#include <atomic> 
 #include <chrono>
 #include <memory>
 #include <opencv2/opencv.hpp>

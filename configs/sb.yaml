@@ -78,7 +78,7 @@ auto_fire: true # 是否由自瞄控制射击
 # 6mm camera
 camera_name: "daheng"
 camera_sn: "FDN21050087"
-exposure_us: 4000
+exposure_us: 6000
 gain: 0.5
 gamma: 0.5
 vid_pid: "2bdf:0001"
