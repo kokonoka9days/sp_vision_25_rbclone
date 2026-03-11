@@ -167,7 +167,7 @@ int main(int argc, char * argv[])
   
   // 全向感知决策器
   auto_aim::Solver left_solver(omnl_yaml_name);
-  auto_aim::Solver  right_solver(omnr_yaml_name);
+  auto_aim::Solver right_solver(omnr_yaml_name);
   omniperception::Decider decider(omnl_yaml_name);
   
   // 线程安全队列（用于MPC规划线程）
@@ -245,42 +245,8 @@ int main(int argc, char * argv[])
         std::this_thread::sleep_for(10ms);
     }
   });
-  std::chrono::steady_clock::time_point last, last_lost_point = std::chrono::steady_clock::now();
+  std::chrono::steady_clock::time_point last, last_track_point = std::chrono::steady_clock::now();
   // 主循环
-
-
-  auto resume_omncamera_thread = std::thread([&]() {
-    bool is_currently_paused = true; // 记录当前硬件状态，减少重复调用
-     while (!quit){
-      
-        // cv::Mat img1, img2;
-        // std::chrono::steady_clock::time_point ts1, ts2;
-        
-        // bool r1 = omn_cam1.read(img1, ts1);
-        // bool r2 = omn_cam2.read(img2, ts2);
-
-        if (tracker.state() == "lost") {
-            // 只有需要时才执行重负载的 YOLO 和 决策
-            io::VisionToGimbal vision_cmd = decider.decide_g(
-                yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
-              
-            static size_t omn_detect_num = 0;
-            if(vision_cmd.mode == 3) omn_detect_num++;
-            // 只有在 lost 状态下才发送全向指令，避免干扰主线程控制
-            if (tracker.state() == "lost" 
-              // && omn_detect_num == 3
-            ) {
-              omn_detect_num = 0;
-              gimbal.send(vision_cmd);
-            }
-        } else {
-            // 不需要感知时，稍微 sleep 释放 CPU，但保持读取频率
-            std::this_thread::sleep_for(10ms);
-        }
-
-
-     }
-  });
 
 
   while (!exiter.exit()) {
@@ -339,25 +305,25 @@ int main(int argc, char * argv[])
     
     // 设置优先级
     decider.set_priority(armors);
-    
+
+    // static size_t omn_detect_num = 0;
     // 跟踪目标
     auto targets = tracker.track(armors, timestamp);
 
-    if (tracker.state() == "lost") {
-        // 只有需要时才执行重负载的 YOLO 和 决策
-        io::VisionToGimbal vision_cmd = decider.decide_g(
-            yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
-          
-        static size_t omn_detect_num = 0;
-        if(vision_cmd.mode == 3) omn_detect_num++;
-        // 只有在 lost 状态下才发送全向指令，避免干扰主线程控制
-        if (tracker.state() == "lost" 
-          // && omn_detect_num == 3
-        ) {
-          omn_detect_num = 0;
-          gimbal.send(vision_cmd);
-        }
-    } 
+
+    // 只有在 lost 状态下才发送全向指令，避免干扰主线程控制
+    if (tracker.state() == "lost" && tools::delta_time(last_track_point, std::chrono::steady_clock::now()) > 1
+      // && omn_detect_num == 3
+    ) {
+    // 只有需要时才执行重负载的 YOLO 和 决策
+    io::VisionToGimbal vision_cmd = decider.decide_g(
+        yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
+      gimbal.send(vision_cmd);
+    }
+
+    if(tracker.state() != "lost"){
+      last_track_point = std::chrono::steady_clock::now();
+    }
 
     
     // // 模式判断：如果跟踪器丢失目标，切换到全向感知模式
@@ -495,9 +461,6 @@ int main(int argc, char * argv[])
   quit = true;
   if (mpc_thread.joinable()) {
     mpc_thread.join();
-  }
-  if (resume_omncamera_thread.joinable()) {
-    resume_omncamera_thread.join();
   }
   // 发送停止指令
   gimbal.send(false, false, 0, 0, 0, 0, 0, 0);

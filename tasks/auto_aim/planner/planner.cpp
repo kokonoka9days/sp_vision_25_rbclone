@@ -579,10 +579,10 @@ Trajectory Planner::rbget_trajectory(Target target, double yaw0, double bullet_s
   Trajectory traj;
     
   auto armors = target.armor_xyza_list();
-  if (armors.empty()) throw std::runtime_error("No armor");
+  if (armors.empty()) throw std::runtime_error("无装甲板");
   
   // 1. 调用 aim 确定本轮预测所锁定的装甲板
-  this->aim(target, bullet_speed); 
+  this->rbaim(target, bullet_speed); 
   int locked_id = this->last_selected_idx;
   
   // 2. 提取车辆中心状态与锁定装甲板的相对几何关系
