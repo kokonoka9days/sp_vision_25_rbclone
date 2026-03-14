@@ -650,6 +650,8 @@ Trajectory Planner::rbget_trajectory(Target target, double yaw0, double bullet_s
   }
 
   return traj;
+
+  
   // Trajectory traj;
     
   // auto armors = target.armor_xyza_list();
