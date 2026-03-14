@@ -38,6 +38,8 @@ public:
   const tools::ExtendedKalmanFilter & ekf() const;
   std::vector<Eigen::Vector4d> armor_xyza_list() const;
 
+  Eigen::Vector3d h_armor_xyz(const Eigen::VectorXd & x, int id) const;
+
   bool diverged() const;
 
   bool convergened();
@@ -78,7 +80,6 @@ private:
 
   void update_ypda(const Armor & armor, int id);  // yaw pitch distance angle
 
-  Eigen::Vector3d h_armor_xyz(const Eigen::VectorXd & x, int id) const;
   Eigen::MatrixXd h_jacobian(const Eigen::VectorXd & x, int id) const;
 
 
