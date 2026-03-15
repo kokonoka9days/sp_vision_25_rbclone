@@ -254,10 +254,7 @@ void Target::update(const Armor & armor)
     } else {
       is_switch_ = false;
     }
-    // for(auto it :tower_armor_hs){
-    //   std::cout<<"it :"<<it;
-    // }
-    // std::cout<<std::endl;
+
     if (is_switch_) switch_count_++;
 
     last_id = id;

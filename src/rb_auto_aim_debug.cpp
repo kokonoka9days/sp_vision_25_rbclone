@@ -68,6 +68,14 @@ int main(int argc, char * argv[])
       auto target = target_queue.front(); 
       auto gs = gimbal.state();
 
+
+      //完整形态考核专用限制角度开火
+      // auto l = 
+      // auto r = 
+      // if(gs.yaw < l && gs.yaw > r){
+      //   stopkey = false;
+      // }
+
       //MPC预测以及+自家火控
       auto plan = planner.plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
 
@@ -85,19 +93,13 @@ int main(int argc, char * argv[])
           plan.target_pitch = gs.pitch * 57.3;
       }
       
-      if (stopkey == true)
+      if (!stopkey)
       {
-         gimbal.send(
-        plan.control, 0, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
-        plan.pitch_acc);
+        plan.fire = 0;
       }
-      else if (stopkey == false)
-      {
-         gimbal.send(
-        plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
-        plan.pitch_acc);
-      }
-      
+        gimbal.send(
+      plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
+      plan.pitch_acc);      
      
 
       // //command预测以及火控
@@ -125,9 +127,9 @@ int main(int argc, char * argv[])
 
       data["stopkey"] = stopkey;
       data["gimbal_yaw"] = gs.yaw;
-      data["gimbal_yaw_vel"] = gs.yaw_vel;
+      // data["gimbal_yaw_vel"] = gs.yaw_vel;
       data["gimbal_pitch"] = gs.pitch;
-      data["gimbal_pitch_vel"] = gs.pitch_vel;
+      // data["gimbal_pitch_vel"] = gs.pitch_vel;
 
       data["target_yaw"] = plan.target_yaw;
       data["target_pitch"] = plan.target_pitch;
@@ -142,17 +144,35 @@ int main(int argc, char * argv[])
 
       data["fire"] = plan.fire ? 1 : 0;
       data["fired"] = fired ? 1 : 0;
+      
+      const auto ekf_satic = target->ekf_x();
+      data["ekf_x"] = ekf_satic(0);
+      data["ekf_vx"] = ekf_satic(1);
+      data["ekf_y"] = ekf_satic(2);
+      data["ekf_vy"] = ekf_satic(3);
+      data["ekf_z"] = ekf_satic(4);
+      data["ekf_vz"] = ekf_satic(5);
+      data["ekf_yaw"] = ekf_satic(6);
+      data["ekf_vyaw"] = ekf_satic(7);
+      data["ekf_r"] = ekf_satic(8);
 
       if (target.has_value()) {
-        data["target_z"] = target->ekf_x()[4];   //z
-        data["target_vz"] = target->ekf_x()[5];  //vz
+        data["ekf_x"] = ekf_satic(0);
+        data["ekf_vx"] = ekf_satic(1);
+        data["ekf_y"] = ekf_satic(2);
+        data["ekf_vy"] = ekf_satic(3);
+        data["ekf_z"] = ekf_satic(4);
+        data["ekf_vz"] = ekf_satic(5);
+        data["ekf_yaw"] = ekf_satic(6) * 57.3;
+        data["ekf_vyaw"] = ekf_satic(7);
+        data["ekf_r"] = ekf_satic(8);
+      }else{
+        data["ekf_x"] = data["ekf_vx"]
+           = data["ekf_y"] = data["ekf_y"] = data["ekf_vy"] = 
+           data["ekf_z"] = data["ekf_vz"] = data["ekf_yaw"] = 
+           data["ekf_vyaw"] = data["ekf_r"] = 0;
       }
 
-      if (target.has_value()) {
-        data["w"] = target->ekf_x()[7];
-      } else {
-        data["w"] = 0.0;
-      }
 
       plotter.plot(data);
 
@@ -288,9 +308,9 @@ int main(int argc, char * argv[])
       io::GimbalState* g_demo = gimbal.set_state_();
       g_demo->mode = !g_demo->mode;
     }
-    if(key == 's') {
-      stopkey = !stopkey;
-    }
+    // if(key == 's') {
+    //   stopkey = !stopkey;
+    // }
   }
   quit = true;
   if (plan_thread.joinable()) plan_thread.join();
