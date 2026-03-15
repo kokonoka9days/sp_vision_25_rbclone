@@ -425,7 +425,12 @@ Eigen::Matrix<double, 2, 1> Planner::rbaim(const Target & target, double bullet_
 
   auto armor_num = armor_xyza_list.size();
   // 如果装甲板未发生过跳变，则只有当前装甲板的位置已知
-  if (!target.jumped) return {true, armor_xyza_list[0]};
+if (!target.jumped) {
+    Eigen::Vector3d xyz = armor_xyza_list[0].head<3>();
+    auto azim = std::atan2(xyz.y(), xyz.x());
+    auto bullet_traj = tools::Trajectory(bullet_speed, xyz.head<2>().norm(), xyz.z());
+    return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + pitch_offset_};
+}
 
   // 整车旋转中心的球坐标yaw
   auto center_yaw = std::atan2(ekf_x[2], ekf_x[0]);

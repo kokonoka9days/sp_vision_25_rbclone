@@ -91,6 +91,7 @@ add_executable(minimum_vision_system tests/minimum_vision_system.cpp)
 add_executable(omniperception_test tests/omniperception_test.cpp)
 add_executable(binocular_camera_test tests/binocular_camera_test.cpp)
 add_executable(4cmaera_test tests/4cmaera_test.cpp)
+add_executable(time_calibrator tests/time_calibrator.cpp)
 
 target_link_libraries(auto_aim_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 target_link_libraries(auto_buff_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
@@ -110,6 +111,7 @@ target_link_libraries(minimum_vision_system ${OpenCV_LIBS} fmt::fmt yaml-cpp too
 target_link_libraries(omniperception_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim omniperception)
 target_link_libraries(binocular_camera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 target_link_libraries(4cmaera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+target_link_libraries(time_calibrator ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
 
 add_executable(gimbal_test tests/gimbal_test.cpp)
