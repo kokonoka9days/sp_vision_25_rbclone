@@ -276,7 +276,7 @@ void Gimbal::read_thread()
     state_.enemy_color = !rx_data_.color;
 
     // state_.bullet_speed = rx_data_.bullet_speed;
-    state_.bullet_speed = 25;
+    state_.bullet_speed = 28;
     state_.bullet_count = rx_data_.bullet_count;
 
     switch (rx_data_.mode) {

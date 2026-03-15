@@ -36,6 +36,7 @@ add_executable(standard_mpc src/standard_mpc.cpp)
 add_executable(auto_aim_debug_mpc src/auto_aim_debug_mpc.cpp)
 add_executable(rb_auto_aim_debug  src/rb_auto_aim_debug.cpp)
 add_executable(rb_binocular_aim_debug  src/rb_binocular_aim_debug.cpp)
+
 add_executable(hero  src/hero.cpp)
 add_executable(mt_auto_aim_debug src/mt_auto_aim_debug.cpp)
 add_executable(auto_buff_debug src/auto_buff_debug.cpp)
@@ -154,7 +155,9 @@ if(ament_cmake_FOUND AND rclcpp_FOUND AND std_msgs_FOUND AND rosidl_typesupport_
     add_executable(subscribe_test tests/subscribe_test.cpp)
     add_executable(topic_loop_test tests/topic_loop_test.cpp)
     add_executable(sentry_binocular_aim_mpc src/sentry_binocular_aim_mpc.cpp)
+    add_executable(sentry_omn_aim_mpc src/sentry_omn_aim_mpc.cpp)
 
+    target_link_libraries(sentry_omn_aim_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
     target_link_libraries(sentry ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
     target_link_libraries(sentry_bp ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
     target_link_libraries(sentry_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)

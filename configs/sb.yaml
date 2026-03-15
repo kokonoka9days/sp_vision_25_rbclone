@@ -29,7 +29,7 @@ threshold: 150
 max_angle_error: 45 # degree
 min_lightbar_ratio: 1.5
 max_lightbar_ratio: 20
-min_lightbar_length: 8
+min_lightbar_length: 832
 min_armor_ratio: 1
 max_armor_ratio: 5
 max_side_ratio: 1.5
@@ -51,13 +51,13 @@ outpost_max_temp_lost_count: 75
 # low_speed_delay_time: 0.093 # s
 
 #####-----aimer参数-----##### 12mm
-yaw_offset: -2 # degree -2.5
-pitch_offset: 10 # degree 2
+yaw_offset: -1.5 # degree -2.5
+pitch_offset: -0.5 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
 high_speed_delay_time: 0.17 # s   远 0.25
-low_speed_delay_time: 0.17 # s    远 0.25
+low_speed_delay_time: 0.15 # s    远 0.25
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree
@@ -78,9 +78,9 @@ auto_fire: true # 是否由自瞄控制射击
 # 6mm camera
 camera_name: "daheng"
 camera_sn: "FDN21050087"
-exposure_us: 6000
-gain: 0.5
-gamma: 0.5
+exposure_us: 8000
+gain: 0.9
+gamma: 0.7
 vid_pid: "2bdf:0001"
 flip: true
 mirror: true
@@ -107,9 +107,10 @@ R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 
 # 相机同理想情况的偏角: yaw-2.11 pitch-10.07 roll4.23 degree
 # 标定板到世界坐标系原点的水平距离: 2.07 m
-# 标定板同竖直摆放时的偏角: yaw154.47 pitch13.82 roll2.89 degree
-R_camera2gimbal: [0.02388754640281707, -0.1769736608617867, 0.9839256620741379, -0.9970773397188691, 0.06722509901308757, 0.03629827381327414, -0.07256833845415031, -0.9819170583220653, -0.17485058430027053]
-t_camera2gimbal: [0.128501035122418, 0.04346160775084312, 0.01194559626745868]
+
+# 相机同理想情况的偏角: yaw-0.26 pitch2.39 roll5.61 degree
+R_camera2gimbal: [0.008636750302154939, 0.04099388996471793, 0.9991220683829273, -0.9951778499111561, 0.09797983093111706, 0.004582551354687483, -0.09770595473371539, -0.9943437301639058, 0.04164243860898198]
+t_camera2gimbal: [0.14340606177701287, 0.04431056523596118, 0.03689741444786332]
 # 重投影误差: 0.0859px
 camera_matrix: [1794.7187330883828, 0, 699.7622672423851, 0, 1789.6017187595758, 536.6853118936033, 0, 0, 1]
 distort_coeffs: [-0.06556457781220619, 0.10304292310453342, 0.0035082365546658368, -7.636838968409379e-05, 0.08855478914497823]
@@ -125,7 +126,7 @@ distort_coeffs: [-0.06556457781220619, 0.10304292310453342, 0.003508236554665836
 # # # 相机同理想情况的偏角: yaw-3.03 pitch0.26 roll0.84 degree
 # # # 标定板到世界坐标系原点的水平距离: 3.39 m
 # # # 标定板同竖直摆放时的偏角: yaw10.51 pitch6.93 roll-1.85 degree
-# R_camera2gimbal: [0.05293871277740374, 0.003752714924705188, 0.9985907118635569, -0.9984910777682651, 0.014815900448325254, 0.052877752515340645, -0.014596585444543545, -0.9998831962907464, 0.004531387068098422]
+# R_camera2gimbal: [0.05293871277740374, 0.003752714924705188, 0.9985907118635569, -0.9984910777682651, 0.01481590044 15254, 0.052877752515340645, -0.014596585444543545, -0.9998831962907464, 0.004531387068098422]
 # t_camera2gimbal: [0.19936918316981864, 0.031528539583439465, 0.003809688002070062]
 #####-----cboard参数-----#####
 quaternion_canid: 0x100
@@ -149,9 +150,9 @@ gimbal_r3: -3
 
 #####-----planner-----#####
 fire_thresh: 0.003 # 
-small_armor_tolerance: 0.05
+small_armor_tolerance: 0.12
 big_armor_tolerance: 0.22
-gimbal_control_delay: 0
+gimbal_control_delay: 0.06
 tower_pitch_prediction_time: 0.05
 
 max_yaw_acc: 50
