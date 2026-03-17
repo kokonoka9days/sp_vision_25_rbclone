@@ -44,7 +44,7 @@ int main(int argc, char * argv[])
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
 
-  auto_aim::YOLO yolo(config_path, false);
+  auto_aim::YOLO yolo(config_path, true);
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, &solver);
   tracker.set_gimbal(&gimbal);
@@ -63,13 +63,26 @@ int main(int argc, char * argv[])
     while (!quit) {
       auto target = target_queue.front();
       auto gs = gimbal.state();
+      // gs.yaw -= 0.2;
+      // if(target.has_value())
+      //   if(target->ekf_x()(7) < 0){
+      //     gs.yaw += 0.25;
+      //   }
+
+      //完整形态考核专用限制角度开火
+      // auto l = 
+      // auto r = 
 
       
-      auto plan = planner.plan(target, 11.8, gs.yaw, auto_aim::Planner::ShootStrategy::rbHero);
+      auto plan = planner.plan(target, gs.bullet_speed, gs.yaw , auto_aim::Planner::ShootStrategy::rbHero);
       gimbal.send(
         plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
         plan.pitch_acc);
 
+      // if(gs.yaw < l && gs.yaw > r){
+      //   stopkey = false;
+      // }
+      
       // //command预测以及火控
       // io::Command command{false, false, 0, 0};
       // command = aimer.aim(target, target.getTimePoint(), gs.bullet_speed);
@@ -121,11 +134,23 @@ int main(int argc, char * argv[])
         data["tower_h3"] = target->tower_armor_hs[2];
         data["tower_armor_h"] = target->tower_armor_h;
       }
-
+      
+      const auto ekf_satic = target->ekf_x();
       if (target.has_value()) {
-        data["w"] = target->ekf_x()[7];
-      } else {
-        data["w"] = 0.0;
+        data["ekf_x"] = ekf_satic(0);
+        data["ekf_vx"] = ekf_satic(1);
+        data["ekf_y"] = ekf_satic(2);
+        data["ekf_vy"] = ekf_satic(3);
+        data["ekf_z"] = ekf_satic(4);
+        data["ekf_vz"] = ekf_satic(5);
+        data["ekf_yaw"] = ekf_satic(6) * 57.3;
+        data["ekf_vyaw"] = ekf_satic(7);
+        data["ekf_r"] = ekf_satic(8);
+      }else{
+        data["ekf_x"] = data["ekf_vx"]
+           = data["ekf_y"] = data["ekf_y"] = data["ekf_vy"] = 
+           data["ekf_z"] = data["ekf_vz"] = data["ekf_yaw"] = 
+           data["ekf_vyaw"] = data["ekf_r"] = 0;
       }
 
       plotter.plot(data);
@@ -155,8 +180,8 @@ int main(int argc, char * argv[])
     // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
     // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
     // if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
-     tools::draw_text(img, fmt::format("DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 0, 255});
-      tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
+    //  tools::draw_text(img, fmt::format("DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 0, 255});
+    //   tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
     // std::cout << "Roll: " << roll_deg << std::endl;
 
     solver.set_R_gimbal2world(q);

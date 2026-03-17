@@ -151,7 +151,7 @@ bool Planner::rbShoot(Target target, double gimbal_yaw, bool tower_fixed_pitch){
 
   // pitch
   bool suggest_pitch = true;
-  if(tower_fixed_pitch && abs(target.ekf_x()(4) - target_armor_xyza(2)) > 0.003){
+  if(tower_fixed_pitch && abs(target.ekf_x()(4) - target_armor_xyza(2)) > 0.001){
     suggest_pitch = false;
   }
 
@@ -195,6 +195,7 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
     }
   }
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
+  
   target.predict(bullet_traj.fly_time);
 
   // 2. Get trajectory
@@ -280,6 +281,12 @@ Plan Planner::rbHeroplan(Target target, double bullet_speed, double gimbal_yaw){
     }
   }
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
+  // if(target.ekf_x()(7) < -0.69808){
+  //   bullet_traj.fly_time += 0.10;
+  // }
+  // if(target.ekf_x()(7) > 0.69808){
+  //   target.getEKFXest()
+  // }
   target.predict(bullet_traj.fly_time );
 
   // 2. Get trajectory
@@ -412,82 +419,133 @@ Eigen::Matrix<double, 2, 1> Planner::aim(const Target & target, double bullet_sp
 
 Eigen::Matrix<double, 2, 1> Planner::rbaim(const Target & target, double bullet_speed)
 {
-auto armors = target.armor_xyza_list();
-    if (armors.empty()) throw std::runtime_error("No armors available");
+  auto armors = target.armor_xyza_list();
+  // if (armors.empty()) throw std::runtime_error("No armors available");
 
-    // --- 配置参数 ---
-    const double dist_buffer = 0.3;             // 距离迟滞缓冲 (m)
-    const double angle_threshold = 80.0 / 57.3; // 强制切换角度 (约80度)
-    const double superior_angle = 35.0 / 57.3;  // 优秀角度 (约35度)
+  // --- 配置参数 ---
+  const double dist_buffer = 0.3;             // 距离迟滞缓冲 (m)
+  const double angle_threshold = 80.0 / 57.3; // 强制切换角度 (约80度)
+  const double superior_angle = 35.0 / 57.3;  // 优秀角度 (约35度)
 
-    int best_idx = 0;
+  int best_idx = 0;
 
-    // 寻找上一帧锁定的装甲板在当前帧的索引
-    int current_locked_idx = -1;
-    if (last_selected_idx != -1) {
-        for (int i = 0; i < (int)armors.size(); ++i) {
-            // 通过位置判定是否为同一个装甲板（车辆旋转时，极短时间内位置移动较小）
-            if ((armors[i].head<3>() - last_selected_xyz).norm() < 0.5) {
-                current_locked_idx = i;
-                break;
-            }
-        }
+  Eigen::Vector3d xyz;
+  double yaw;
+  auto min_dist = 1e10;
+
+  Eigen::VectorXd ekf_x = target.ekf_x();
+  // 如果delta_angle为0，则该装甲板中心和整车中心的连线在世界坐标系的xy平面过原点
+  static std::vector<std::pair<int ,double>> armorId_delta_list;  
+  if(!armorId_delta_list.empty()) armorId_delta_list.clear();
+  std::vector<Eigen::Vector4d> armor_xyza_list = target.armor_xyza_list();
+
+  auto armor_num = armor_xyza_list.size();
+  // // 如果装甲板未发生过跳变，则只有当前装甲板的位置已知
+  // if (!target.jumped) return {true, armor_xyza_list[0]};
+
+  // 整车旋转中心的球坐标yaw
+  auto center_yaw = std::atan2(ekf_x[2], ekf_x[0]);
+
+  for (int i = 0; i < armor_num; i++) {
+    auto delta_angle = tools::limit_rad(armor_xyza_list[i][3] - center_yaw);
+    // auto dist = armor_xyza_list[i].head<2>().norm();
+    armorId_delta_list.emplace_back(std::make_pair(i, delta_angle));
+  }
+  
+  for (auto & xyza : target.armor_xyza_list()) {
+    auto dist = xyza.head<2>().norm();
+    if (dist < min_dist) {
+      min_dist = dist;
+      xyz = xyza.head<3>();
+      yaw = xyza[3];
     }
+  }
 
-    if (current_locked_idx != -1) {
-        // --- 核心逻辑：判断是否需要切换 ---
-        best_idx = current_locked_idx;
-        double cur_dist = armors[current_locked_idx].head<2>().norm();
-        // 计算偏角：装甲板法线与 (相机-装甲板) 连线的夹角
-        double cur_angle = std::abs(tools::limit_rad(armors[current_locked_idx][3] - 
-                           std::atan2(armors[current_locked_idx][1], armors[current_locked_idx][0]) + M_PI));
+  double abs_vyaw = abs(ekf_x(7));
+  if(abs_vyaw < 90./57.3 
+    && armorId_delta_list[target.last_id].second < 60./57.3){// 判断当前看到的装甲板在预测时间之后是否还在视野内
+    min_dist = armor_xyza_list[target.last_id].head<2>().norm();
+    xyz = armor_xyza_list[target.last_id].head<3>();
+    yaw = armor_xyza_list[target.last_id](3);
+  }
 
-        for (int i = 0; i < (int)armors.size(); ++i) {
-            if (i == current_locked_idx) continue;
 
-            double other_dist = armors[i].head<2>().norm();
-            double other_angle = std::abs(tools::limit_rad(armors[i][3] - 
-                                 std::atan2(armors[i][1], armors[i][0]) + M_PI));
 
-            // 切换条件1：当前目标角度太差，且有另一个角度非常好的目标
-            bool angle_switch = (cur_angle > angle_threshold && other_angle < superior_angle);
-            // 切换条件2：另一个目标明显更近（超过缓冲阈值）
-            bool dist_switch = (other_dist < (cur_dist - dist_buffer));
-            // 切换条件3：距离差不多，但另一个角度具有绝对优势（正对相机）
-            bool quality_switch = (other_angle < superior_angle && cur_angle > 45.0/57.3 && other_dist < cur_dist + 0.1);
 
-            if (angle_switch || dist_switch || quality_switch) { // 修复了这里的变量名
-                best_idx = i;
-                break; 
-            }
-        }
-    } else {
-        // --- 丢失后重新寻找最适合的目标 ---
-        double min_score = 1e10;
-        for (int i = 0; i < (int)armors.size(); ++i) {
-            double d = armors[i].head<2>().norm();
-            double a = std::abs(tools::limit_rad(armors[i][3] - std::atan2(armors[i][1], armors[i][0]) + M_PI));
-            double score = d + a * 0.3; // 距离权重更高，角度辅助
-            if (score < min_score) {
-                min_score = score;
-                best_idx = i;
-            }
-        }
-    }
+  debug_xyza = Eigen::Vector4d(xyz.x(), xyz.y(), xyz.z(), yaw);
 
-    // 更新状态记录 (请确保在 planner.hpp 中定义了这两个成员变量)
-    last_selected_idx = best_idx;
-    last_selected_xyz = armors[best_idx].head<3>();
+  auto azim = std::atan2(xyz.y(), xyz.x());
+  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
+  if (bullet_traj.unsolvable) throw std::runtime_error("Unsolvable bullet trajectory!");
 
-    // 计算弹道
-    Eigen::Vector3d xyz = armors[best_idx].head<3>();
-    debug_xyza = Eigen::Vector4d(xyz.x(), xyz.y(), xyz.z(), armors[best_idx][3]);
+  return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + pitch_offset_};
 
-    auto azim = std::atan2(xyz.y(), xyz.x());
-    auto bullet_traj = tools::Trajectory(bullet_speed, xyz.head<2>().norm(), xyz.z());
-    if (bullet_traj.unsolvable) throw std::runtime_error("Unsolvable bullet trajectory!");
+  // // 寻找上一帧锁定的装甲板在当前帧的索引
+  // int current_locked_idx = -1;
+  // if (last_selected_idx != -1) {
+  //     for (int i = 0; i < (int)armors.size(); ++i) {
+  //         // 通过位置判定是否为同一个装甲板（车辆旋转时，极短时间内位置移动较小）
+  //         if ((armors[i].head<3>() - last_selected_xyz).norm() < 0.5) {
+  //             current_locked_idx = i;
+  //             break;
+  //         }
+  //     }
+  // }
 
-    return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + pitch_offset_};
+  // if (current_locked_idx != -1) {
+  //     // --- 核心逻辑：判断是否需要切换 ---
+  //     best_idx = current_locked_idx;
+  //     double cur_dist = armors[current_locked_idx].head<2>().norm();
+  //     // 计算偏角：装甲板法线与 (相机-装甲板) 连线的夹角
+  //     double cur_angle = std::abs(tools::limit_rad(armors[current_locked_idx][3] - 
+  //                         std::atan2(armors[current_locked_idx][1], armors[current_locked_idx][0]) + M_PI));
+
+  //     for (int i = 0; i < (int)armors.size(); ++i) {
+  //         if (i == current_locked_idx) continue;
+
+  //         double other_dist = armors[i].head<2>().norm();
+  //         double other_angle = std::abs(tools::limit_rad(armors[i][3] - 
+  //                               std::atan2(armors[i][1], armors[i][0]) + M_PI));
+
+  //         // 切换条件1：当前目标角度太差，且有另一个角度非常好的目标
+  //         bool angle_switch = (cur_angle > angle_threshold && other_angle < superior_angle);
+  //         // 切换条件2：另一个目标明显更近（超过缓冲阈值）
+  //         bool dist_switch = (other_dist < (cur_dist - dist_buffer));
+  //         // 切换条件3：距离差不多，但另一个角度具有绝对优势（正对相机）
+  //         bool quality_switch = (other_angle < superior_angle && cur_angle > 45.0/57.3 && other_dist < cur_dist + 0.1);
+
+  //         if (angle_switch || dist_switch || quality_switch) { // 修复了这里的变量名
+  //             best_idx = i;
+  //             break; 
+  //         }
+  //     }
+  // } else {
+  //     // --- 丢失后重新寻找最适合的目标 ---
+  //     double min_score = 1e10;
+  //     for (int i = 0; i < (int)armors.size(); ++i) {
+  //         double d = armors[i].head<2>().norm();
+  //         double a = std::abs(tools::limit_rad(armors[i][3] - std::atan2(armors[i][1], armors[i][0]) + M_PI));
+  //         double score = d + a * 0.3; // 距离权重更高，角度辅助
+  //         if (score < min_score) {
+  //             min_score = score;
+  //             best_idx = i;
+  //         }
+  //     }
+  // }
+
+  // // 更新状态记录 (请确保在 planner.hpp 中定义了这两个成员变量)
+  // last_selected_idx = best_idx;
+  // last_selected_xyz = armors[best_idx].head<3>();
+
+  // // 计算弹道
+  // Eigen::Vector3d xyz = armors[best_idx].head<3>();
+  // debug_xyza = Eigen::Vector4d(xyz.x(), xyz.y(), xyz.z(), armors[best_idx][3]);
+
+  // auto azim = std::atan2(xyz.y(), xyz.x());
+  // auto bullet_traj = tools::Trajectory(bullet_speed, xyz.head<2>().norm(), xyz.z());
+  // if (bullet_traj.unsolvable) throw std::runtime_error("Unsolvable bullet trajectory!");
+
+  // return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + pitch_offset_};
 }
 
 Eigen::Matrix<double, 2, 1> Planner::heroaim(const Target & target, double bullet_speed, double gimbal_yaw)
@@ -540,7 +598,7 @@ Eigen::Matrix<double, 2, 1> Planner::heroaim(const Target & target, double bulle
     // aim_point_z = xyz1.z();
     aim_point_z = target.ekf_x()(4);
   }
-
+  
   //补偿距离和补偿高度
   double comp_dist = 0;
   double comp_h = 0;
@@ -585,59 +643,18 @@ Trajectory Planner::get_trajectory(Target  target, double yaw0, double bullet_sp
 
 Trajectory Planner::rbget_trajectory(Target target, double yaw0, double bullet_speed)
 {
+
   Trajectory traj;
-    
-  auto armors = target.armor_xyza_list();
-  if (armors.empty()) throw std::runtime_error("No armor");
-  
-  // 1. 调用 aim 确定本轮预测所锁定的装甲板
-  this->aim(target, bullet_speed); 
-  int locked_id = this->last_selected_idx;
-  
-  // 2. 提取车辆中心状态与锁定装甲板的相对几何关系
-  double center_x = target.ekf_x()(0);
-  double center_y = target.ekf_x()(2);
-  double center_z = target.ekf_x()(4);
-  
-  double armor_x = armors[locked_id][0];
-  double armor_y = armors[locked_id][1];
-  double armor_z = armors[locked_id][2];
 
-  // 计算装甲板相对于车辆中心的固联 Yaw 偏角和高度差
-  double relative_angle = std::atan2(armor_y - center_y, armor_x - center_x) - target.ekf_x()(6);
-  double z_offset = armor_z - center_z; // 保留装甲板的独立高度
-
-  // 3. 定义预测函数：严格预测“被锁定装甲板”的未来位置
-  auto get_aim_for_locked = [&](Target& t) -> Eigen::Vector2d {
-      double c_x = t.ekf_x()(0);
-      double c_y = t.ekf_x()(2);
-      double c_z = t.ekf_x()(4);
-      double v_yaw = t.ekf_x()(6);
-      double r = t.ekf_x()(8); // 取出半径
-      
-      // 根据 EKF 预测出的中心位置和偏角，算出未来时刻装甲板的绝对坐标
-      // 注意：这里的正负号逻辑需要与你们 EKF 模型中关于 r 的定义一致
-      double pred_armor_x = c_x + r * std::cos(v_yaw + relative_angle);
-      double pred_armor_y = c_y + r * std::sin(v_yaw + relative_angle);
-      double pred_armor_z = c_z + z_offset; // 加上高度补偿
-      
-      auto azim = std::atan2(pred_armor_y, pred_armor_x);
-      double dist = std::hypot(pred_armor_x, pred_armor_y);
-      auto bullet_traj = tools::Trajectory(bullet_speed, dist, pred_armor_z);
-      
-      return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + pitch_offset_};
-  };
-
-  // 4. 生成轨迹
   target.predict(-DT * (HALF_HORIZON + 1));
-  auto yaw_pitch_last = get_aim_for_locked(target);
-  
-  target.predict(DT);
-  auto yaw_pitch = get_aim_for_locked(target);
+  auto yaw_pitch_last = aim(target, bullet_speed);
+
+  target.predict(DT);  // [0] = -HALF_HORIZON * DT -> [HHALF_HORIZON] = 0
+  auto yaw_pitch = aim(target, bullet_speed);
 
   for (int i = 0; i < HORIZON; i++) {
     target.predict(DT);
-    auto yaw_pitch_next = get_aim_for_locked(target);
+    auto yaw_pitch_next = aim(target, bullet_speed);
 
     auto yaw_vel = tools::limit_rad(yaw_pitch_next(0) - yaw_pitch_last(0)) / (2 * DT);
     auto pitch_vel = (yaw_pitch_next(1) - yaw_pitch_last(1)) / (2 * DT);
@@ -649,6 +666,69 @@ Trajectory Planner::rbget_trajectory(Target target, double yaw0, double bullet_s
   }
 
   return traj;
+
+  
+  // Trajectory traj;
+    
+  // auto armors = target.armor_xyza_list();
+  // if (armors.empty()) throw std::runtime_error("无装甲板");
+  
+  // // 1. 调用 aim 确定本轮预测所锁定的装甲板
+  // this->rbaim(target, bullet_speed); 
+  // int locked_id = this->last_selected_idx;
+  
+  // // 2. 提取车辆中心状态与锁定装甲板的相对几何关系
+  // double center_x = target.ekf_x()(0);
+  // double center_y = target.ekf_x()(2);
+  // double center_z = target.ekf_x()(4);
+  
+  // double armor_x = armors[locked_id][0];
+  // double armor_y = armors[locked_id][1];
+  // double armor_z = armors[locked_id][2];
+
+  // // 计算装甲板相对于车辆中心的固联 Yaw 偏角和高度差
+  // double relative_angle = std::atan2(armor_y - center_y, armor_x - center_x) - target.ekf_x()(6);
+  // double z_offset = armor_z - center_z; // 保留装甲板的独立高度
+
+  // auto get_aim_for_locked = [&](Target& t) -> Eigen::Vector2d {
+  //     double c_x = t.ekf_x()(0);
+  //     double c_y = t.ekf_x()(2);
+  //     double c_z = t.ekf_x()(4);
+  //     double v_yaw = t.ekf_x()(6);
+  //     double r = t.ekf_x()(8); // 取出半径
+      
+  //     double pred_armor_x = c_x + r * std::cos(v_yaw + relative_angle);
+  //     double pred_armor_y = c_y + r * std::sin(v_yaw + relative_angle);
+  //     double pred_armor_z = c_z + z_offset; 
+      
+  //     auto azim = std::atan2(pred_armor_y, pred_armor_x);
+  //     double dist = std::hypot(pred_armor_x, pred_armor_y);
+  //     auto bullet_traj = tools::Trajectory(bullet_speed, dist, pred_armor_z);
+      
+  //     return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + pitch_offset_};
+  // };
+
+  // // 4. 生成轨迹
+  // target.predict(-DT * (HALF_HORIZON + 1));
+  // auto yaw_pitch_last = get_aim_for_locked(target);
+  
+  // target.predict(DT);
+  // auto yaw_pitch = get_aim_for_locked(target);
+
+  // for (int i = 0; i < HORIZON; i++) {
+  //   target.predict(DT);
+  //   auto yaw_pitch_next = get_aim_for_locked(target);
+
+  //   auto yaw_vel = tools::limit_rad(yaw_pitch_next(0) - yaw_pitch_last(0)) / (2 * DT);
+  //   auto pitch_vel = (yaw_pitch_next(1) - yaw_pitch_last(1)) / (2 * DT);
+
+  //   traj.col(i) << tools::limit_rad(yaw_pitch(0) - yaw0), yaw_vel, yaw_pitch(1), pitch_vel;
+
+  //   yaw_pitch_last = yaw_pitch;
+  //   yaw_pitch = yaw_pitch_next;
+  // }
+
+  // return traj;
 }
 
 }  // namespace auto_aim
