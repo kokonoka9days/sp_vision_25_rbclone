@@ -31,8 +31,8 @@ exposure_us: 12000
 gain: 0.5
 gamma: 0.5  
 vid_pid: "2ba2:4d55"
-flip: false
-mirror: false
+flip: true
+mirror: true
 timestamp_offset_us: 1000 #us
 
 #omn_l

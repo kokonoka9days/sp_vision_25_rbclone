@@ -28,7 +28,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/hero_long.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/sb.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -54,7 +54,7 @@ int main(int argc, char * argv[])
   auto_aim::Shooter shooter(config_path);
   auto_aim::Planner planner(config_path);
   // tools::Recorder recor(90);
-  bool stopkey = true;
+  bool stopkey = false;
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
   target_queue.push(std::nullopt);
@@ -78,6 +78,21 @@ int main(int argc, char * argv[])
 
       //MPC预测以及+自家火控
       auto plan = planner.plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
+
+      if (!plan.control) {
+          // 目标丢失或弹道无解时，强制用云台当前的真实角度覆盖默认的 0.0
+          plan.yaw = gs.yaw;       
+          plan.pitch = gs.pitch;   
+          plan.yaw_vel = 0.0;
+          plan.pitch_vel = 0.0;
+          plan.yaw_acc = 0.0;
+          plan.pitch_acc = 0.0;
+          
+          // 修复 debug 画图时的 target_yaw 突变问题
+          plan.target_yaw = gs.yaw * 57.3;
+          plan.target_pitch = gs.pitch * 57.3;
+      }
+      
       if (!stopkey)
       {
         plan.fire = 0;
@@ -290,7 +305,22 @@ int main(int argc, char * argv[])
   }
   quit = true;
   if (plan_thread.joinable()) plan_thread.join();
-  gimbal.send(false, false, 0, 0, 0, 0, 0, 0);
+  
+  // 获取当前下位机发来的云台状态数据
+  auto current_state = gimbal.state();
+  
+  // 发送当前数据（注意：由于 gimbal.cpp 中接收时乘了 57.3 转成了角度，发回下位机时需要除以 57.3 转回弧度）
+  // 因为下位机没有发来速度和加速度数据，所以 vel 和 acc 继续填 0 即可
+  gimbal.send(
+      false, 
+      false, 
+      current_state.yaw / 57.3f, 
+      0.0f, 
+      0.0f, 
+      current_state.pitch / 57.3f, 
+      0.0f, 
+      0.0f
+  );
 
   return 0;
 }
