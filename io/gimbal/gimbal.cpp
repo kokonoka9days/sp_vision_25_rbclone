@@ -273,10 +273,11 @@ void Gimbal::read_thread()
     state_.yaw = ypr_now[0] * 57.3;
     state_.pitch = ypr_now[1] * 57.3;
     state_.mode = rx_data_.mode;
+    // state_.mode = 1;
     state_.enemy_color = !rx_data_.color;
 
-    // state_.bullet_speed = rx_data_.bullet_speed;
-    state_.bullet_speed = 25;
+    state_.bullet_speed = rx_data_.bullet_speed;
+    // state_.bullet_speed = 25;
     state_.bullet_count = rx_data_.bullet_count;
 
     switch (rx_data_.mode) {

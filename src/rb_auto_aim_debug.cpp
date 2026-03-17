@@ -28,7 +28,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/sb_copy.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/hero_long.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -131,15 +131,6 @@ int main(int argc, char * argv[])
       data["fired"] = fired ? 1 : 0;
       
       const auto ekf_satic = target->ekf_x();
-      data["ekf_x"] = ekf_satic(0);
-      data["ekf_vx"] = ekf_satic(1);
-      data["ekf_y"] = ekf_satic(2);
-      data["ekf_vy"] = ekf_satic(3);
-      data["ekf_z"] = ekf_satic(4);
-      data["ekf_vz"] = ekf_satic(5);
-      data["ekf_yaw"] = ekf_satic(6);
-      data["ekf_vyaw"] = ekf_satic(7);
-      data["ekf_r"] = ekf_satic(8);
 
       if (target.has_value()) {
         data["ekf_x"] = ekf_satic(0);
@@ -171,7 +162,7 @@ int main(int argc, char * argv[])
 
   while (!exiter.exit()) {
     camera.read(img, t);
-    auto q = gimbal.q(t - 1ms);
+    auto q = gimbal.q(t - 3ms);
 
 
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;

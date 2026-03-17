@@ -151,7 +151,7 @@ bool Planner::rbShoot(Target target, double gimbal_yaw, bool tower_fixed_pitch){
 
   // pitch
   bool suggest_pitch = true;
-  if(tower_fixed_pitch && abs(target.ekf_x()(4) - target_armor_xyza(2)) > 0.003){
+  if(tower_fixed_pitch && abs(target.ekf_x()(4) - target_armor_xyza(2)) > 0.001){
     suggest_pitch = false;
   }
 
@@ -195,6 +195,7 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
     }
   }
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
+  
   target.predict(bullet_traj.fly_time);
 
   // 2. Get trajectory
@@ -271,6 +272,12 @@ Plan Planner::rbHeroplan(Target target, double bullet_speed, double gimbal_yaw){
     }
   }
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
+  // if(target.ekf_x()(7) < -0.69808){
+  //   bullet_traj.fly_time += 0.10;
+  // }
+  // if(target.ekf_x()(7) > 0.69808){
+  //   target.getEKFXest()
+  // }
   target.predict(bullet_traj.fly_time );
 
   // 2. Get trajectory
@@ -424,8 +431,8 @@ Eigen::Matrix<double, 2, 1> Planner::rbaim(const Target & target, double bullet_
   std::vector<Eigen::Vector4d> armor_xyza_list = target.armor_xyza_list();
 
   auto armor_num = armor_xyza_list.size();
-  // 如果装甲板未发生过跳变，则只有当前装甲板的位置已知
-  if (!target.jumped) return {true, armor_xyza_list[0]};
+  // // 如果装甲板未发生过跳变，则只有当前装甲板的位置已知
+  // if (!target.jumped) return {true, armor_xyza_list[0]};
 
   // 整车旋转中心的球坐标yaw
   auto center_yaw = std::atan2(ekf_x[2], ekf_x[0]);
@@ -582,7 +589,7 @@ Eigen::Matrix<double, 2, 1> Planner::heroaim(const Target & target, double bulle
     // aim_point_z = xyz1.z();
     aim_point_z = target.ekf_x()(4);
   }
-
+  
   //补偿距离和补偿高度
   double comp_dist = 0;
   double comp_h = 0;

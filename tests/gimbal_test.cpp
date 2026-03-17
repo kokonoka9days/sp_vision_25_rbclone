@@ -12,7 +12,7 @@
 const std::string keys =
   "{help h usage ? | | 输出命令行参数说明}"
   "{f              | | 是否开火}"
-  "{@config-path   | ../configs/sb.yaml | yaml配置文件路径 }";
+  "{@config-path   | ../configs/hero_long.yaml | yaml配置文件路径 }";
 
 using namespace std::chrono_literals;
 
@@ -56,11 +56,18 @@ int main(int argc, char * argv[])
     float yaw_deg = ypr[0] * 180.0 / M_PI;
     float pitch_deg = ypr[1] * 180.0 / M_PI;
     float roll_deg = ypr[2] * 180.0 / M_PI;
+    uint8_t enemy_color = state.enemy_color;
+    float bullet_speed = state.bullet_speed;
+
         
     std::cout << "Euler Angles (deg): ";
     std::cout << "Yaw: " << yaw_deg << "°, ";
     std::cout << "Pitch: " << pitch_deg << "°, ";
     std::cout << "Roll: " << roll_deg << "°" << std::endl;
+    std::cout << "enemy_color: " << (int)enemy_color  << std::endl;
+    std::cout << "mode: " <<(int) mode << std::endl;
+    std::cout << "bullet_speed: " <<(float) bullet_speed << std::endl;
+
     // std::cout<<q<<std::endl;
 // 
     auto fired = state.bullet_count > last_bullet_count;
@@ -86,7 +93,7 @@ int main(int argc, char * argv[])
     }
     fire_count++;
 
-    gimbal.send(true, test_fire && fire, yaw_deg, 2, 3, pitch_deg , 5, 6);
+    // gimbal.send(true, test_fire && fire, yaw_deg, 2, 3, pitch_deg , 5, 6);
 
     nlohmann::json data;
     data["q_yaw"] = ypr[0];

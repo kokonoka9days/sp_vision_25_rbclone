@@ -117,7 +117,7 @@ std::list<Target> Tracker::track(
     return {};
   }
   io::GimbalState g = gimbal_->state();
-  if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ? Color::red : Color::blue;
+  if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ?  Color::blue: Color::red;
 
   target_.cam_is_short = cam_is_short;
 
@@ -172,7 +172,7 @@ std::list<Target> Tracker::track(
         found = set_target(armors, t);
         state_ = "detecting";
         detect_count_ = 1;
-        tools::logger()->debug("不按右键，默认选中离图像中心最近的兵种，切换至： {}, 跟踪器重置", ARMOR_NAMES[armors.front().name]);
+        // tools::logger()->debug("不按右键，默认选中离图像中心最近的兵种，切换至： {}, 跟踪器重置, 置信度:{:.3f}", ARMOR_NAMES[armors.front().name],armors.front().confidence );
       }
 
      
