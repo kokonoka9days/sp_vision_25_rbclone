@@ -130,6 +130,7 @@ void Gimbal::send(
   float pitch_acc)
 {
   tx_data_.mode = control ? (fire ? 2 : 1) : 0;
+  tools::logger()->info(tx_data_.mode);
   tx_data_.yaw = yaw;
   tx_data_.yaw_vel = yaw_vel;
   tx_data_.yaw_acc = yaw_acc;
@@ -274,9 +275,10 @@ void Gimbal::read_thread()
     state_.pitch = ypr_now[1] * 57.3;
     state_.mode = rx_data_.mode;
     state_.enemy_color = !rx_data_.color;
-
-    // state_.bullet_speed = rx_data_.bullet_speed;
-    state_.bullet_speed = 25;
+    state_.mode = rx_data_.mode;
+    state_.bullet_speed = rx_data_.bullet_speed;
+    // tools::logger()->info(state_.bullet_speed);
+    // state_.bullet_speed = 25;
     state_.bullet_count = rx_data_.bullet_count;
 
     switch (rx_data_.mode) {

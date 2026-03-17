@@ -28,7 +28,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/sb_copy.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/xiaohei.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -54,7 +54,7 @@ int main(int argc, char * argv[])
   auto_aim::Shooter shooter(config_path);
   auto_aim::Planner planner(config_path);
   // tools::Recorder recor(90);
-  bool stopkey = true;
+  bool stopkey = false;
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
   target_queue.push(std::nullopt);
@@ -70,13 +70,13 @@ int main(int argc, char * argv[])
 
       //MPC预测以及+自家火控
       auto plan = planner.plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
-      if (stopkey == true)
+      if (stopkey == true && plan.target_yaw != 0)
       {
          gimbal.send(
         plan.control, 0, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
         plan.pitch_acc);
       }
-      else if (stopkey == false)
+      else if (stopkey == false && plan.target_yaw != 0)
       {
          gimbal.send(
         plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
@@ -108,6 +108,7 @@ int main(int argc, char * argv[])
       nlohmann::json data;
       data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);
 
+      data["mode"] = gs.mode;
       data["stopkey"] = stopkey;
       data["gimbal_yaw"] = gs.yaw;
       data["gimbal_yaw_vel"] = gs.yaw_vel;
@@ -151,13 +152,13 @@ int main(int argc, char * argv[])
 
   while (!exiter.exit()) {
     camera.read(img, t);
-    auto q = gimbal.q(t - 1ms);
+    auto q = gimbal.q(t - 1000us);
 
 
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
     // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
     last_t = t;
-    tools::logger()->info("fps:: {:.2f}", fps);
+    // tools::logger()->info("fps:: {:.2f}", fps);
 
     auto ypr = tools::eulers(q, 2, 1, 0);
 
