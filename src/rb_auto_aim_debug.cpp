@@ -28,7 +28,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/sb.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/sb_088.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -79,24 +79,24 @@ int main(int argc, char * argv[])
       //MPC预测以及+自家火控
       auto plan = planner.plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
 
-      if (!plan.control) {
-          // 目标丢失或弹道无解时，强制用云台当前的真实角度覆盖默认的 0.0
-          plan.yaw = gs.yaw;       
-          plan.pitch = gs.pitch;   
-          plan.yaw_vel = 0.0;
-          plan.pitch_vel = 0.0;
-          plan.yaw_acc = 0.0;
-          plan.pitch_acc = 0.0;
+      // if (!plan.control) {
+      //     // 目标丢失或弹道无解时，强制用云台当前的真实角度覆盖默认的 0.0
+      //     plan.yaw = gs.yaw;       
+      //     plan.pitch = gs.pitch;   
+      //     plan.yaw_vel = 0.0;
+      //     plan.pitch_vel = 0.0;
+      //     plan.yaw_acc = 0.0;
+      //     plan.pitch_acc = 0.0;
           
-          // 修复 debug 画图时的 target_yaw 突变问题
-          plan.target_yaw = gs.yaw * 57.3;
-          plan.target_pitch = gs.pitch * 57.3;
-      }
+      //     // 修复 debug 画图时的 target_yaw 突变问题
+      //     plan.target_yaw = gs.yaw * 57.3;
+      //     plan.target_pitch = gs.pitch * 57.3;
+      // }
       
-      if (!stopkey)
-      {
-        plan.fire = 0;
-      }
+      // if (!stopkey)
+      // {
+      //   plan.fire = 0;
+      // }
         gimbal.send(
       plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
       plan.pitch_acc);      

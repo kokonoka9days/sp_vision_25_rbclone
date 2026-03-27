@@ -4,8 +4,8 @@
 
 #include "io/camera.hpp"
 #include "io/gimbal/gimbal.hpp"  // 改为使用Gimbal串口通信
-#include "io/ros2/publish2nav.hpp"
-#include "io/ros2/ros2.hpp"
+// #include "io/ros2/publish2nav.hpp"
+// #include "io/ros2/ros2.hpp"
 #include "io/usbcamera/usbcamera.hpp"
 #include "tasks/auto_aim/aimer.hpp"
 #include "tasks/auto_aim/shooter.hpp"
@@ -122,8 +122,8 @@ int main(int argc, char * argv[])
   auto short_camera_config_path = cli.get<std::string>("short_camera");
   auto long_camera_config_path = cli.get<std::string>("long_camera");
 
-  // ROS2 通信
-  io::ROS2 ros2;
+  // // ROS2 通信
+  // io::ROS2 ros2;
   
   // 主相机（工业相机）
   io::Camera short_camera(short_camera_config_path);
@@ -489,9 +489,9 @@ int main(int argc, char * argv[])
 
 
     
-    // ROS2通信 - 发布目标信息
-    Eigen::Vector4d target_info = decider.get_target_info(armors, targets);
-    ros2.publish(target_info);
+    // // ROS2通信 - 发布目标信息
+    // Eigen::Vector4d target_info = decider.get_target_info(armors, targets);
+    // ros2.publish(target_info);
   }
   
   // 清理

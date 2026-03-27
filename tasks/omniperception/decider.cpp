@@ -22,6 +22,7 @@ Decider::Decider(const std::string & config_path) : detector_(config_path), coun
   new_fov_v_ = yaml["new_fov_v"].as<double>();
   enemy_color_ =
     (yaml["enemy_color"].as<std::string>() == "red") ? auto_aim::Color::red : auto_aim::Color::blue;
+  enemy_color_str_ = yaml["enemy_color"].as<std::string>();
   mode_ = yaml["mode"].as<double>();
 }
 
@@ -271,20 +272,20 @@ Eigen::Vector2d Decider::delta_angle_3d(
 
   //TUDO:计算大yaw旋转角度
   if (camera == "left") {
-    left_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0,-(105 * CV_PI / 180.0)), Eigen::Vector3d(-0.127611, -0.136932, 0.16) );
+    left_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0,-(105. * CV_PI / 180.0)), Eigen::Vector3d(-0.127611, -0.136932, 0.16) );
     auto xyz = armors.front().xyz_in_gimbal;
     tools::logger()->info("omn_xyz :x{}, y{} ,z{}", xyz(0), xyz(1), xyz(2));
-    auto ypd_angle = 120 - std::atan2(xyz(0), xyz(1))* 57.3;
+    auto ypd_angle = 120 - std::atan2(xyz(0), xyz(1))* 57.3 + 10;
     delta_angle[0] = ypd_angle;
     delta_angle[1] =std::atan2(xyz(2), std::sqrt(xyz(0) * xyz(0) + xyz(1) * xyz(1)))* 57.3; 
     return delta_angle;        
   }
 
   else if (camera == "right") {
-    right_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0, -(105.0 * CV_PI / 180.0)), Eigen::Vector3d(-0.127611, 0.136932, 0.16) );
+    right_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0, -(105. * CV_PI / 180.0)), Eigen::Vector3d(-0.127611, 0.136932, 0.16) );
     auto xyz = armors.front().xyz_in_gimbal;
     tools::logger()->info("omn_xyz :x{}, y{} ,z{}", xyz(0), xyz(1), xyz(2));
-    auto ypd_angle = -120 - std::atan2(xyz(0), xyz(1))* 57.3;
+    auto ypd_angle = -120 - std::atan2(xyz(0), xyz(1))* 57.3 - 20;
     delta_angle[0] = ypd_angle;
     delta_angle[1] =std::atan2(xyz(2), std::sqrt(xyz(0) * xyz(0) + xyz(1) * xyz(1)))* 57.3; 
     return delta_angle; 
@@ -302,8 +303,19 @@ Eigen::Vector2d Decider::delta_angle_3d(
 bool Decider::armor_filter(std::list<auto_aim::Armor> & armors)
 {
   if (armors.empty()) return true;
+
+
+  if(gimbal_ == nullptr) {
+    tools::logger()->error("[omniperception::Decider] gimbal_不能为空指针，请先调用set_gimbal()设置云台指针");
+    return {};
+  }
+  io::GimbalState g = gimbal_->state();
+  if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ?   auto_aim::Color::red : auto_aim::Color::blue;
+
   // 过滤非敌方装甲板
   armors.remove_if([&](const auto_aim::Armor & a) { return a.color != enemy_color_; });
+
+
 
   // 25赛季没有5号装甲板
   armors.remove_if([&](const auto_aim::Armor & a) { return a.name == auto_aim::ArmorName::five; });

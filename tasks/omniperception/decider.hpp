@@ -6,6 +6,7 @@
 #include <list>
 #include <unordered_map>
 
+// #include "armor.hpp"
 #include "detection.hpp"
 #include "io/camera.hpp"
 #include "io/command.hpp"
@@ -57,6 +58,10 @@ public:
   void get_auto_aim_target(
     std::list<auto_aim::Armor> & armors, const std::vector<int8_t> & auto_aim_target);
 
+  io::Gimbal* gimbal_ = nullptr; // 新增一个云台指针，默认为空
+
+  void set_gimbal(io::Gimbal* gimbal) { gimbal_ = gimbal; }
+
 private:
   int img_width_;
   int img_height_;
@@ -68,6 +73,7 @@ private:
   io::VisionToGimbal last_vision_cmd; 
 
   auto_aim::Color enemy_color_;
+  std::string enemy_color_str_;
   auto_aim::YOLO detector_;
   std::vector<auto_aim::ArmorName> invincible_armor_;  //无敌状态机器人编号,英雄为1，哨兵为6
 

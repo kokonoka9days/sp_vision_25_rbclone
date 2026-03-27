@@ -203,9 +203,9 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   Trajectory traj;
   Eigen::Vector2d yaw_pitch;
   try {
-    yaw_pitch = aim(target, bullet_speed);
+    yaw_pitch = rbaim(target, bullet_speed);
     yaw0 = yaw_pitch(0);
-    traj = get_trajectory(target, yaw0, bullet_speed);
+    traj = rbget_trajectory(target, yaw0, bullet_speed);
   } catch (const std::exception & e) {
     tools::logger()->warn("Unsolvable target {:.2f}", bullet_speed);
     return {false};

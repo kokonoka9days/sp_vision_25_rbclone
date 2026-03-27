@@ -26,7 +26,7 @@ struct __attribute__((packed)) GimbalToVision
 {
   uint8_t head[2] = {0x5a,0x53};
   uint8_t mode;  // 0: 空闲, 1: 自瞄, 2: 小符, 3: 大符  电控控制右键0，1
-  uint16_t color; // 0: 蓝色, 1: 红色
+  uint16_t color; // 0: 红色, 1: 蓝色
   float q[4];    // wxyz顺序
   float bullet_speed;
   uint16_t bullet_count;  // 子弹累计发送次数

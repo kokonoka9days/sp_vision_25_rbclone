@@ -117,7 +117,7 @@ std::list<Target> Tracker::track(
     return {};
   }
   io::GimbalState g = gimbal_->state();
-  if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ?  Color::blue: Color::red;
+  if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ?   Color::red :Color::blue;
 
   target_.cam_is_short = cam_is_short;
 

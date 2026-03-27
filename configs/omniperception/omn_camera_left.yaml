@@ -1,5 +1,7 @@
-enemy_color: "red"
+# enemy_color: "red"
 # enemy_color: "blue"
+enemy_color: "auto"
+
 
 #####-----神经网络参数-----#####
 yolo_name: yolov8
@@ -77,9 +79,9 @@ auto_fire: true # 是否由自瞄控制射击
 
 camera_name: "daheng"
 camera_sn: "KE0210010003"
-exposure_us: 12000
-gain: 0.8
-gamma: 0.3
+exposure_us: 9000
+gain: 1
+gamma: 0.5
 vid_pid: "2ba2:4d55"
 flip: false
 mirror: false
