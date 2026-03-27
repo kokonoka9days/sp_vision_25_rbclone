@@ -10,7 +10,7 @@
 #include "tools/plotter.hpp"
 
 const std::string keys =
-  "{help h usage ? | | 输出命令行参数说明}"
+  "{help h usage ? | | 输出命令行参数说明}"                
   "{f              | | 是否开火}"
   "{@config-path   | ../configs/sb_088.yaml | yaml配置文件路径 }";
 
@@ -48,11 +48,15 @@ int main(int argc, char * argv[])
       last_mode = mode;
     }
 
+
+    std::cout << "mode "<<(int)mode<<std::endl;
+    
     auto t = std::chrono::steady_clock::now();
     auto state = gimbal.state();
     auto q = gimbal.q(t);
+    std::cout << "red or bule "<<(int)state.enemy_color<<std::endl;
     auto ypr = tools::eulers(q, 2, 1, 0);
-
+    std::cout << "bullet_speed "<<state.bullet_speed<<std::endl;
     float yaw_deg = ypr[0] * 180.0 / M_PI;
     float pitch_deg = ypr[1] * 180.0 / M_PI;
     float roll_deg = ypr[2] * 180.0 / M_PI;

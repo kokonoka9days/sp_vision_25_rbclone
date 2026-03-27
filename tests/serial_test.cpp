@@ -35,7 +35,7 @@ int main() {
                 bool found_frame = false;
                 for (size_t i = 0; i < buffer.size(); ++i) {
                     // 查找0x53帧头
-                    if (1) {
+                    if (buffer[i] == 0x5a && (buffer.size() - i) >= FRAME_SIZE && buffer[i+1] == 0x53) {
                         found_frame = true;
                         std::cout << "\n[Frame " << ++frame_count << "] ";
                         

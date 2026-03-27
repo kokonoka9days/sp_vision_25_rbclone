@@ -28,7 +28,11 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
+<<<<<<< HEAD
   "{@config-path   | ../configs/sb_088.yaml | 位置参数，yaml配置文件路径 }";
+=======
+  "{@config-path   | ../configs/xiaohei.yaml | 位置参数，yaml配置文件路径 }";
+>>>>>>> bdef4d47f557dc426a3aba88d8cd11e61ddb9b14
 
 int main(int argc, char * argv[])
 {
@@ -125,6 +129,7 @@ int main(int argc, char * argv[])
       nlohmann::json data;
       data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);
 
+      data["mode"] = gs.mode;
       data["stopkey"] = stopkey;
       data["gimbal_yaw"] = gs.yaw;
       // data["gimbal_yaw_vel"] = gs.yaw_vel;
@@ -177,13 +182,13 @@ int main(int argc, char * argv[])
 
   while (!exiter.exit()) {
     camera.read(img, t);
-    auto q = gimbal.q(t - 3ms);
+    auto q = gimbal.q(t - 1000us);
 
 
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
     // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
     last_t = t;
-    tools::logger()->info("fps:: {:.2f}", fps);
+    // tools::logger()->info("fps:: {:.2f}", fps);
 
     auto ypr = tools::eulers(q, 2, 1, 0);
 
