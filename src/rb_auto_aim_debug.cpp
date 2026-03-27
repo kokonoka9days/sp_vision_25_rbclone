@@ -28,11 +28,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-<<<<<<< HEAD
   "{@config-path   | ../configs/sb_088.yaml | 位置参数，yaml配置文件路径 }";
-=======
-  "{@config-path   | ../configs/xiaohei.yaml | 位置参数，yaml配置文件路径 }";
->>>>>>> bdef4d47f557dc426a3aba88d8cd11e61ddb9b14
 
 int main(int argc, char * argv[])
 {
@@ -48,7 +44,6 @@ int main(int argc, char * argv[])
 
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
-  // io::Camera camera1("../configs/sb_copy.yaml");
 
   auto_aim::YOLO yolo(config_path, true);
   auto_aim::Solver solver(config_path);
@@ -129,16 +124,15 @@ int main(int argc, char * argv[])
       nlohmann::json data;
       data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);
 
-      data["mode"] = gs.mode;
-      data["stopkey"] = stopkey;
       data["gimbal_yaw"] = gs.yaw;
-      // data["gimbal_yaw_vel"] = gs.yaw_vel;
+      data["gimbal_yaw_vel"] = gs.yaw_vel;
       data["gimbal_pitch"] = gs.pitch;
-      // data["gimbal_pitch_vel"] = gs.pitch_vel;
+      data["gimbal_pitch_vel"] = gs.pitch_vel;
 
       data["target_yaw"] = plan.target_yaw;
       data["target_pitch"] = plan.target_pitch;
 
+      data["plan_mode"] = plan.control ? (plan.fire ? 2 : 1) : 0;
       data["plan_yaw"] = plan.yaw * 57.3;
       data["plan_yaw_vel"] = plan.yaw_vel;
       data["plan_yaw_acc"] = plan.yaw_acc;
@@ -149,10 +143,16 @@ int main(int argc, char * argv[])
 
       data["fire"] = plan.fire ? 1 : 0;
       data["fired"] = fired ? 1 : 0;
-      
-      const auto ekf_satic = target->ekf_x();
 
       if (target.has_value()) {
+        data["target_z"] = target->ekf_x()[4];   //z
+        data["target_vz"] = target->ekf_x()[5];  //vz
+        data["tower_h1"] = target->tower_armor_hs[0];
+        data["tower_h2"] = target->tower_armor_hs[1];
+        data["tower_h3"] = target->tower_armor_hs[2];
+        data["tower_armor_h"] = target->tower_armor_h;
+
+        const auto ekf_satic = target->ekf_x();
         data["ekf_x"] = ekf_satic(0);
         data["ekf_vx"] = ekf_satic(1);
         data["ekf_y"] = ekf_satic(2);
@@ -161,14 +161,8 @@ int main(int argc, char * argv[])
         data["ekf_vz"] = ekf_satic(5);
         data["ekf_yaw"] = ekf_satic(6) * 57.3;
         data["ekf_vyaw"] = ekf_satic(7);
-        data["ekf_r"] = ekf_satic(8);
-      }else{
-        data["ekf_x"] = data["ekf_vx"]
-           = data["ekf_y"] = data["ekf_y"] = data["ekf_vy"] = 
-           data["ekf_z"] = data["ekf_vz"] = data["ekf_yaw"] = 
-           data["ekf_vyaw"] = data["ekf_r"] = 0;
+        data["ekf_r"] = ekf_satic(8);        
       }
-
 
       plotter.plot(data);
 

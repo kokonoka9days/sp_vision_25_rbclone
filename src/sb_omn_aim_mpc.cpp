@@ -4,14 +4,7 @@
 
 #include "io/camera.hpp"
 #include "io/gimbal/gimbal.hpp"  // 改为使用Gimbal串口通信
-// #include "io/ros2/publish2nav.hpp"
-// #include "io/ros2/ros2.hpp"
-#include "io/usbcamera/usbcamera.hpp"
-#include "tasks/auto_aim/aimer.hpp"
-#include "tasks/auto_aim/shooter.hpp"
-#include "tasks/auto_aim/solver.hpp"
-#include "tasks/auto_aim/tracker.hpp"
-#include "tasks/auto_aim/planner/planner.hpp"  // MPC 规划器
+// #include "io/usbcamera/usbcamera.hpp"
 #include "tasks/auto_aim/yolo.hpp"
 #include "tasks/omniperception/decider.hpp"
 #include "tools/exiter.hpp"
@@ -22,6 +15,9 @@
 #include "tools/yaml.hpp"
 #include "tools/img_tools.hpp"
 
+#include "method_set/binocular_aim.hpp" // 双目自瞄
+
+
 const std::string keys =
   "{help h usage ? |                                             | 输出命令行参数说明}"
   "{short_camera   | ../configs/sb_088.yaml                          | 短焦相机配置文件路径 }"
@@ -31,81 +27,6 @@ const std::string keys =
 
 using namespace std::chrono_literals;
 
-
-template<typename T> 
-class BinocularType{
-public:
-  using Ptr = T*;
-  using Address = T&;
-
-  Address short_aim, long_aim;
-  Ptr aim_ptr = nullptr;
-  BinocularType(T& short_aim_, T&long_aim_): short_aim(short_aim_), long_aim(long_aim_), aim_ptr(&short_aim_){}
-
-  void Switch(){
-    aim_ptr = aim_ptr == &short_aim ? & long_aim: &short_aim;
-  }
-};
-struct BinocularAim{
-  BinocularAim(
-        io::Camera& cam_short, io::Camera& cam_long,
-        auto_aim::Solver& solver_short, auto_aim::Solver& solver_long,
-        auto_aim::Planner& planner_short, auto_aim::Planner& planner_long
-    ) : cameras(cam_short, cam_long),
-        solvers(solver_short, solver_long),
-        planners(planner_short, planner_long) 
-    {}
-  BinocularType<io::Camera> cameras;
-  BinocularType<auto_aim::Solver> solvers;
-  BinocularType<auto_aim::Planner> planners;
-  bool is_short = true;
-
-  std::chrono::steady_clock::time_point switch_time_point;
-
-  //长短焦各射程范围 min_near到max_far
-  double short_min_near = 0, short_max_far = 3.3;
-  double long_min_near = 1.5, long_max_far = 5.5;
-
-  // 缓冲区 far2near and near2far
-  double short2long_point =  3.4;//(short_max_far + long_min_near)/2.;
-  double long2short_point = 2.5;
-
-  /// @brief 长短焦强制切换
-  void Switch(auto_aim::Tracker& tracker){
-    this->cameras.Switch();
-    this->solvers.Switch();
-    this->planners.Switch();
-    is_short = !is_short;
-    switch_time_point = std::chrono::steady_clock::now();
-    tracker.setSolver(this->solvers.aim_ptr);
-  }
-
-  /// @brief 长短焦自动切换逻辑
-  void ChangeTheScope(auto_aim::Target target , auto_aim::Tracker& tracker){
-
-    auto now = std::chrono::steady_clock::now();
-    auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(now - switch_time_point).count();
-    
-    if (elapsed_time < 1000) {
-        return; // 在冷却时间内，直接退出，不执行切换判断
-    }
-    const auto x_est = target.getEKFXest();
-    const double x = x_est(0), y = x_est(2), z = x_est(4);
-    double dis = sqrt( x*x + y*y + z*z);
-
-    // if(is_short ) dis -= 1.16;
-
-    // tools::logger()->info("dis = {}", dis);
-    
-    if(is_short && dis > short2long_point ){
-      tools::logger()->info("切换至长焦镜头, dis = {}", dis);
-      Switch(tracker);
-    }else if(!is_short && dis < long2short_point){
-      tools::logger()->info("切换至短焦镜头 dis = {}", dis);
-      Switch(tracker);
-    }
-  }
-};
 
 
 int main(int argc, char * argv[])
@@ -122,9 +43,7 @@ int main(int argc, char * argv[])
   auto short_camera_config_path = cli.get<std::string>("short_camera");
   auto long_camera_config_path = cli.get<std::string>("long_camera");
 
-  // // ROS2 通信
-  // io::ROS2 ros2;
-  
+
   // 主相机（工业相机）
   io::Camera short_camera(short_camera_config_path);
   // io::Camera long_camera(long_camera_config_path);
@@ -211,19 +130,21 @@ int main(int argc, char * argv[])
         nlohmann::json data;
         data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);
 
+
         data["gimbal_yaw"] = gs.yaw;
+        data["gimbal_yaw_vel"] = gs.yaw_vel;
         data["gimbal_pitch"] = gs.pitch;
         data["gimbal_pitch_vel"] = gs.pitch_vel;
 
         data["target_yaw"] = plan.target_yaw;
         data["target_pitch"] = plan.target_pitch;
-        data["color"] = gs.enemy_color;
 
-        data["plan_yaw"] = plan.yaw*57.3;
+        data["plan_mode"] = plan.control ? (plan.fire ? 2 : 1) : 0;
+        data["plan_yaw"] = plan.yaw * 57.3;
         data["plan_yaw_vel"] = plan.yaw_vel;
         data["plan_yaw_acc"] = plan.yaw_acc;
 
-        data["plan_pitch"] = plan.pitch;
+        data["plan_pitch"] = plan.pitch * 57.3;
         data["plan_pitch_vel"] = plan.pitch_vel;
         data["plan_pitch_acc"] = plan.pitch_acc;
 
@@ -233,13 +154,23 @@ int main(int argc, char * argv[])
         if (target.has_value()) {
           data["target_z"] = target->ekf_x()[4];   //z
           data["target_vz"] = target->ekf_x()[5];  //vz
+          data["tower_h1"] = target->tower_armor_hs[0];
+          data["tower_h2"] = target->tower_armor_hs[1];
+          data["tower_h3"] = target->tower_armor_hs[2];
+          data["tower_armor_h"] = target->tower_armor_h;
+
+          const auto ekf_satic = target->ekf_x();
+          data["ekf_x"] = ekf_satic(0);
+          data["ekf_vx"] = ekf_satic(1);
+          data["ekf_y"] = ekf_satic(2);
+          data["ekf_vy"] = ekf_satic(3);
+          data["ekf_z"] = ekf_satic(4);
+          data["ekf_vz"] = ekf_satic(5);
+          data["ekf_yaw"] = ekf_satic(6) * 57.3;
+          data["ekf_vyaw"] = ekf_satic(7);
+          data["ekf_r"] = ekf_satic(8);        
         }
 
-        if (target.has_value()) {
-          data["w"] = target->ekf_x()[7];
-        } else {
-          data["w"] = 0.0;
-        }
 
 
         plotter.plot(data);

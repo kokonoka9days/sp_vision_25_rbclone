@@ -133,10 +133,8 @@ int main(int argc, char * argv[])
         data["tower_h2"] = target->tower_armor_hs[1];
         data["tower_h3"] = target->tower_armor_hs[2];
         data["tower_armor_h"] = target->tower_armor_h;
-      }
-      
-      const auto ekf_satic = target->ekf_x();
-      if (target.has_value()) {
+
+        const auto ekf_satic = target->ekf_x();
         data["ekf_x"] = ekf_satic(0);
         data["ekf_vx"] = ekf_satic(1);
         data["ekf_y"] = ekf_satic(2);
@@ -145,12 +143,7 @@ int main(int argc, char * argv[])
         data["ekf_vz"] = ekf_satic(5);
         data["ekf_yaw"] = ekf_satic(6) * 57.3;
         data["ekf_vyaw"] = ekf_satic(7);
-        data["ekf_r"] = ekf_satic(8);
-      }else{
-        data["ekf_x"] = data["ekf_vx"]
-           = data["ekf_y"] = data["ekf_y"] = data["ekf_vy"] = 
-           data["ekf_z"] = data["ekf_vz"] = data["ekf_yaw"] = 
-           data["ekf_vyaw"] = data["ekf_r"] = 0;
+        data["ekf_r"] = ekf_satic(8);        
       }
 
       plotter.plot(data);
