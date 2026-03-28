@@ -13,14 +13,6 @@ constexpr double TOWER_ARMOR_XTB = 0.05;  //前哨装甲小跳变m
 namespace auto_aim
 {
 
-Eigen::VectorXd Target::mix_states(const Eigen::VectorXd& xa, const Eigen::VectorXd& xb, double wa, double wb) const {
-  Eigen::VectorXd mixed = wa * xa + wb * xb;
-  // 第7个状态是Yaw角(索引6)，直接按权重相加在跨越 π/-π 时会出错，需要通过差值计算
-  double diff = tools::limit_rad(xa[6] - xb[6]);
-  mixed[6] = tools::limit_rad(xb[6] + wa * diff);
-  return mixed;
-}
-
 Target::Target(
   const Armor & armor, std::chrono::steady_clock::time_point t, double radius, int armor_num,
   Eigen::VectorXd P0_dig)
@@ -33,7 +25,8 @@ Target::Target(
   t_(t),
   is_switch_(false),
   is_converged_(false),
-  switch_count_(0)
+  switch_count_(0),
+  is_ca_(true) // 初始化为使用 CA 模型
 {
   auto r = radius;
   priority = armor.priority;
@@ -51,8 +44,12 @@ Target::Target(
 
   cam_is_switch_time_point = std::chrono::steady_clock::time_point{};
 
-  Eigen::VectorXd x0{{center_x, 0, center_y, 0, center_z, 0, ypr[0], 0, r, 0, 0}};
-  Eigen::MatrixXd P0 = P0_dig.asDiagonal();
+  // 扩维至15维：引入 ax, ay, az, a_yaw
+  Eigen::VectorXd x0 = Eigen::VectorXd::Zero(15);
+  x0.head(11) << center_x, 0, center_y, 0, center_z, 0, ypr[0], 0, r, 0, 0;
+  
+  Eigen::MatrixXd P0 = Eigen::MatrixXd::Identity(15, 15) * 10.0;
+  P0.block(0, 0, 11, 11) = P0_dig.asDiagonal();
 
   auto x_add = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
     Eigen::VectorXd c = a + b;
@@ -60,22 +57,20 @@ Target::Target(
     return c;
   };
 
-  // 初始化 IMM 的两个 EKF
-  ekf_1_ = tools::ExtendedKalmanFilter(x0, P0, x_add);
-  ekf_2_ = tools::ExtendedKalmanFilter(x0, P0, x_add);
-  combined_x_ = x0;
-
-  // 初始化模型概率和状态转移矩阵
-  mu_ << 0.5, 0.5;
-  P_trans_ << 0.95, 0.05, 
-              0.05, 0.95;
+  ekf_ = tools::ExtendedKalmanFilter(x0, P0, x_add);
 }
 
-Target::Target(double x, double vyaw, double radius, double h) : armor_num_(4)
+Target::Target(double x, double vyaw, double radius, double h) 
+: armor_num_(4),
+  is_ca_(true) // 初始化为使用 CA 模型
 {
-  Eigen::VectorXd x0{{x, 0, 0, 0, 0, 0, 0, vyaw, radius, 0, h}};
+  // 扩维至15维
+  Eigen::VectorXd x0 = Eigen::VectorXd::Zero(15);
+  x0.head(11) << x, 0, 0, 0, 0, 0, 0, vyaw, radius, 0, h;
+
   Eigen::VectorXd P0_dig{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-  Eigen::MatrixXd P0 = P0_dig.asDiagonal();
+  Eigen::MatrixXd P0 = Eigen::MatrixXd::Identity(15, 15) * 10.0;
+  P0.block(0, 0, 11, 11) = P0_dig.asDiagonal();
 
   auto x_add = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
     Eigen::VectorXd c = a + b;
@@ -83,13 +78,7 @@ Target::Target(double x, double vyaw, double radius, double h) : armor_num_(4)
     return c;
   };
 
-  ekf_1_ = tools::ExtendedKalmanFilter(x0, P0, x_add);
-  ekf_2_ = tools::ExtendedKalmanFilter(x0, P0, x_add);
-  combined_x_ = x0;
-
-  mu_ << 0.5, 0.5;
-  P_trans_ << 0.95, 0.05, 
-              0.05, 0.95;
+  ekf_ = tools::ExtendedKalmanFilter(x0, P0, x_add);
 }
 
 void Target::predict(std::chrono::steady_clock::time_point t)
@@ -101,87 +90,62 @@ void Target::predict(std::chrono::steady_clock::time_point t)
 
 void Target::predict(double dt)
 {
-  Eigen::MatrixXd F{
-    {1, dt,  0,  0,  0,  0,  0,  0,  0,  0,  0},
-    {0,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0},
-    {0,  0,  1, dt,  0,  0,  0,  0,  0,  0,  0},
-    {0,  0,  0,  1,  0,  0,  0,  0,  0,  0,  0},
-    {0,  0,  0,  0,  1, dt,  0,  0,  0,  0,  0},
-    {0,  0,  0,  0,  0,  1,  0,  0,  0,  0,  0},
-    {0,  0,  0,  0,  0,  0,  1, dt,  0,  0,  0},
-    {0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0},
-    {0,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0},
-    {0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0},
-    {0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1}
-  };
-
-  // --- IMM 步骤 1: 交互 (Interaction / Mixing) ---
-  Eigen::Vector2d c;
-  c[0] = P_trans_(0, 0) * mu_[0] + P_trans_(1, 0) * mu_[1];
-  c[1] = P_trans_(0, 1) * mu_[0] + P_trans_(1, 1) * mu_[1];
-
-  Eigen::Matrix2d mu_ij;
-  mu_ij(0, 0) = P_trans_(0, 0) * mu_[0] / c[0];
-  mu_ij(1, 0) = P_trans_(1, 0) * mu_[1] / c[0];
-  mu_ij(0, 1) = P_trans_(0, 1) * mu_[0] / c[1];
-  mu_ij(1, 1) = P_trans_(1, 1) * mu_[1] / c[1];
-
-  Eigen::VectorXd x1 = ekf_1_.x;
-  Eigen::VectorXd x2 = ekf_2_.x;
-  Eigen::MatrixXd P1 = ekf_1_.P;
-  Eigen::MatrixXd P2 = ekf_2_.P;
-
-  Eigen::VectorXd x01 = mix_states(x1, x2, mu_ij(0, 0), mu_ij(1, 0));
-  Eigen::VectorXd x02 = mix_states(x1, x2, mu_ij(0, 1), mu_ij(1, 1));
-
-  auto normalize_diff = [](const Eigen::VectorXd& xa, const Eigen::VectorXd& xb) {
-    Eigen::VectorXd dx = xa - xb;
-    dx[6] = tools::limit_rad(dx[6]);
-    return dx;
-  };
-
-  Eigen::VectorXd dx11 = normalize_diff(x1, x01);
-  Eigen::VectorXd dx21 = normalize_diff(x2, x01);
-  Eigen::VectorXd dx12 = normalize_diff(x1, x02);
-  Eigen::VectorXd dx22 = normalize_diff(x2, x02);
-
-  Eigen::MatrixXd P01 = mu_ij(0, 0) * (P1 + dx11 * dx11.transpose()) +
-                        mu_ij(1, 0) * (P2 + dx21 * dx21.transpose());
-  Eigen::MatrixXd P02 = mu_ij(0, 1) * (P1 + dx12 * dx12.transpose()) +
-                        mu_ij(1, 1) * (P2 + dx22 * dx22.transpose());
-
-  ekf_1_.x = x01; ekf_1_.P = P01;
-  ekf_2_.x = x02; ekf_2_.P = P02;
-
-  mu_ = c; // 预测阶段的模型概率更新
-
-  // --- IMM 步骤 2: 生成不同模型的 Q 矩阵并预测 ---
-  double v1_1, v2_1; // 模型 1: 平滑 (低噪声)
-  double v1_2, v2_2; // 模型 2: 机动 (高噪声)
+  // ================= CA/CV 滞回比较逻辑 =================
+  double vyaw = std::abs(ekf_.x[7]);
   
-  if (name == ArmorName::outpost) {
-    v1_1 = 5;     v2_1 = 0.05;
-    v1_2 = 50;    v2_2 = 2.0; 
+  if (is_ca_) {
+    // 当前是 CA 模型，如果角速度 >= 3.0 rad/s，切到 CV 模型
+    if (vyaw >= 1.5) {
+      is_ca_ = false;
+    }
   } else {
-    v1_1 = 50;    v2_1 = 50; 
-    v1_2 = 1000;  v2_2 = 2000; // 应对急停急走和小陀螺的高倍率噪声
+    // 当前是 CV 模型，如果角速度 <= 1.2 rad/s，切回 CA 模型
+    if (vyaw <= 0.5) {
+      is_ca_ = true;
+    }
+  }
+  
+  // 打印当前所用模型
+  tools::logger()->debug("[Target] Current Model: {}", is_ca_ ? "CA (Constant Acceleration)" : "CV (Constant Velocity)");
+
+  Eigen::MatrixXd F = Eigen::MatrixXd::Identity(15, 15);
+  F(0, 1) = dt; F(2, 3) = dt; F(4, 5) = dt; F(6, 7) = dt;
+
+  if (is_ca_) {
+    F(0, 11) = 0.5 * dt * dt; F(1, 11) = dt; 
+    F(2, 12) = 0.5 * dt * dt; F(3, 12) = dt; 
+    F(4, 13) = 0.5 * dt * dt; F(5, 13) = dt; 
+    F(6, 14) = 0.5 * dt * dt; F(7, 14) = dt; 
+  } else {
+    // CV 模型强行将加速度衰减避免扰动
+    F(11, 11) = 0.0; 
+    F(12, 12) = 0.0; 
+    F(13, 13) = 0.0; 
+    F(14, 14) = 0.0; 
+  }
+
+  double v1, v2;
+  if (name == ArmorName::outpost) {
+    v1 = 5;     v2 = 0.05;
+  } else {
+    v1 = 5;    v2 = 5; 
   }
 
   auto a_ = dt * dt * dt * dt / 4;
   auto b_ = dt * dt * dt / 2;
   auto c_ = dt * dt;
 
-  auto build_Q = [&](double v1, double v2) -> Eigen::MatrixXd {
-    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(11, 11);
-    Q(0,0) = a_ * v1; Q(0,1) = b_ * v1; Q(1,0) = b_ * v1; Q(1,1) = c_ * v1; // X
-    Q(2,2) = a_ * v1; Q(2,3) = b_ * v1; Q(3,2) = b_ * v1; Q(3,3) = c_ * v1; // Y
-    Q(4,4) = a_ * v1; Q(4,5) = b_ * v1; Q(5,4) = b_ * v1; Q(5,5) = c_ * v1; // Z
-    Q(6,6) = a_ * v2; Q(6,7) = b_ * v2; Q(7,6) = b_ * v2; Q(7,7) = c_ * v2; // Yaw
-    return Q;
-  };
-
-  Eigen::MatrixXd Q1 = build_Q(v1_1, v2_1);
-  Eigen::MatrixXd Q2 = build_Q(v1_2, v2_2);
+  Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(15, 15);
+  Q(0,0) = a_ * v1; Q(0,1) = b_ * v1; Q(1,0) = b_ * v1; Q(1,1) = c_ * v1; // X
+  Q(2,2) = a_ * v1; Q(2,3) = b_ * v1; Q(3,2) = b_ * v1; Q(3,3) = c_ * v1; // Y
+  Q(4,4) = a_ * v1; Q(4,5) = b_ * v1; Q(5,4) = b_ * v1; Q(5,5) = c_ * v1; // Z
+  Q(6,6) = a_ * v2; Q(6,7) = b_ * v2; Q(7,6) = b_ * v2; Q(7,7) = c_ * v2; // Yaw
+  
+  // 加速度过程噪声
+  Q(11,11) = c_ * v1;
+  Q(12,12) = c_ * v1;
+  Q(13,13) = c_ * v1;
+  Q(14,14) = c_ * v2;
 
   auto f = [&](const Eigen::VectorXd & x) -> Eigen::VectorXd {
     Eigen::VectorXd x_prior = F * x;
@@ -189,17 +153,11 @@ void Target::predict(double dt)
     return x_prior;
   };
 
-  // 前哨站特判 (对两个滤波器都应用)
   if (this->convergened() && this->name == ArmorName::outpost) {
-    if (std::abs(this->ekf_1_.x[7]) > 2) this->ekf_1_.x[7] = this->ekf_1_.x[7] > 0 ? 2.51 : -2.51;
-    if (std::abs(this->ekf_2_.x[7]) > 2) this->ekf_2_.x[7] = this->ekf_2_.x[7] > 0 ? 2.51 : -2.51;
+    if (std::abs(this->ekf_.x[7]) > 2) this->ekf_.x[7] = this->ekf_.x[7] > 0 ? 2.51 : -2.51;
   }
 
-  ekf_1_.predict(F, Q1, f);
-  ekf_2_.predict(F, Q2, f);
-
-  // 预测阶段结束后初步更新 combined_x_，以便其它函数在此间隙调用时不会出错
-  combined_x_ = mix_states(ekf_1_.x, ekf_2_.x, mu_[0], mu_[1]);
+  ekf_.predict(F, Q, f);
 }
 
 void Target::update(const Armor & armor)
@@ -268,14 +226,13 @@ void Target::update_ypda(const Armor & armor, int id)
   auto center_yaw = std::atan2(armor.xyz_in_world[1], armor.xyz_in_world[0]);
   auto delta_angle = tools::limit_rad(armor.ypr_in_world[0] - center_yaw);
 
-  auto r2_azimuth = 4e-3;
+  auto r2_azimuth = 1e-2;
   auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2;
   auto r2_d = log(std::abs(delta_angle) + 1) + 1;
   
   if(last_cam_is_short != cam_is_short){
     cam_is_switch_time_point = std::chrono::steady_clock::now();
     last_cam_is_short = cam_is_short;
-    tools::logger()->info("[Target] last_cam_is_short != cam_is_short {}", (bool)(last_cam_is_short != cam_is_short));
   }
   auto now = std::chrono::steady_clock::now();
   double cam_is_switch_lter_dt = tools::delta_time(now, cam_is_switch_time_point);
@@ -307,55 +264,22 @@ void Target::update_ypda(const Armor & armor, int id)
   const Eigen::VectorXd & ypr = armor.ypr_in_world;
   Eigen::VectorXd z{{ypd[0], ypd[1], ypd[2], ypr[0]}};
 
-  // --- IMM 步骤 3: 观测与似然更新 ---
-  Eigen::MatrixXd H1 = h_jacobian(ekf_1_.x, id);
-  Eigen::MatrixXd H2 = h_jacobian(ekf_2_.x, id);
+  Eigen::MatrixXd H = h_jacobian(ekf_.x, id);
 
-  Eigen::Vector4d z_pred1 = h(ekf_1_.x);
-  Eigen::Vector4d z_pred2 = h(ekf_2_.x);
-
-  Eigen::VectorXd y1 = z_subtract(z, z_pred1);
-  Eigen::VectorXd y2 = z_subtract(z, z_pred2);
-
-  // 计算新息协方差 S
-  Eigen::MatrixXd S1 = H1 * ekf_1_.P * H1.transpose() + R;
-  Eigen::MatrixXd S2 = H2 * ekf_2_.P * H2.transpose() + R;
-
-  // 计算多维高斯似然 (Likelihood) - 忽略常数项
-  double L1 = std::exp(-0.5 * y1.transpose() * S1.inverse() * y1) / std::sqrt(S1.determinant());
-  double L2 = std::exp(-0.5 * y2.transpose() * S2.inverse() * y2) / std::sqrt(S2.determinant());
-
-  // 防止出现极小值导致除零
-  L1 = std::max(L1, 1e-15);
-  L2 = std::max(L2, 1e-15);
-
-  // 更新模型概率并归一化
-  mu_[0] = mu_[0] * L1;
-  mu_[1] = mu_[1] * L2;
-  mu_ /= mu_.sum(); 
-
-  // 分别更新两个滤波器
-  ekf_1_.update(z, H1, R, h, z_subtract);
-  ekf_2_.update(z, H2, R, h, z_subtract);
-
-  // --- IMM 步骤 4: 最终状态融合 ---
-  combined_x_ = mix_states(ekf_1_.x, ekf_2_.x, mu_[0], mu_[1]);
-
-  // 目标静止或匀速时，mu_[0]（平滑模型）应该接近 1.0；当敌方发生急停或转向时，mu_[1] 会瞬间飙升，这说明 IMM 工作正常
-  tools::logger()->info("Mu: {:.2f}, {:.2f}", mu_[0], mu_[1]);
+  // 单一滤波器的观测更新
+  ekf_.update(z, H, R, h, z_subtract);
 }
 
-Eigen::VectorXd Target::ekf_x() const { return combined_x_; }
+Eigen::VectorXd Target::ekf_x() const { return ekf_.x; }
 
-// IMM 不再暴露单个滤波器实例，此处注释掉
-const tools::ExtendedKalmanFilter & Target::ekf() const { return ekf_1_; }
+const tools::ExtendedKalmanFilter & Target::ekf() const { return ekf_; }
 
 std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
 {
   std::vector<Eigen::Vector4d> _armor_xyza_list;
   for (int i = 0; i < armor_num_; i++) {
-    auto angle = tools::limit_rad(combined_x_[6] + i * 2 * CV_PI / armor_num_);
-    Eigen::Vector3d xyz = h_armor_xyz(combined_x_, i);
+    auto angle = tools::limit_rad(ekf_.x[6] + i * 2 * CV_PI / armor_num_);
+    Eigen::Vector3d xyz = h_armor_xyz(ekf_.x, i);
     _armor_xyza_list.push_back({xyz[0], xyz[1], xyz[2], angle});
   }
   return _armor_xyza_list;
@@ -363,8 +287,8 @@ std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
 
 bool Target::diverged() const
 {
-  auto r_ok = combined_x_[8] > 0.05 && combined_x_[8] < 0.5;
-  auto l_ok = combined_x_[8] + combined_x_[9] > 0.05 && combined_x_[8] + combined_x_[9] < 0.5;
+  auto r_ok = ekf_.x[8] > 0.05 && ekf_.x[8] < 0.5;
+  auto l_ok = ekf_.x[8] + ekf_.x[9] > 0.05 && ekf_.x[8] + ekf_.x[9] < 0.5;
   if (r_ok && l_ok) return false;
   return true;
 }
@@ -438,12 +362,12 @@ Eigen::MatrixXd Target::h_jacobian(const Eigen::VectorXd & x, int id) const
     dz_dh = (use_l_h) ? 1.0 : 0.0;
   }
   
-  Eigen::MatrixXd H_armor_xyza{
-    {1, 0, 0, 0, 0, 0, dx_da, 0, dx_dr, dx_dl,     0},
-    {0, 0, 1, 0, 0, 0, dy_da, 0, dy_dr, dy_dl,     0},
-    {0, 0, 0, 0, 1, 0,     0, 0,     0,     0, dz_dh},
-    {0, 0, 0, 0, 0, 0,     1, 0,     0,     0,     0}
-  };
+  // 匹配扩维后的 15 维状态矩阵 (新加的4列加速度在末尾，对应导数为0)
+  Eigen::MatrixXd H_armor_xyza = Eigen::MatrixXd::Zero(4, 15);
+  H_armor_xyza(0, 0) = 1; H_armor_xyza(0, 6) = dx_da; H_armor_xyza(0, 8) = dx_dr; H_armor_xyza(0, 9) = dx_dl;
+  H_armor_xyza(1, 2) = 1; H_armor_xyza(1, 6) = dy_da; H_armor_xyza(1, 8) = dy_dr; H_armor_xyza(1, 9) = dy_dl;
+  H_armor_xyza(2, 4) = 1; H_armor_xyza(2, 10) = dz_dh;
+  H_armor_xyza(3, 6) = 1;
 
   Eigen::VectorXd armor_xyz = h_armor_xyz(x, id);
   Eigen::MatrixXd H_armor_ypd = tools::xyz2ypd_jacobian(armor_xyz);

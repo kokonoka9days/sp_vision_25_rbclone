@@ -130,7 +130,7 @@ void Gimbal::send(
   float pitch_acc)
 {
   tx_data_.mode = control ? (fire ? 2 : 1) : 0;
-  tools::logger()->info(tx_data_.mode);
+  // tools::logger()->info(tx_data_.mode);
   tx_data_.yaw = yaw;
   tx_data_.yaw_vel = yaw_vel;
   tx_data_.yaw_acc = yaw_acc;
@@ -185,90 +185,108 @@ void Gimbal::read_thread()
 {
   tools::logger()->info("[Gimbal] read_thread started.");
   int error_count = 0;
+  
+  std::vector<uint8_t> buffer;
+  buffer.reserve(2048); 
 
   while (!quit_) {
-    if (error_count > 50000) {
+    if (error_count > 500) {  
       error_count = 0;
       tools::logger()->warn("[Gimbal] Too many errors, attempting to reconnect...");
       reconnect();
+      buffer.clear();
       continue;
     }
 
-    // 1. 一次性读取完整的一帧数据（基于 GimbalToVision 结构体的大小）
-    if (!read(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
-      error_count++;
+    // ==========================================
+    // 增加异常捕获与安全读取机制
+    // ==========================================
+    try {
+      size_t available_bytes = serial_.available();
+      if (available_bytes > 0) {
+        uint8_t chunk[256];
+        size_t read_len = std::min(available_bytes, sizeof(chunk));
+        size_t bytes_read = serial_.read(chunk, read_len);
+        
+        if (bytes_read > 0) {
+          buffer.insert(buffer.end(), chunk, chunk + bytes_read);
+        }
+      } else {
+        // 如果没有数据，累计错误并休眠 1ms 让出 CPU
+        error_count++;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
+    } catch (const serial::SerialException& e) {
+      tools::logger()->error("[Gimbal] 串口物理断开 (SerialException): {}", e.what());
+      error_count = 5000; // 强制立刻进入重连流程
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      continue;
+    } catch (const serial::IOException& e) {
+      tools::logger()->error("[Gimbal] 串口 IO 错误 (IOException): {}", e.what());
+      error_count = 5000; 
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      continue;
+    } catch (const std::exception& e) {
+      tools::logger()->error("[Gimbal] 未知错误: {}", e.what());
+      error_count = 5000;
       continue;
     }
 
-    // 2. 检查帧头是否正确
-    if (rx_data_.head[0] != 0x5a || rx_data_.head[1] != 0x53) {
-      // 如果帧头不对，说明数据由于丢包等原因发生了错位（失步）
-      // 此时必须立刻清空底层的接收缓冲区，把残留的错位数据全部丢弃，以便下一次能读到全新的完整帧
-      serial_.flushInput(); 
-      error_count++;
-      // 可选：添加一条 debug 日志观察失步频率
-      // tools::logger()->debug("[Gimbal] 帧头错位，已清空缓冲区");
-      continue;
+    // ==========================================
+    // 内存数据解算（保持不变）
+    // ==========================================
+    while (buffer.size() >= sizeof(rx_data_)) {
+      if (buffer[0] == 0x5a && buffer[1] == 0x53) {
+        if (tools::check_crc16(buffer.data(), sizeof(rx_data_))) {
+          error_count = 0; // 成功解析一帧，清零错误计数
+          memcpy(&rx_data_, buffer.data(), sizeof(rx_data_));
+          auto t = std::chrono::steady_clock::now();
+
+          Eigen::Quaterniond q_(rx_data_.q[0], rx_data_.q[1], rx_data_.q[2], rx_data_.q[3]);
+          auto ypr = tools::eulers(q_, 2, 1, 0);
+          
+          float yaw = ypr[abs(gimbal_yaw2vision) -  1];
+          float pitch = ypr[abs(gimbal_pitch2vision) - 1];
+          float roll = ypr[abs(gimbal_roll2vision) - 1];
+
+          yaw = gimbal_yaw2vision > 0 ? yaw : -yaw;
+          pitch = gimbal_pitch2vision > 0 ? pitch : -pitch;
+          roll = gimbal_roll2vision > 0 ? roll : -roll;
+
+          Eigen::Quaterniond q = 
+              Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) * Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) * Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX());
+
+          queue_.push({q, t});
+
+          std::lock_guard<std::mutex> lock(mutex_);
+          auto ypr_now = tools::eulers(q, 2, 1, 0);
+          state_.yaw = ypr_now[0] * 57.3;
+          state_.pitch = ypr_now[1] * 57.3;
+          
+          state_.mode = rx_data_.mode;
+          state_.enemy_color = !rx_data_.color;
+          state_.bullet_speed = rx_data_.bullet_speed;
+          state_.bullet_count = rx_data_.bullet_count;
+
+          switch (rx_data_.mode) {
+            case 0: mode_ = GimbalMode::IDLE; break;
+            case 1: mode_ = GimbalMode::AUTO_AIM; break;
+            case 2: mode_ = GimbalMode::SMALL_BUFF; break;
+            case 3: mode_ = GimbalMode::BIG_BUFF; break;
+            default: mode_ = GimbalMode::IDLE; break;
+          }
+
+          buffer.erase(buffer.begin(), buffer.begin() + sizeof(rx_data_));
+        } else {
+          buffer.erase(buffer.begin());
+          // 注意：校验失败不再增加 error_count，因为数据还在流动，只是物理残缺
+        }
+      } else {
+        buffer.erase(buffer.begin());
+      }
     }
 
-    // 3. 记录成功接收到有效帧的时间戳
-    auto t = std::chrono::steady_clock::now();
-
-    // 4. 检查 CRC 校验和
-    if (!tools::check_crc16(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
-      tools::logger()->debug("[Gimbal] CRC16 check failed.");
-      error_count++;
-      continue;
-    }
-
-    // --- 以下为原本的数据处理逻辑，保持不变 ---
-    error_count = 0;
-    Eigen::Quaterniond q_(rx_data_.q[0], rx_data_.q[1], rx_data_.q[2], rx_data_.q[3]);
-    auto ypr = tools::eulers(q_, 2, 1, 0);
-    
-    float yaw = ypr[abs(gimbal_yaw2vision) -  1];
-    float pitch = ypr[abs(gimbal_pitch2vision) - 1];
-    float roll = ypr[abs(gimbal_roll2vision) - 1];
-
-    yaw = gimbal_yaw2vision > 0 ? yaw : -yaw;
-    pitch = gimbal_pitch2vision > 0 ? pitch : -pitch;
-    roll = gimbal_roll2vision > 0 ? roll : -roll;
-
-    Eigen::Quaterniond q = 
-        Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) * // 绕Z轴旋转yaw
-        Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
-        Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
-
-    queue_.push({q, t});
-
-    std::lock_guard<std::mutex> lock(mutex_);
-    auto ypr_now = tools::eulers(q, 2, 1, 0);
-    state_.yaw = ypr_now[0] * 57.3;
-    state_.pitch = ypr_now[1] * 57.3;
-    
-    state_.mode = rx_data_.mode;
-    state_.enemy_color = !rx_data_.color;
-    state_.bullet_speed = rx_data_.bullet_speed;
-    state_.bullet_count = rx_data_.bullet_count;
-
-    switch (rx_data_.mode) {
-      case 0:
-        mode_ = GimbalMode::IDLE;
-        break;
-      case 1:
-        mode_ = GimbalMode::AUTO_AIM;
-        break;
-      case 2:
-        mode_ = GimbalMode::SMALL_BUFF;
-        break;
-      case 3:
-        mode_ = GimbalMode::BIG_BUFF;
-        break;
-      default:
-        mode_ = GimbalMode::IDLE;
-        tools::logger()->warn("[Gimbal] Invalid mode: {}", rx_data_.mode);
-        break;
-    }
+    if (buffer.size() > 2048) buffer.clear();
   }
 
   tools::logger()->info("[Gimbal] read_thread stopped.");

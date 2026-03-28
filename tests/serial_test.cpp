@@ -12,7 +12,7 @@ int main() {
         ser.setPort("/dev/ttyACM0");
         ser.setBaudrate(460800);
         
-        serial::Timeout timeout = serial::Timeout::simpleTimeout(1000);
+        serial::Timeout timeout = serial::Timeout::simpleTimeout(2);
         ser.setTimeout(timeout);
         ser.open();
         

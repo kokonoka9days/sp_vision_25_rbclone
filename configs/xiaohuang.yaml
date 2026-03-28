@@ -1,5 +1,5 @@
-# enemy_color: "red"
-enemy_color: "blue"
+enemy_color: "auto"
+# enemy_color: "blue"
 
 #####-----神经网络参数-----#####
 yolo_name: yolov5
@@ -38,13 +38,13 @@ max_temp_lost_count: 11
 outpost_max_temp_lost_count: 75
 
 #####-----aimer参数-----#####
-yaw_offset: 0 # degree -2.5
-pitch_offset: 5 # degree 2
+yaw_offset: 0.8 # degree -2.5
+pitch_offset: 3.2 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
-high_speed_delay_time: 0.09 # s
-low_speed_delay_time: 0.09 # s
+high_speed_delay_time: 0.25 # s
+low_speed_delay_time: 0.25 # s
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree
@@ -52,11 +52,21 @@ second_tolerance: 2 # 远距离射击容差，degree
 judge_distance: 2 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
-camera_name: "hikrobot"
-camera_sn: "DA7188447"
-exposure_us: 6000
-gain: 0.7
-vid_pid: "2bdf:0001"
+# camera_name: "hikrobot"
+# camera_sn: "DA9492714"
+# exposure_us: 6000
+# gain: 0.7
+# vid_pid: "2bdf:0001"
+# flip: true
+# mirror: true
+# timestamp_offset_us: 1000 #us
+
+camera_name: "daheng"
+camera_sn: "FDN24040486"
+exposure_us: 5000
+gain: 0.5
+gamma: 0.7  
+vid_pid: "2ba2:4d55"
 flip: true
 mirror: true
 timestamp_offset_us: 1000 #us
@@ -75,17 +85,17 @@ timestamp_offset_us: 1000 #us
 #  0 -1  0
 #  0  0  1
 # R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
-R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
+R_gimbal2imubody: [1, 0, 0, 0, 1, 0, 0, 0, -1]
 
-# 重投影误差: 0.0552px
-camera_matrix: [3572.373366013139, 0, 626.0114272779299, 0, 3574.718899324038, 518.1603213691299, 0, 0, 1]
-distort_coeffs: [-0.0016831637782622174, 0.22532265563867876, -0.0027424870134692965, -0.008116943124378675, -0.6996106730380051]
+# 相机同理想情况的偏角: yaw-0.37 pitch-1.51 roll-4.59 degree
+# 标定板到世界坐标系原点的水平距离: 2.40 m
+# 标定板同竖直摆放时的偏角: yaw35.30 pitch12.69 roll-3.67 degree
+R_camera2gimbal: [0.008555055624210023, -0.02569862007584805, 0.9996331286774482, -0.9967562722752042, -0.08021905381318105, 0.006468159348480616, 0.08002340097312802, -0.996445926446345, -0.026301539216912254]
+t_camera2gimbal: [0.1554460393606563, -0.0410457137726228, 0.0289906693713169]
 
-# 相机同理想情况的偏角: yaw-0.89 pitch-0.80 roll-2.91 degree
-# 标定板到世界坐标系原点的水平距离: 3.31 m
-# 标定板同竖直摆放时的偏角: yaw-27.11 pitch13.66 roll-4.42 degree
-R_camera2gimbal: [0.016204877803424663, -0.013208430617676983, 0.9997814457650201, -0.9985794171285421, -0.05097575373680919, 0.015511937924892848, 0.05075972441412222, -0.9986125424265321, -0.014015722807625128]
-t_camera2gimbal: [0.18225833397346017, -0.026141913562430164, 0.049826940407687315]
+# 重投影误差: 0.0822px
+camera_matrix: [2428.509985618256, 0, 717.0615414224527, 0, 2419.750570932901, 557.1203420710033, 0, 0, 1]
+distort_coeffs: [-0.05111319195243219, 0.22772385849378304, 0.002335635650449124, -5.724580840229652e-05, -0.49596768500171107]
 # _camera2gimbal第一位调yaw
 # _camera2gimbal第二位调yaw
 # _camera2gimbal第三位调pitch
@@ -100,8 +110,8 @@ com_port: "/dev/ttyACM0"
 # 陀螺仪是否装错, 编号012分别代表电控坐标系ypr，想换旋转轴只需要对编号进行互换即可，负号就是对当前值取负，交换完再取负
 # 上车前记得对齐电控坐标系和济瞄惯性系
 gimbal_y1: 1
-gimbal_p2: -3
-gimbal_r3: -2
+gimbal_p2: 2
+gimbal_r3: -3
 # 济瞄的惯性系  z轴往上, x轴是枪管指向
 #     x  z
 #      \ |
@@ -112,7 +122,7 @@ gimbal_r3: -2
 fire_thresh: 0.003 # 
 small_armor_tolerance: 0.12
 big_armor_tolerance: 0.22
-gimbal_control_delay: 0.08
+gimbal_control_delay: 0
 tower_pitch_prediction_time: 0.05
 
 max_yaw_acc: 50

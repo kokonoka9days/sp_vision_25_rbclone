@@ -35,7 +35,6 @@ public:
   void update(const Armor & armor);
 
   Eigen::VectorXd ekf_x() const;
-  // IMM: 由于有两个EKF，我们对外隐藏EKF实例，直接提供最终融合的X和P(可选)
   const tools::ExtendedKalmanFilter & ekf() const; 
   std::vector<Eigen::Vector4d> armor_xyza_list() const;
 
@@ -50,7 +49,7 @@ public:
   bool checkinit();
 
   inline Eigen::VectorXd getEKFXest() {
-    return combined_x_; // IMM: 返回融合后的状态
+    return ekf_.x; // 直接返回单一 EKF 状态
   }
 
   inline std::chrono::steady_clock::time_point getTimePoint() {
@@ -76,20 +75,16 @@ private:
 
   bool is_switch_, is_converged_;
 
-  // IMM (Interacting Multiple Model) 变量
-  tools::ExtendedKalmanFilter ekf_1_; // 模型1: 低过程噪声 (平滑)
-  tools::ExtendedKalmanFilter ekf_2_; // 模型2: 高过程噪声 (机动)
-  Eigen::VectorXd combined_x_;        // 最终融合的状态向量
-  Eigen::Vector2d mu_;                // 两个模型的当前概率
-  Eigen::Matrix2d P_trans_;           // 马尔可夫状态转移概率矩阵
+  // 单一 EKF 实例 (集成 CA/CV 动态切换)
+  tools::ExtendedKalmanFilter ekf_; 
 
   std::chrono::steady_clock::time_point t_;
 
+  // 记录当前使用的状态模型 (true: CA匀加速, false: CV匀速)
+  bool is_ca_ = true;
+
   void update_ypda(const Armor & armor, int id);  // yaw pitch distance angle
   Eigen::MatrixXd h_jacobian(const Eigen::VectorXd & x, int id) const;
-
-  // 用于在 IMM 混合状态时，安全处理角度 (Yaw) 的环绕问题
-  Eigen::VectorXd mix_states(const Eigen::VectorXd& xa, const Eigen::VectorXd& xb, double wa, double wb) const;
 };
 
 }  // namespace auto_aim
