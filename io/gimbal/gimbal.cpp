@@ -19,7 +19,7 @@ Gimbal::Gimbal(const std::string & config_path)
   try {
     serial_.setPort(com_port);
     serial_.setBaudrate(460800);
-    auto timeout = serial::Timeout::simpleTimeout(100); 
+    auto timeout = serial::Timeout::simpleTimeout(2); 
     serial_.setTimeout(timeout);
     serial_.open();
   } catch (const std::exception & e) {
@@ -194,78 +194,50 @@ void Gimbal::read_thread()
       continue;
     }
 
-    // if (!read(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_.head))) {
-    //    tools::logger()->warn("[Gimbal] 1");
-    //   error_count++;
-    //    tools::logger()->warn("[Gimbal] 1");
-    //   continue;
-    // }
-
-    // if (rx_data_.head[0] != 0x5a || rx_data_.head[1] != 0x53){
-    //   // error_count++;
-    //   tools::logger()->warn("找不到帧头");
-    //   continue;
-    // } 
-
-    uint8_t first_byte;
-    // 1. 逐个字节读取，直到找到 0x5A
-    if (!read(&first_byte, 1)) {
-      error_count++;
-      continue;
-    }
-    
-    if (first_byte != 0x5a) {
-      // 还没找到正确的起始字节，继续找
-      // tools::logger()->warn("寻找帧头 0x5A 中...");
-      continue;
-    }
-
-    // 2. 找到了 0x5A，检查紧接着的下一个字节是不是 0x53
-    uint8_t second_byte;
-    if (!read(&second_byte, 1)) {
+    // 1. 一次性读取完整的一帧数据（基于 GimbalToVision 结构体的大小）
+    if (!read(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
       error_count++;
       continue;
     }
 
-    if (second_byte != 0x53) {
-      // 找到了 0x5a 但下一个不是 0x53，说明找错了，重新开始
-      // tools::logger()->warn("找到 0x5a，但下一个不是 0x53");
+    // 2. 检查帧头是否正确
+    if (rx_data_.head[0] != 0x5a || rx_data_.head[1] != 0x53) {
+      // 如果帧头不对，说明数据由于丢包等原因发生了错位（失步）
+      // 此时必须立刻清空底层的接收缓冲区，把残留的错位数据全部丢弃，以便下一次能读到全新的完整帧
+      serial_.flushInput(); 
+      error_count++;
+      // 可选：添加一条 debug 日志观察失步频率
+      // tools::logger()->debug("[Gimbal] 帧头错位，已清空缓冲区");
       continue;
     }
 
+    // 3. 记录成功接收到有效帧的时间戳
     auto t = std::chrono::steady_clock::now();
 
-    if (!read(
-          reinterpret_cast<uint8_t *>(&rx_data_) + sizeof(rx_data_.head),
-          sizeof(rx_data_) - sizeof(rx_data_.head)))
-    {
-      tools::logger()->warn("[Gimbal] 2");
+    // 4. 检查 CRC 校验和
+    if (!tools::check_crc16(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
+      tools::logger()->debug("[Gimbal] CRC16 check failed.");
       error_count++;
       continue;
     }
 
-    if (!tools::check_crc16(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
-      // tools::logger()->debug("[Gimbal] CRC16 check failed.");
-      continue;
-    }
-
+    // --- 以下为原本的数据处理逻辑，保持不变 ---
     error_count = 0;
     Eigen::Quaterniond q_(rx_data_.q[0], rx_data_.q[1], rx_data_.q[2], rx_data_.q[3]);
     auto ypr = tools::eulers(q_, 2, 1, 0);
-    // auto q = tools::toeuler(ypr,0,2,1);
+    
     float yaw = ypr[abs(gimbal_yaw2vision) -  1];
     float pitch = ypr[abs(gimbal_pitch2vision) - 1];
     float roll = ypr[abs(gimbal_roll2vision) - 1];
 
-    yaw = gimbal_yaw2vision > 0 ? yaw : - yaw;
+    yaw = gimbal_yaw2vision > 0 ? yaw : -yaw;
     pitch = gimbal_pitch2vision > 0 ? pitch : -pitch;
     roll = gimbal_roll2vision > 0 ? roll : -roll;
 
     Eigen::Quaterniond q = 
-        Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *   // 绕Z轴旋转yaw
+        Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) * // 绕Z轴旋转yaw
         Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
         Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
-
 
     queue_.push({q, t});
 
@@ -273,13 +245,10 @@ void Gimbal::read_thread()
     auto ypr_now = tools::eulers(q, 2, 1, 0);
     state_.yaw = ypr_now[0] * 57.3;
     state_.pitch = ypr_now[1] * 57.3;
+    
     state_.mode = rx_data_.mode;
-    // state_.mode = 1;
     state_.enemy_color = !rx_data_.color;
-    state_.mode = rx_data_.mode;
     state_.bullet_speed = rx_data_.bullet_speed;
-    // tools::logger()->info(state_.bullet_speed);
-    // state_.bullet_speed = 25;
     state_.bullet_count = rx_data_.bullet_count;
 
     switch (rx_data_.mode) {
