@@ -68,55 +68,14 @@ int main(int argc, char * argv[])
       auto gs = gimbal.state();
 
 
-      //完整形态考核专用限制角度开火
-      // auto l = 
-      // auto r = 
-      // if(gs.yaw < l && gs.yaw > r){
-      //   stopkey = false;
-      // }
 
       //MPC预测以及+自家火控
       auto plan = planner.plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
 
-      // if (!plan.control) {
-      //     // 目标丢失或弹道无解时，强制用云台当前的真实角度覆盖默认的 0.0
-      //     plan.yaw = gs.yaw;       
-      //     plan.pitch = gs.pitch;   
-      //     plan.yaw_vel = 0.0;
-      //     plan.pitch_vel = 0.0;
-      //     plan.yaw_acc = 0.0;
-      //     plan.pitch_acc = 0.0;
-          
-      //     // 修复 debug 画图时的 target_yaw 突变问题
-      //     plan.target_yaw = gs.yaw * 57.3;
-      //     plan.target_pitch = gs.pitch * 57.3;
-      // }
-      
-      // if (!stopkey)
-      // {
-      //   plan.fire = 0;
-      // }
         gimbal.send(
       plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
       plan.pitch_acc);      
      
-
-      // //command预测以及火控
-      // io::Command command{false, false, 0, 0};
-      // command = aimer.aim(target, target.getTimePoint(), gs.bullet_speed);
-      // auto ypr = Eigen::Vector3d(gs.yaw, 0, 0);//yaw
-      // command.shoot = shooter.shoot(command, aimer, target, ypr);
-      // gimbal.send(
-      // command.control, command.shoot, command.yaw, 0, 0, command.pitch, 0,
-      // 0);
-
-      // //
-
-      // tools::draw_text(img, fmt::format("Yaw {:.2f}",plan.yaw), {40, 40}, {0, 0, 255});
-      // tools::draw_text(img, fmt::format("Pitch {:.2f}", plan.pitch), {40, 40}, {0, 0, 255});
-
-      // std::cout << "Yaw: " << plan.yaw * 180.0 / M_PI << std::endl;
-      // std::cout << "Pitch: " << plan.pitch * 180.0 / M_PI << std::endl;
 
       auto fired = gs.bullet_count > last_bullet_count;
       last_bullet_count = gs.bullet_count;

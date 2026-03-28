@@ -25,7 +25,7 @@
 
 const std::string keys =
   "{help h usage ? |                                             | 输出命令行参数说明}"
-  "{short_camera   | ../configs/sb_088.yaml                          | 自瞄相机配置文件路径 }"
+  "{aim_camera   | ../configs/sb_088.yaml                          | 自瞄相机配置文件路径 }"
   "{l_cam          | ../configs/omniperception/omn_camera_left.yaml | 左感知相机 }"
   "{r_cam          | ../configs/omniperception/omn_camera_right.yaml  | 右感知相机 }";
 
@@ -44,7 +44,7 @@ int main(int argc, char * argv[])
     cli.printMessage();
     return 0;
   }
-  auto short_camera_config_path = cli.get<std::string>("short_camera");
+  auto short_camera_config_path = cli.get<std::string>("aim_camera");
 
   // ROS2 通信
   io::ROS2 ros2;
@@ -183,19 +183,7 @@ int main(int argc, char * argv[])
     auto dt = tools::delta_time(now, last);
     tools::logger()->info("{:.2f} fps", 1 / dt);
     last = now;
-    // // 模式切换日志
-    // if (last_mode != mode) {
-    //   tools::logger()->info("Switch to {}", gimbal.str(mode));
-    //   last_mode = mode;
-    // }
-    
-    // // 只处理自瞄模式
-    // if (mode != io::GimbalMode::AUTO_AIM) {
-    //   // 非自瞄模式：发送停止指令并跳过
-    //   std::this_thread::sleep_for(50ms);
-    //   continue;
-    // }
-    
+
     // 读取主相机图像
     // bincameras.cameras.aim_ptr->read(img, timestamp);
     short_camera.read(img, timestamp);

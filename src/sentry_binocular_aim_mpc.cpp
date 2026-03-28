@@ -22,8 +22,8 @@ const std::string keys =
   "{help h usage ? |                                             | 输出命令行参数说明}"
   "{short_camera   | ../configs/sb.yaml                          | 短焦相机配置文件路径 }"
   "{long_camera    | ../configs/sb_copy.yaml                     | 长焦相机配置文件路径 }"
-  "{l_cam          | ../configs/omniperception/omn_camera_left.yaml | 左感知相机 }"
-  "{r_cam          | ../configs/omniperception/omn_camera_right.yaml  | 右感知相机 }";
+  "{l_cam          | ../configs/omn_camera_left.yaml             | 左感知相机 }"
+  "{r_cam          | ../configs/omn_camera_right.yaml            | 右感知相机 }";
 
 using namespace std::chrono_literals;
 
@@ -67,15 +67,12 @@ int main(int argc, char * argv[])
   
   // 视觉模块
   auto_aim::YOLO yolo(short_camera_config_path, false);  // 主相机YOLO
-  // auto_aim::YOLO omn_yolo(short_camera_config_path, false);  // 主相机YOLO
 
   auto_aim::Solver short_camera_solver(short_camera_config_path);
   auto_aim::Solver long_camera_solver(long_camera_config_path);
 
   auto_aim::Tracker tracker(short_camera_config_path, &short_camera_solver);//默认短焦
   tracker.set_gimbal(&gimbal);
-  // auto_aim::Aimer aimer(short_camera_config_path);
-  // auto_aim::Shooter shooter(short_camera_config_path);
   
   // MPC 规划器
   auto_aim::Planner short_camera_planner(short_camera_config_path);
@@ -190,18 +187,6 @@ int main(int argc, char * argv[])
     auto dt = tools::delta_time(now, last);
     tools::logger()->info("{:.2f} fps", 1 / dt);
     last = now;
-    // // 模式切换日志
-    // if (last_mode != mode) {
-    //   tools::logger()->info("Switch to {}", gimbal.str(mode));
-    //   last_mode = mode;
-    // }
-    
-    // // 只处理自瞄模式
-    // if (mode != io::GimbalMode::AUTO_AIM) {
-    //   // 非自瞄模式：发送停止指令并跳过
-    //   std::this_thread::sleep_for(50ms);
-    //   continue;
-    // }
     
     // 读取主相机图像
     bincameras.cameras.aim_ptr->read(img, timestamp);
@@ -259,31 +244,6 @@ int main(int argc, char * argv[])
       last_track_point = std::chrono::steady_clock::now();
     }
 
-    
-    // // 模式判断：如果跟踪器丢失目标，切换到全向感知模式
-    // if (tracker.state() == "lost") {
-    //   // 发现目标丢失，通知线程开启相机
-    //   need_omni_perception = true;
-
-    //   // 自动切换至短焦（用于全向感知后的接力）
-    //   if(!bincameras.is_short){
-    //       tools::logger()->info("进入全向感知模式，切换至短焦镜头");
-    //       bincameras.Switch(tracker);
-    //   }
-
-    //   // 全向感知决策（非阻塞判断）
-    //   if(!omn_cam1.is_paused() && !omn_cam2.is_paused()){
-    //       io::VisionToGimbal vision_cmd = decider.decide_g(
-    //           yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
-    //       gimbal.send(vision_cmd);
-    //   }
-      
-    // } else {
-    //     // 挂起全向相机
-    //     need_omni_perception = false;
-    //     // omn_cam1.pause();
-    //     // omn_cam2.pause();      
-    // }
 
     {
       // 自瞄模式 - 使用MPC

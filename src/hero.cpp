@@ -63,39 +63,11 @@ int main(int argc, char * argv[])
     while (!quit) {
       auto target = target_queue.front();
       auto gs = gimbal.state();
-      // gs.yaw -= 0.2;
-      // if(target.has_value())
-      //   if(target->ekf_x()(7) < 0){
-      //     gs.yaw += 0.25;
-      //   }
-
-      //完整形态考核专用限制角度开火
-      // auto l = 
-      // auto r = 
-
       
       auto plan = planner.plan(target, gs.bullet_speed, gs.yaw , auto_aim::Planner::ShootStrategy::rbHero);
       gimbal.send(
         plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
         plan.pitch_acc);
-
-      // if(gs.yaw < l && gs.yaw > r){
-      //   stopkey = false;
-      // }
-      
-      // //command预测以及火控
-      // io::Command command{false, false, 0, 0};
-      // command = aimer.aim(target, target.getTimePoint(), gs.bullet_speed);
-      // auto ypr = Eigen::Vector3d(gs.yaw, 0, 0);//yaw
-      // command.shoot = shooter.shoot(command, aimer, target, ypr);
-      // gimbal.send(
-      // command.control, command.shoot, command.yaw, 0, 0, command.pitch, 0,
-      // 0);
-
-      // //
-
-      // tools::draw_text(img, fmt::format("Yaw {:.2f}",plan.yaw), {40, 40}, {0, 0, 255});
-      // tools::draw_text(img, fmt::format("Pitch {:.2f}", plan.pitch), {40, 40}, {0, 0, 255});
 
       // std::cout << "Yaw: " << plan.yaw * 180.0 / M_PI << std::endl;
       // std::cout << "Pitch: " << plan.pitch * 180.0 / M_PI << std::endl;
