@@ -49,7 +49,7 @@ public:
   bool checkinit();
 
   inline Eigen::VectorXd getEKFXest() {
-    return ekf_.x; // 直接返回单一 EKF 状态
+    return ekf_.x;
   }
 
   inline std::chrono::steady_clock::time_point getTimePoint() {
@@ -75,13 +75,13 @@ private:
 
   bool is_switch_, is_converged_;
 
-  // 单一 EKF 实例 (集成 CA/CV 动态切换)
+  // 单一 EKF 实例
   tools::ExtendedKalmanFilter ekf_; 
 
   std::chrono::steady_clock::time_point t_;
 
-  // 记录当前使用的状态模型 (true: CA匀加速, false: CV匀速)
-  bool is_ca_ = true;
+  // 记录当前使用的 CV 模型 (false: 平移 CV, true: 旋转 CV)
+  bool is_rotation_cv_ = false;
 
   void update_ypda(const Armor & armor, int id);  // yaw pitch distance angle
   Eigen::MatrixXd h_jacobian(const Eigen::VectorXd & x, int id) const;

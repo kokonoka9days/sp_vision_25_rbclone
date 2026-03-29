@@ -14,6 +14,7 @@ find_package(yaml-cpp REQUIRED)
 find_package(nlohmann_json REQUIRED)
 set(OpenVINO_DIR "/opt/intel/openvino_2024.6.0/runtime/cmake/")
 find_package(OpenVINO REQUIRED)
+find_package(Ceres REQUIRED)
 
 include_directories(${EIGEN3_INCLUDE_DIR})
 include_directories(${OpenCV_INCLUDE_DIRS})
@@ -96,7 +97,7 @@ target_link_libraries(minimum_vision_system ${OpenCV_LIBS} fmt::fmt yaml-cpp too
 target_link_libraries(omniperception_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim omniperception)
 target_link_libraries(binocular_camera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 target_link_libraries(4cmaera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
-target_link_libraries(time_calibrator ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+target_link_libraries(time_calibrator ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim Ceres::ceres)
 
 
 add_executable(gimbal_test tests/gimbal_test.cpp)

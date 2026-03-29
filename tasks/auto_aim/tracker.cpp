@@ -376,32 +376,21 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
 bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t)
 {
   target_.predict(t);
+  
+  bool found = false;
 
-  int found_count = 0;
-  double min_x = 1e10;  // 画面最左侧
-  for (const auto & armor : armors) {
-    if (armor.name != target_.name || armor.type != target_.armor_type) continue;
-    found_count++;
-    min_x = armor.center.x < min_x ? armor.center.x : min_x;
-  }
-
-  if (found_count == 0) return false;
-
-  // 只更新最左侧的装甲板
+  // 由于 armors 在 track/sb_track 中已经按距离图像中心的远近排序
+  // 遍历找到的第一个匹配目标的装甲板，即为视野中最居中、畸变最小的装甲板
   for (auto & armor : armors) {
-    if (
-      armor.name != target_.name || armor.type != target_.armor_type
-      || armor.center.x != min_x  // 恢复这个条件，确保只更新一个装甲板
-    )
-      continue;
-
-    solver_->solve(armor);
-
-    target_.update(armor);
-    break; // 找到第一个匹配的就退出
+    if (armor.name == target_.name && armor.type == target_.armor_type) {
+      solver_->solve(armor);
+      target_.update(armor);
+      found = true;
+      break; // 找到最优匹配后立即退出
+    }
   }
 
-  return true;
+  return found;
 }
 
 }  // namespace auto_aim

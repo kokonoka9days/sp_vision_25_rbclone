@@ -26,7 +26,7 @@ Target::Target(
   is_switch_(false),
   is_converged_(false),
   switch_count_(0),
-  is_ca_(true) // 初始化为使用 CA 模型
+  is_rotation_cv_(false) // 默认初始为平移 CV 模型
 {
   auto r = radius;
   priority = armor.priority;
@@ -44,11 +44,11 @@ Target::Target(
 
   cam_is_switch_time_point = std::chrono::steady_clock::time_point{};
 
-  // 扩维至15维：引入 ax, ay, az, a_yaw
-  Eigen::VectorXd x0 = Eigen::VectorXd::Zero(15);
-  x0.head(11) << center_x, 0, center_y, 0, center_z, 0, ypr[0], 0, r, 0, 0;
+  // 恢复 11 维：纯 CV 状态
+  Eigen::VectorXd x0 = Eigen::VectorXd::Zero(11);
+  x0 << center_x, 0, center_y, 0, center_z, 0, ypr[0], 0, r, 0, 0;
   
-  Eigen::MatrixXd P0 = Eigen::MatrixXd::Identity(15, 15) * 10.0;
+  Eigen::MatrixXd P0 = Eigen::MatrixXd::Identity(11, 11) * 10.0;
   P0.block(0, 0, 11, 11) = P0_dig.asDiagonal();
 
   auto x_add = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
@@ -62,14 +62,14 @@ Target::Target(
 
 Target::Target(double x, double vyaw, double radius, double h) 
 : armor_num_(4),
-  is_ca_(true) // 初始化为使用 CA 模型
+  is_rotation_cv_(false)
 {
-  // 扩维至15维
-  Eigen::VectorXd x0 = Eigen::VectorXd::Zero(15);
-  x0.head(11) << x, 0, 0, 0, 0, 0, 0, vyaw, radius, 0, h;
+  // 恢复 11 维
+  Eigen::VectorXd x0 = Eigen::VectorXd::Zero(11);
+  x0 << x, 0, 0, 0, 0, 0, 0, vyaw, radius, 0, h;
 
   Eigen::VectorXd P0_dig{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-  Eigen::MatrixXd P0 = Eigen::MatrixXd::Identity(15, 15) * 10.0;
+  Eigen::MatrixXd P0 = Eigen::MatrixXd::Identity(11, 11) * 10.0;
   P0.block(0, 0, 11, 11) = P0_dig.asDiagonal();
 
   auto x_add = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
@@ -90,62 +90,53 @@ void Target::predict(std::chrono::steady_clock::time_point t)
 
 void Target::predict(double dt)
 {
-  // ================= CA/CV 滞回比较逻辑 =================
+  // ================= 平移/旋转 CV 滞回比较逻辑 =================
   double vyaw = std::abs(ekf_.x[7]);
   
-  if (is_ca_) {
-    // 当前是 CA 模型，如果角速度 >= 3.0 rad/s，切到 CV 模型
+  if (!is_rotation_cv_) {
+    // 当前是平移 CV，如果角速度 >= 3.0 rad/s，切到旋转 CV
     if (vyaw >= 1.5) {
-      is_ca_ = false;
+      is_rotation_cv_ = true;
     }
   } else {
-    // 当前是 CV 模型，如果角速度 <= 1.2 rad/s，切回 CA 模型
+    // 当前是旋转 CV，如果角速度 <= 1.2 rad/s，切回平移 CV
     if (vyaw <= 0.5) {
-      is_ca_ = true;
+      is_rotation_cv_ = false;
     }
   }
   
   // 打印当前所用模型
-  tools::logger()->debug("[Target] Current Model: {}", is_ca_ ? "CA (Constant Acceleration)" : "CV (Constant Velocity)");
+  tools::logger()->debug("[Target] Current Model: {}", is_rotation_cv_ ? "CV (旋转)" : "CV (平移)");
 
-  Eigen::MatrixXd F = Eigen::MatrixXd::Identity(15, 15);
+  // 11维基础转移矩阵
+  Eigen::MatrixXd F = Eigen::MatrixXd::Identity(11, 11);
   F(0, 1) = dt; F(2, 3) = dt; F(4, 5) = dt; F(6, 7) = dt;
-
-  if (is_ca_) {
-    F(0, 11) = 0.5 * dt * dt; F(1, 11) = dt; 
-    F(2, 12) = 0.5 * dt * dt; F(3, 12) = dt; 
-    F(4, 13) = 0.5 * dt * dt; F(5, 13) = dt; 
-    F(6, 14) = 0.5 * dt * dt; F(7, 14) = dt; 
-  } else {
-    // CV 模型强行将加速度衰减避免扰动
-    F(11, 11) = 0.0; 
-    F(12, 12) = 0.0; 
-    F(13, 13) = 0.0; 
-    F(14, 14) = 0.0; 
-  }
 
   double v1, v2;
   if (name == ArmorName::outpost) {
     v1 = 5;     v2 = 0.05;
   } else {
-    v1 = 5;    v2 = 5; 
+    // ================= 核心：对两种 CV 分配不同的噪声 =================
+    if (is_rotation_cv_) {
+      // 旋转 CV：锁定车辆中心(v1极小)，紧盯小陀螺自转(v2极大)
+      v1 = 2.0;   // 抑制 X/Y 轴的乱跳，认为车辆中心大致不动或缓慢匀速
+      v2 = 400.0; // 紧随 Yaw 角的变化
+    } else {
+      // 平移 CV：跟踪车辆平移机动(v1大)，过滤 Yaw 的干扰(v2小)
+      v1 = 300.0;  // 灵活跟踪平移
+      v2 = 80.0;   // 认为车体朝向不会突变
+    }
   }
 
   auto a_ = dt * dt * dt * dt / 4;
   auto b_ = dt * dt * dt / 2;
   auto c_ = dt * dt;
 
-  Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(15, 15);
+  Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(11, 11);
   Q(0,0) = a_ * v1; Q(0,1) = b_ * v1; Q(1,0) = b_ * v1; Q(1,1) = c_ * v1; // X
   Q(2,2) = a_ * v1; Q(2,3) = b_ * v1; Q(3,2) = b_ * v1; Q(3,3) = c_ * v1; // Y
   Q(4,4) = a_ * v1; Q(4,5) = b_ * v1; Q(5,4) = b_ * v1; Q(5,5) = c_ * v1; // Z
   Q(6,6) = a_ * v2; Q(6,7) = b_ * v2; Q(7,6) = b_ * v2; Q(7,7) = c_ * v2; // Yaw
-  
-  // 加速度过程噪声
-  Q(11,11) = c_ * v1;
-  Q(12,12) = c_ * v1;
-  Q(13,13) = c_ * v1;
-  Q(14,14) = c_ * v2;
 
   auto f = [&](const Eigen::VectorXd & x) -> Eigen::VectorXd {
     Eigen::VectorXd x_prior = F * x;
@@ -226,7 +217,7 @@ void Target::update_ypda(const Armor & armor, int id)
   auto center_yaw = std::atan2(armor.xyz_in_world[1], armor.xyz_in_world[0]);
   auto delta_angle = tools::limit_rad(armor.ypr_in_world[0] - center_yaw);
 
-  auto r2_azimuth = 1e-2;
+  auto r2_azimuth = 4e-3;
   auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2;
   auto r2_d = log(std::abs(delta_angle) + 1) + 1;
   
@@ -266,7 +257,6 @@ void Target::update_ypda(const Armor & armor, int id)
 
   Eigen::MatrixXd H = h_jacobian(ekf_.x, id);
 
-  // 单一滤波器的观测更新
   ekf_.update(z, H, R, h, z_subtract);
 }
 
@@ -362,8 +352,8 @@ Eigen::MatrixXd Target::h_jacobian(const Eigen::VectorXd & x, int id) const
     dz_dh = (use_l_h) ? 1.0 : 0.0;
   }
   
-  // 匹配扩维后的 15 维状态矩阵 (新加的4列加速度在末尾，对应导数为0)
-  Eigen::MatrixXd H_armor_xyza = Eigen::MatrixXd::Zero(4, 15);
+  // 恢复 11 维大小
+  Eigen::MatrixXd H_armor_xyza = Eigen::MatrixXd::Zero(4, 11);
   H_armor_xyza(0, 0) = 1; H_armor_xyza(0, 6) = dx_da; H_armor_xyza(0, 8) = dx_dr; H_armor_xyza(0, 9) = dx_dl;
   H_armor_xyza(1, 2) = 1; H_armor_xyza(1, 6) = dy_da; H_armor_xyza(1, 8) = dy_dr; H_armor_xyza(1, 9) = dy_dl;
   H_armor_xyza(2, 4) = 1; H_armor_xyza(2, 10) = dz_dh;
