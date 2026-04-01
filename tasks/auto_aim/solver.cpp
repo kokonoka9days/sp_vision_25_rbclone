@@ -59,8 +59,8 @@ void Solver::solve(Armor & armor) const
 
   cv::Vec3d rvec, tvec;
   cv::solvePnP(
-    object_points, armor.points, camera_matrix_, distort_coeffs_, rvec, tvec, false,
-    cv::SOLVEPNP_IPPE);
+    object_points, armor.points, camera_matrix_, distort_coeffs_, rvec, tvec, true,
+    cv::SOLVEPNP_ITERATIVE);
 
   Eigen::Vector3d xyz_in_camera;
   cv::cv2eigen(tvec, xyz_in_camera);
