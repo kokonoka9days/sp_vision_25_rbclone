@@ -49,28 +49,30 @@ int main(int argc, char * argv[])
     }
 
 
-    std::cout << "mode "<<(int)mode<<std::endl;
+    
     
     auto t = std::chrono::steady_clock::now();
     auto state = gimbal.state();
     auto q = gimbal.q(t);
-    std::cout << "red or bule "<<(int)state.enemy_color<<std::endl;
+    // std::cout << "red or bule "<<(int)state.enemy_color<<std::endl;
     auto ypr = tools::eulers(q, 2, 1, 0);
-    std::cout << "bullet_speed "<<state.bullet_speed<<std::endl;
     float yaw_deg = ypr[0] * 180.0 / M_PI;
     float pitch_deg = ypr[1] * 180.0 / M_PI;
     float roll_deg = ypr[2] * 180.0 / M_PI;
     uint8_t enemy_color = state.enemy_color;
     float bullet_speed = state.bullet_speed;
 
-        
+       
     std::cout << "Euler Angles (deg): ";
     std::cout << "Yaw: " << yaw_deg << "°, ";
     std::cout << "Pitch: " << pitch_deg << "°, ";
-    std::cout << "Roll: " << roll_deg << "°" << std::endl;
-    std::cout << "enemy_color: " << (int)enemy_color  << std::endl;
-    std::cout << "mode: " <<(int) mode << std::endl;
-    std::cout << "bullet_speed: " <<(float) bullet_speed << std::endl;
+    std::cout << "Roll: " << roll_deg << "°, "<<std::endl;
+    std::cout<<"Data: ";
+    std::cout << "mode "<<(int)mode;
+    // std::cout << "enemy_color: " << (int)enemy_color  << std::endl;
+    // std::cout << "mode: " <<(int) mode << std::endl;
+    std::cout << "bullet_speed: " <<(float) bullet_speed;
+    std::cout << "  bullet_count: " <<(float) state.bullet_count << std::endl;
 
     // std::cout<<q<<std::endl;
 // 
@@ -116,7 +118,7 @@ int main(int argc, char * argv[])
     plotter.plot(data);
 
     // tools::logger()->info("dt:: {:.4f}", dt);
-    tools::logger()->info("fps:: {:.4f}", 1./dt);
+    // tools::logger()->info("fps:: {:.4f}", 1./dt);
 
     std::this_thread::sleep_for(1ms);
   }
