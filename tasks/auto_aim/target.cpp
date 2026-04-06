@@ -236,7 +236,13 @@ void Target::update(const Armor & armor)
       // }
         tower_armor_hs_datas[id] += tower_armor_h;
         last_tower_armor_h[id] = tower_armor_h;
-        tower_armor_hs_datas_ptr++;     
+        tower_armor_hs_datas_ptr[id]++;     
+    }
+
+    if(tower_armor_hs_datas[id] > 10000){
+      tower_armor_hs_datas[id] = tower_armor_hs_datas[id] / (tower_armor_hs_datas_ptr[id] + 1);
+      tower_armor_hs_datas[id] *=600;
+      tower_armor_hs_datas_ptr[id] = 599;
     }
     // std::cout<<"update_count_ :"<<update_count_<<std::endl;
 
@@ -246,9 +252,9 @@ void Target::update(const Armor & armor)
       
       is_switch_ = true;
       if(name == ArmorName::outpost){
-        tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / (tower_armor_hs_datas_ptr + 1);//armor.xyz_in_world[2];
-        tower_armor_hs_datas_ptr = 0;
-        tower_armor_hs_datas[last_id] = 0;        
+        tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / (tower_armor_hs_datas_ptr[last_id] + 1);//armor.xyz_in_world[2];
+        // tower_armor_hs_datas_ptr = 0;
+        // tower_armor_hs_datas[last_id] = 0;        
       }
 
     } else {
