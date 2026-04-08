@@ -94,12 +94,12 @@ void Target::predict(double dt)
   double vyaw = std::abs(ekf_.x[7]);
   
   if (!is_rotation_cv_) {
-    // 当前是平移 CV，如果角速度 >= 3.0 rad/s，切到旋转 CV
+    // 当前是平移 CV，如果角速度 >= 1.5 rad/s，切到旋转 CV
     if (vyaw >= 1.5) {
       is_rotation_cv_ = true;
     }
   } else {
-    // 当前是旋转 CV，如果角速度 <= 1.2 rad/s，切回平移 CV
+    // 当前是旋转 CV，如果角速度 <= 0.5 rad/s，切回平移 CV
     if (vyaw <= 0.5) {
       is_rotation_cv_ = false;
     }
@@ -218,6 +218,7 @@ void Target::update_ypda(const Armor & armor, int id)
   auto delta_angle = tools::limit_rad(armor.ypr_in_world[0] - center_yaw);
 
   auto r2_azimuth = 4e-3;
+  auto r2_pitch = 4e-3;
   auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2;
   auto r2_d = log(std::abs(delta_angle) + 1) + 1;
   
@@ -233,7 +234,7 @@ void Target::update_ypda(const Armor & armor, int id)
     r2_d *= 300;
   }
   
-  Eigen::VectorXd R_dig{{r2_azimuth, r2_azimuth, r2_d, r2_angle}};
+  Eigen::VectorXd R_dig{{r2_azimuth, r2_pitch, r2_d, r2_angle}};
   Eigen::MatrixXd R = R_dig.asDiagonal();
 
   auto h = [&](const Eigen::VectorXd & x) -> Eigen::Vector4d {

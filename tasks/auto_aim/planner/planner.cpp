@@ -252,13 +252,6 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   // tools::logger()->warn("fire:{}", plan.fire);
   plan.target_yaw = (aim_target_yaw + yaw_offset_ )* 57.3;
 
-  // ==========================================================
-  // [新增] 专属 5m 距离打中间 3m 的“击杀区”限制
-  // 仅当目标位于 -17° 到 17° 之间时，才允许保留开火指令
-  // ==========================================================
-  // if (plan.target_yaw < -5.0 || plan.target_yaw > 28.0) {
-  //     plan.fire = false; // 强制禁火，但云台依然会跟随让卡尔曼收敛
-  // }
 
   return plan;
 }
