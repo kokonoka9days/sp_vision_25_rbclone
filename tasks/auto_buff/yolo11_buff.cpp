@@ -1,6 +1,6 @@
 #include "yolo11_buff.hpp"
 
-const double ConfidenceThreshold = 0.7f;
+const double ConfidenceThreshold = 0.3f;
 const double IouThreshold = 0.4f;
 namespace auto_buff
 {
@@ -199,8 +199,8 @@ std::vector<YOLO11_BUFF::Object> YOLO11_BUFF::get_onecandidatebox(cv::Mat & imag
     }
     object_result.push_back(obj);
 
-    /// 0.3-0.7 save
-    if (max_confidence < 0.7) save(std::to_string(start), image);
+    /// 0.3-0.7 save(这是用来继续训练数据集用的)
+    // if (max_confidence < 0.7) save(std::to_string(start), image);
 
     /// 绘制关键点和连线
     cv::rectangle(image, obj.rect, cv::Scalar(255, 255, 255), 1, 8);                  // 绘制矩形框

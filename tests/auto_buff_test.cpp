@@ -21,7 +21,7 @@ const std::string keys =
   "{config-path c  | ../configs/xiaohuang.yaml    | yaml配置文件的路径}"
   "{start-index s  | 0                      | 视频起始帧下标    }"
   "{end-index e    | 0                      | 视频结束帧下标    }"
-  "{@input-path    |    /home/rm/Desktop/sp_vision_25_rbclone/buff                    | avi和txt文件的路径}";
+  "{@input-path    |           /home/cyn/Desktop/sp_vision_25_rbclone/buff   | avi和txt文件的路径}";
 
 int main(int argc, char * argv[])
 {

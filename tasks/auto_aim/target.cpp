@@ -105,9 +105,6 @@ void Target::predict(double dt)
     }
   }
   
-  // 打印当前所用模型
-  // tools::logger()->debug("[Target] Current Model: {}", is_rotation_cv_ ? "CV (旋转)" : "CV (平移)");
-
   // 11维基础转移矩阵
   Eigen::MatrixXd F = Eigen::MatrixXd::Identity(11, 11);
   F(0, 1) = dt; F(2, 3) = dt; F(4, 5) = dt; F(6, 7) = dt;
@@ -189,7 +186,7 @@ void Target::update(const Armor & armor)
     tower_armor_h = a*armor.xyz_in_world[2] + (1-a)*last_tower_armor_h[id];
     tower_armor_hs_datas[id] += tower_armor_h;
     last_tower_armor_h[id] = tower_armor_h;
-    tower_armor_hs_datas_ptr++;     
+    tower_armor_hs_datas_ptr[id]++;     
   }
 
   if (id != last_id) {
@@ -197,32 +194,9 @@ void Target::update(const Armor & armor)
     if(name == ArmorName::outpost){
       double a = 0.1;
       tower_armor_h = a*armor.xyz_in_world[2] + (1-a)*last_tower_armor_h[id];
-      // if(tower_armor_hs_datas_ptr < 20 && update_count_ > 800){
-      //   // if(! (abs(tower_armor_hs[id] - tower_armor_h) > 0.1)){
-      //   //   tower_armor_hs_datas[id] += tower_armor_h;
-      //   //   last_tower_armor_h[id] = tower_armor_h;
-      //   //   tower_armor_hs_datas_ptr++;            
-      //   // }
-      //   int min_absdz_id = 0;
-      //   for(int index = 0; index < 3; index ++){
-      //     double z_diff = abs(tower_armor_hs[index] - tower_armor_h);
-          
-      //     if(z_diff < min_absdz_id){
-      //       min_absdz_id = index;
-      //     }
-      //   }
-      //   if(min_absdz_id == id){
-      //     tower_armor_hs_datas[id] += tower_armor_h;
-      //     last_tower_armor_h[id] = tower_armor_h;
-      //     tower_armor_hs_datas_ptr++;  
-      //   } 
-      // }else{
- 
-   
-      // }
-        tower_armor_hs_datas[id] += tower_armor_h;
-        last_tower_armor_h[id] = tower_armor_h;
-        tower_armor_hs_datas_ptr[id]++;     
+      tower_armor_hs_datas[id] += tower_armor_h;
+      last_tower_armor_h[id] = tower_armor_h;
+      tower_armor_hs_datas_ptr[id]++;     
     }
 
     if(tower_armor_hs_datas[id] > 10000){
@@ -233,17 +207,13 @@ void Target::update(const Armor & armor)
   } else {
     is_switch_ = false;
   }
-
-    // if(tower_armor_hs_datas_ptr > 39) tower_armor_hs_datas_ptr = 0;
     
-    if (id != last_id) {
-      
-      is_switch_ = true;
-      if(name == ArmorName::outpost){
-        tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / (tower_armor_hs_datas_ptr[last_id] + 1);//armor.xyz_in_world[2];
-        // tower_armor_hs_datas_ptr = 0;
-        // tower_armor_hs_datas[last_id] = 0;        
-      }
+  if (id != last_id) {
+    is_switch_ = true;
+    if(name == ArmorName::outpost){
+      tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / (tower_armor_hs_datas_ptr[last_id] + 1);
+    }
+  } 
 
   last_id = id;
   update_count_++;    

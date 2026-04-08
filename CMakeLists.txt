@@ -37,11 +37,13 @@ add_executable(rb_auto_aim_debug  src/rb_auto_aim_debug.cpp)
 add_executable(rb_binocular_aim_debug  src/rb_binocular_aim_debug.cpp)
 add_executable(sb_omn_aim_mpc src/sb_omn_aim_mpc.cpp)
 add_executable(hero  src/hero.cpp)
+add_executable(rb_auto_standard_debug  src/rb_auto_standard_debug.cpp)
 
 target_link_libraries(rb_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(sb_omn_aim_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io omniperception)
 target_link_libraries(rb_binocular_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(hero ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
+target_link_libraries(rb_auto_standard_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 
 ##################calibration################
 add_executable(capture calibration/capture.cpp)
