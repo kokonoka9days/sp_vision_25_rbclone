@@ -25,15 +25,15 @@ square_size_mm: 30   # 棋盘格方块大小（毫米）
 # timestamp_offset_us: 1000 #us
 
 #omn_r
-camera_name: "daheng"
-camera_sn: "KE0210010004"
-exposure_us: 12000
-gain: 0.5
-gamma: 0.5  
-vid_pid: "2ba2:4d55"
-flip: false
-mirror: false
-timestamp_offset_us: 1000 #us
+# camera_name: "daheng"
+# camera_sn: "KE0210010004"
+# exposure_us: 12000
+# gain: 0.5
+# gamma: 0.5  
+# vid_pid: "2ba2:4d55"
+# flip: false
+# mirror: false
+# timestamp_offset_us: 1000 #us
 
 #omn_l
 # camera_name: "daheng"
@@ -46,15 +46,15 @@ timestamp_offset_us: 1000 #us
 # mirror: false
 # timestamp_offset_us: 1000 #us
 
-# camera_name: "daheng"
-# camera_sn: "FDN24040486"
-# exposure_us: 4000
-# gain: 0.5
-# gamma: 0.5
-# vid_pid: "2ba2:4d55"
-# flip: true
-# mirror: true
-# timestamp_offset_us: 1000 #us
+camera_name: "daheng"
+camera_sn: "FDN24040486"
+exposure_us: 10000
+gain: 0.5
+gamma: 0.5
+vid_pid: "2ba2:4d55"
+flip: true
+mirror: true
+timestamp_offset_us: 1000 #us
 
 #####-----cboard参数-----#####
 quaternion_canid: 0x01
@@ -65,21 +65,21 @@ can_interface: "can0"
 R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 
 
-# 相机同理想情况的偏角: yaw-3.11 pitch-0.68 roll0.21 degree
-# 标定板到世界坐标系原点的水平距离: 3.71 m
-# 标定板同竖直摆放时的偏角: yaw-60.81 pitch5.77 roll178.92 degree
-R_camera2gimbal: [0.054173795801965755, -0.012022496889007464, 0.9984591425876975, -0.9985244799230355, 0.0031030309223427574, 0.054214704587644574, -0.0037500457113888983, -0.999922912412576, -0.01183665448991832]
-t_camera2gimbal: [0.2616737948916601, -0.07153032005460355, 0.004140131101408284]
-# 重投影误差: 0.0926px
-camera_matrix: [2353.2097382535585, 0, 679.5533961407167, 0, 2343.3807342456803, 584.3210245464778, 0, 0, 1]
-distort_coeffs: [-0.02652415730142552, 0.13230898912618813, 0.003861442688046747, 0.0016157302719538918, 0.10956223098507868]
+# 相机同理想情况的偏角: yaw-0.87 pitch-0.91 roll-1.00 degree
+# 标定板到世界坐标系原点的水平距离: 3.02 m
+# 标定板同竖直摆放时的偏角: yaw106.19 pitch9.00 roll-1.60 degree
+R_camera2gimbal: [0.015518470321146605, -0.015643013374447828, 0.9997572071315407, -0.9997280102863566, -0.017651979339967417, 0.015241819913124462, 0.017409265572517454, -0.9997218131850222, -0.01591269035321636]
+t_camera2gimbal: [0.18555554841512642, -0.016842994914804996, 0.030817235972619976]
+# 重投影误差: 0.1056px
+camera_matrix: [2441.827665989863, 0, 691.9455542050595, 0, 2425.7023748895353, 555.9135405662234, 0, 0, 1]
+distort_coeffs: [-0.049512074262373466, 0.23344510569813, 0.0026741357009112737, -0.00155865327356647, -0.41449838928263805]
 
 com_port: "/dev/ttyACM0"
 # 陀螺仪是否装错, 编号012分别代表电控坐标系ypr，想换旋转轴只需要对编号进行互换即可，负号就是对当前值取负，交换完再取负
 # 上车前记得对齐电控坐标系和济瞄惯性系
 gimbal_y1: 1
-gimbal_p2: 3
-gimbal_r3: -2
+gimbal_p2: 2
+gimbal_r3: 3
 # 济瞄的惯性系  z轴往上, x轴是枪管指向
 #     x  z
 #      \ |

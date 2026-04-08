@@ -106,7 +106,7 @@ void Target::predict(double dt)
   }
   
   // 打印当前所用模型
-  tools::logger()->debug("[Target] Current Model: {}", is_rotation_cv_ ? "CV (旋转)" : "CV (平移)");
+  // tools::logger()->debug("[Target] Current Model: {}", is_rotation_cv_ ? "CV (旋转)" : "CV (平移)");
 
   // 11维基础转移矩阵
   Eigen::MatrixXd F = Eigen::MatrixXd::Identity(11, 11);
