@@ -22,8 +22,8 @@ const std::string keys =
   "{help h usage ? |                                             | 输出命令行参数说明}"
   "{short_camera   | ../configs/sb_088.yaml                          | 短焦相机配置文件路径 }"
   "{long_camera    | ../configs/sb_copy.yaml                     | 长焦相机配置文件路径 }"
-  "{l_cam          | ../configs/omniperception/omn_camera_left.yaml | 左感知相机 }"
-  "{r_cam          | ../configs/omniperception/omn_camera_right.yaml  | 右感知相机 }";
+  "{l_cam          | ../configs/omn_camera_left.yaml | 左感知相机 }"
+  "{r_cam          | ../configs/omn_camera_right.yaml  | 右感知相机 }";
 
 using namespace std::chrono_literals;
 
@@ -183,38 +183,6 @@ int main(int argc, char * argv[])
   // 主循环
 
 
-  // auto resume_omncamera_thread = std::thread([&]() {
-  //   bool is_currently_paused = true; // 记录当前硬件状态，减少重复调用
-  //    while (!quit){
-      
-  //       // cv::Mat img1, img2;
-  //       // std::chrono::steady_clock::time_point ts1, ts2;
-        
-  //       // bool r1 = omn_cam1.read(img1, ts1);
-  //       // bool r2 = omn_cam2.read(img2, ts2);
-
-  //       if (tracker.state() == "lost") {
-  //           // 只有需要时才执行重负载的 YOLO 和 决策
-  //           io::VisionToGimbal vision_cmd = decider.decide_g(
-  //               yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
-              
-  //           static size_t omn_detect_num = 0;
-  //           if(vision_cmd.mode == 3) omn_detect_num++;
-  //           // 只有在 lost 状态下才发送全向指令，避免干扰主线程控制
-  //           if (tracker.state() == "lost" 
-  //             // && omn_detect_num == 3
-  //           ) {
-  //             omn_detect_num = 0;
-  //             gimbal.send(vision_cmd);
-  //           }
-  //       } else {
-  //           // 不需要感知时，稍微 sleep 释放 CPU，但保持读取频率
-  //           std::this_thread::sleep_for(10ms);
-  //       }
-
-
-  //    }
-  // });
 
 
   while (!exiter.exit()) {
@@ -224,19 +192,7 @@ int main(int argc, char * argv[])
     auto dt = tools::delta_time(now, last);
     tools::logger()->info("{:.2f} fps", 1 / dt);
     last = now;
-    // // 模式切换日志
-    // if (last_mode != mode) {
-    //   tools::logger()->info("Switch to {}", gimbal.str(mode));
-    //   last_mode = mode;
-    // }
-    
-    // // 只处理自瞄模式
-    // if (mode != io::GimbalMode::AUTO_AIM) {
-    //   // 非自瞄模式：发送停止指令并跳过
-    //   std::this_thread::sleep_for(50ms);
-    //   continue;
-    // }
-    
+
     // 读取主相机图像
     // bincameras.cameras.aim_ptr->read(img, timestamp);
     short_camera.read(img, timestamp);
@@ -294,30 +250,6 @@ int main(int argc, char * argv[])
     } 
 
     
-    // // 模式判断：如果跟踪器丢失目标，切换到全向感知模式
-    // if (tracker.state() == "lost") {
-    //   // 发现目标丢失，通知线程开启相机
-    //   need_omni_perception = true;
-
-    //   // 自动切换至短焦（用于全向感知后的接力）
-    //   if(!bincameras.is_short){
-    //       tools::logger()->info("进入全向感知模式，切换至短焦镜头");
-    //       bincameras.Switch(tracker);
-    //   }
-
-    //   // 全向感知决策（非阻塞判断）
-    //   if(!omn_cam1.is_paused() && !omn_cam2.is_paused()){
-    //       io::VisionToGimbal vision_cmd = decider.decide_g(
-    //           yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
-    //       gimbal.send(vision_cmd);
-    //   }
-      
-    // } else {
-    //     // 挂起全向相机
-    //     need_omni_perception = false;
-    //     // omn_cam1.pause();
-    //     // omn_cam2.pause();      
-    // }
 
     {
       // 自瞄模式 - 使用MPC
@@ -409,20 +341,16 @@ int main(int argc, char * argv[])
     }
 
 
-    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    // cv::imshow("reprojection", img);
-    // auto key = cv::waitKey(1);
-    // if (key == 'q') break;
+    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    cv::imshow("reprojection", img);
+    auto key = cv::waitKey(1);
+    if (key == 'q') break;
     // if (key == 'c'){// 强制切换长短焦
     //     bincameras.Switch(tracker);
     // }
 
 
 
-    
-    // // ROS2通信 - 发布目标信息
-    // Eigen::Vector4d target_info = decider.get_target_info(armors, targets);
-    // ros2.publish(target_info);
   }
   
   // 清理
@@ -430,9 +358,7 @@ int main(int argc, char * argv[])
   if (mpc_thread.joinable()) {
     mpc_thread.join();
   }
-  // if (resume_omncamera_thread.joinable()) {
-  //   resume_omncamera_thread.join();
-  // }
+
   // 发送停止指令
   gimbal.send(false, false, 0, 0, 0, 0, 0, 0);
   

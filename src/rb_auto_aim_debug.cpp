@@ -68,55 +68,14 @@ int main(int argc, char * argv[])
       auto gs = gimbal.state();
 
 
-      //完整形态考核专用限制角度开火
-      // auto l = 
-      // auto r = 
-      // if(gs.yaw < l && gs.yaw > r){
-      //   stopkey = false;
-      // }
 
       //MPC预测以及+自家火控
       auto plan = planner.plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
 
-      // if (!plan.control) {
-      //     // 目标丢失或弹道无解时，强制用云台当前的真实角度覆盖默认的 0.0
-      //     plan.yaw = gs.yaw;       
-      //     plan.pitch = gs.pitch;   
-      //     plan.yaw_vel = 0.0;
-      //     plan.pitch_vel = 0.0;
-      //     plan.yaw_acc = 0.0;
-      //     plan.pitch_acc = 0.0;
-          
-      //     // 修复 debug 画图时的 target_yaw 突变问题
-      //     plan.target_yaw = gs.yaw * 57.3;
-      //     plan.target_pitch = gs.pitch * 57.3;
-      // }
-      
-      // if (!stopkey)
-      // {
-      //   plan.fire = 0;
-      // }
         gimbal.send(
       plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
       plan.pitch_acc);      
      
-
-      // //command预测以及火控
-      // io::Command command{false, false, 0, 0};
-      // command = aimer.aim(target, target.getTimePoint(), gs.bullet_speed);
-      // auto ypr = Eigen::Vector3d(gs.yaw, 0, 0);//yaw
-      // command.shoot = shooter.shoot(command, aimer, target, ypr);
-      // gimbal.send(
-      // command.control, command.shoot, command.yaw, 0, 0, command.pitch, 0,
-      // 0);
-
-      // //
-
-      // tools::draw_text(img, fmt::format("Yaw {:.2f}",plan.yaw), {40, 40}, {0, 0, 255});
-      // tools::draw_text(img, fmt::format("Pitch {:.2f}", plan.pitch), {40, 40}, {0, 0, 255});
-
-      // std::cout << "Yaw: " << plan.yaw * 180.0 / M_PI << std::endl;
-      // std::cout << "Pitch: " << plan.pitch * 180.0 / M_PI << std::endl;
 
       auto fired = gs.bullet_count > last_bullet_count;
       last_bullet_count = gs.bullet_count;
@@ -133,7 +92,7 @@ int main(int argc, char * argv[])
       data["target_pitch"] = plan.target_pitch;
 
       data["plan_mode"] = plan.control ? (plan.fire ? 2 : 1) : 0;
-      data["plan_yaw"] = plan.yaw * 57.3;
+      data["plan_yaw"] = plan.yaw / CV_PI * 180. ;
       data["plan_yaw_vel"] = plan.yaw_vel;
       data["plan_yaw_acc"] = plan.yaw_acc;
 
@@ -160,13 +119,13 @@ int main(int argc, char * argv[])
         data["ekf_z"] = ekf_satic(4);
         data["ekf_vz"] = ekf_satic(5);
         data["ekf_yaw"] = ekf_satic(6) * 57.3;
-        data["ekf_vyaw"] = ekf_satic(7);
+        data["ekf_vyaw"] = ekf_satic(7) * 57.3;
         data["ekf_r"] = ekf_satic(8);        
       }
 
       plotter.plot(data);
 
-      std::this_thread::sleep_for(5ms);
+      std::this_thread::sleep_for(10ms);
     }
   });
 
@@ -176,7 +135,7 @@ int main(int argc, char * argv[])
 
   while (!exiter.exit()) {
     camera.read(img, t);
-    auto q = gimbal.q(t - 1000us);
+    auto q = gimbal.q(t - 3ms);
 
 
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
@@ -193,8 +152,8 @@ int main(int argc, char * argv[])
     // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
     // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
     if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
-     tools::draw_text(img, fmt::format( "DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 255, 255});
-      tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 255, 255});
+     tools::draw_text(img, fmt::format("rb_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 128, 255});
+      tools::draw_text(img, fmt::format("rb_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 255, 255});
     // std::cout << "Roll: " << roll_deg << std::endl;
 
     solver.set_R_gimbal2world(q);
@@ -281,7 +240,7 @@ int main(int argc, char * argv[])
       for (const Eigen::Vector4d & xyza : armor_xyza_list) {
         auto image_points =
           solver.reproject_armor(xyza.head(3), xyza[3], target.armor_type, target.name);
-        tools::draw_points(img, image_points, {0, 255, 0});
+        tools::draw_points(img, image_points, {235, 206, 135});
       }
 
       Eigen::Vector4d aim_xyza = planner.debug_xyza;

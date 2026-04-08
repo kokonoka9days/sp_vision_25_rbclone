@@ -4,6 +4,7 @@
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/yaml.hpp"
+#include <opencv2/opencv.hpp>
 
 namespace io
 {
@@ -130,7 +131,6 @@ void Gimbal::send(
   float pitch_acc)
 {
   tx_data_.mode = control ? (fire ? 2 : 1) : 0;
-  // tools::logger()->info(tx_data_.mode);
   tx_data_.yaw = yaw;
   tx_data_.yaw_vel = yaw_vel;
   tx_data_.yaw_acc = yaw_acc;

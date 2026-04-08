@@ -59,9 +59,9 @@ public:
   //前哨站
   double tower_armor_hs[3] = {0, 0, 0};  
   double tower_armor_h;
-  double tower_armor_hs_datas[3] = {0, 0, 0}; 
-  double last_tower_armor_h[3] = {0, 0, 0};
-  int tower_armor_hs_datas_ptr = 0;
+  double tower_armor_hs_datas[3] = {0,0,0}; 
+  double last_tower_armor_h[3] = {0,0,0};
+  int tower_armor_hs_datas_ptr[3] = {0, 0, 0};
 
   //长短焦
   bool cam_is_short = true;

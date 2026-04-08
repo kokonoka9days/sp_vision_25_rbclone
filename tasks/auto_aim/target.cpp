@@ -195,15 +195,55 @@ void Target::update(const Armor & armor)
   if (id != last_id) {
     is_switch_ = true;
     if(name == ArmorName::outpost){
-      tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / (tower_armor_hs_datas_ptr + 1);
-      tower_armor_hs_datas_ptr = 0;
-      tower_armor_hs_datas[last_id] = 0;        
+      double a = 0.1;
+      tower_armor_h = a*armor.xyz_in_world[2] + (1-a)*last_tower_armor_h[id];
+      // if(tower_armor_hs_datas_ptr < 20 && update_count_ > 800){
+      //   // if(! (abs(tower_armor_hs[id] - tower_armor_h) > 0.1)){
+      //   //   tower_armor_hs_datas[id] += tower_armor_h;
+      //   //   last_tower_armor_h[id] = tower_armor_h;
+      //   //   tower_armor_hs_datas_ptr++;            
+      //   // }
+      //   int min_absdz_id = 0;
+      //   for(int index = 0; index < 3; index ++){
+      //     double z_diff = abs(tower_armor_hs[index] - tower_armor_h);
+          
+      //     if(z_diff < min_absdz_id){
+      //       min_absdz_id = index;
+      //     }
+      //   }
+      //   if(min_absdz_id == id){
+      //     tower_armor_hs_datas[id] += tower_armor_h;
+      //     last_tower_armor_h[id] = tower_armor_h;
+      //     tower_armor_hs_datas_ptr++;  
+      //   } 
+      // }else{
+ 
+   
+      // }
+        tower_armor_hs_datas[id] += tower_armor_h;
+        last_tower_armor_h[id] = tower_armor_h;
+        tower_armor_hs_datas_ptr[id]++;     
+    }
+
+    if(tower_armor_hs_datas[id] > 10000){
+      tower_armor_hs_datas[id] = tower_armor_hs_datas[id] / (tower_armor_hs_datas_ptr[id] + 1);
+      tower_armor_hs_datas[id] *=600;
+      tower_armor_hs_datas_ptr[id] = 599;
     }
   } else {
     is_switch_ = false;
   }
 
-  if (is_switch_) switch_count_++;
+    // if(tower_armor_hs_datas_ptr > 39) tower_armor_hs_datas_ptr = 0;
+    
+    if (id != last_id) {
+      
+      is_switch_ = true;
+      if(name == ArmorName::outpost){
+        tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / (tower_armor_hs_datas_ptr[last_id] + 1);//armor.xyz_in_world[2];
+        // tower_armor_hs_datas_ptr = 0;
+        // tower_armor_hs_datas[last_id] = 0;        
+      }
 
   last_id = id;
   update_count_++;    
