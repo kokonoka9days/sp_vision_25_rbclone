@@ -206,6 +206,81 @@ std::list<Target> Tracker::track(
   return targets;
 }
 
+
+std::list<Target> Tracker::test_track(
+  std::list<Armor> & armors, std::chrono::steady_clock::time_point t, bool cam_is_short, bool use_enemy_color)
+{
+  auto dt = tools::delta_time(t, last_timestamp_);
+  last_timestamp_ = t;
+  
+ 
+  target_.cam_is_short = cam_is_short;
+
+  // 时间间隔过长，说明可能发生了相机离线
+  if (state_ != "lost" && dt > 0.1) {
+    tools::logger()->warn("[Tracker] Large dt: {:.3f}s", dt);
+    state_ = "lost";
+  }
+  // 过滤掉非我方装甲板
+  armors.remove_if([&](const auto_aim::Armor & a) { return a.color != enemy_color_; });
+
+  // 过滤前哨站顶部装甲板
+  // armors.remove_if([this](const auto_aim::Armor & a) {
+  //   return a.name == ArmorName::outpost &&
+  //          solver_.oupost_reprojection_error(a, 27.5 * CV_PI / 180.0) <
+  //            solver_.oupost_reprojection_error(a, -15 * CV_PI / 180.0);
+  // });
+
+  // 优先选择靠近图像中心的装甲板
+  armors.sort([](const Armor & a, const Armor & b) {
+    cv::Point2f img_center(1440 / 2, 1080 / 2);  // TODO
+    auto distance_1 = cv::norm(a.center - img_center);
+    auto distance_2 = cv::norm(b.center - img_center);
+    return distance_1 < distance_2;
+  });
+
+  // 按优先级排序，优先级最高在首位(优先级越高数字越小，1的优先级最高)
+  // armors.sort(
+  //   [](const auto_aim::Armor & a, const auto_aim::Armor & b) { return a.priority < b.priority; });
+
+  bool found = 0;
+  
+  if (state_ == "lost") {
+    found = set_target(armors, t);
+    // tools::logger()->debug("按下右键，只选择正在跟踪的装甲板，跳过其他兵种，直至丢跟踪，初始化跟踪类型为 {}", ARMOR_NAMES[armors.front().name]);
+  }
+  else {
+    found = update_target(armors, t);
+  }
+  
+  // found = set_target(armors, t);
+
+  state_machine(found);
+
+  // 发散检测
+  if (state_ != "lost" && target_.diverged()) {
+    // tools::logger()->debug("[Tracker] Target diverged!");
+    state_ = "lost";
+    return {};
+  }
+
+  if (
+  std::accumulate(
+    target_.ekf().recent_nis_failures.begin(), target_.ekf().recent_nis_failures.end(), 0) >=
+  (0.4 * target_.ekf().window_size)) {
+      tools::logger()->debug("[Target] Bad Converge Found!");
+      state_ = "lost";
+      return {};
+  }
+
+  if (state_ == "lost") return {};
+
+  
+
+  std::list<Target> targets = {target_};
+  return targets;
+}
+
 std::tuple<omniperception::DetectionResult, std::list<Target>> Tracker::track(
   const std::vector<omniperception::DetectionResult> & detection_queue, std::list<Armor> & armors,
   std::chrono::steady_clock::time_point t, bool use_enemy_color)

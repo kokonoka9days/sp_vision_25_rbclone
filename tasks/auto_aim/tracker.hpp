@@ -32,6 +32,11 @@ public:
     bool cam_is_short = true,
     bool use_enemy_color = true);
 
+  std::list<Target> test_track(
+    std::list<Armor> & armors, std::chrono::steady_clock::time_point t, 
+    bool cam_is_short = true,
+    bool use_enemy_color = true);
+
 
   std::tuple<omniperception::DetectionResult, std::list<Target>> track(
     const std::vector<omniperception::DetectionResult> & detection_queue, std::list<Armor> & armors,
