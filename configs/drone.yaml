@@ -44,8 +44,8 @@ usb_gain: 10 #0-96
 # flip: false
 # mirror: false
 
-camera_name: "daheng"
-camera_sn: "KE0210030295"
+camera_name: "hikrobot"
+camera_sn: "DA9492714"
 exposure_us: 8000
 gain: 0.5
 gamma: 0.5

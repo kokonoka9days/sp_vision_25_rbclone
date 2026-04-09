@@ -15,6 +15,9 @@ message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}-------
 # openvino依赖
 set(OPENVINO_MAKE OFF)
 
+# tensorRT依赖
+set(TENSOR_RT_MAKE ON)
+
 find_package(OpenCV REQUIRED)
 find_package(fmt REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -130,6 +133,11 @@ target_link_libraries(time_calibrator ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io 
 
 add_executable(planner_test_offline tests/planner_test_offline.cpp)
 target_link_libraries(planner_test_offline ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io omniperception)
+endif()
+
+if(TENSOR_RT_MAKE)
+    add_executable(trt_camera_detect_test tests/trt_camera_detect_test.cpp)
+    target_link_libraries(trt_camera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools auto_aim io)
 endif()
 
 
