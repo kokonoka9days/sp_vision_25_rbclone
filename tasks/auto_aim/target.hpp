@@ -14,6 +14,13 @@
 namespace auto_aim
 {
 
+// 定义运动状态枚举
+enum class MotionState {
+  TRANSLATION,          // 纯平移
+  IN_PLACE_ROTATION,    // 原地旋转
+  TRANSLATION_ROTATION  // 平移 + 旋转
+};
+
 class Target
 {
 public:
@@ -32,7 +39,7 @@ public:
 
   void predict(std::chrono::steady_clock::time_point t);
   void predict(double dt);
-  void update(const std::vector<Armor> & armors);
+  void update(const Armor & armor);
 
   Eigen::VectorXd ekf_x() const;
   const tools::ExtendedKalmanFilter & ekf() const; 
@@ -72,7 +79,6 @@ private:
   int armor_num_;
   int switch_count_;
   int update_count_;
-  int reject_count_; // [新增] 马氏距离连续拒收计数器，用于防死锁
 
   bool is_switch_, is_converged_;
 
@@ -81,12 +87,7 @@ private:
 
   std::chrono::steady_clock::time_point t_;
 
-  enum class MotionState {
-    TRANSLATION,          // 纯平移
-    IN_PLACE_ROTATION,    // 原地旋转
-    TRANSLATION_ROTATION  // 平移旋转(走位小陀螺)
-  };
-
+  // 记录当前的运动状态
   MotionState motion_state_ = MotionState::TRANSLATION;
 
   void update_ypda(const Armor & armor, int id);  // yaw pitch distance angle

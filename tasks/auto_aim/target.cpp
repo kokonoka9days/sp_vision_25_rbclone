@@ -2,7 +2,6 @@
 
 #include <numeric>
 #include <cmath>
-#include <functional>
 
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
@@ -22,13 +21,12 @@ Target::Target(
   jumped(false),
   last_id(0),
   update_count_(0),
-  reject_count_(0), // [新增] 初始化拒收计数器
   armor_num_(armor_num),
   t_(t),
   is_switch_(false),
   is_converged_(false),
   switch_count_(0),
-  motion_state_(MotionState::TRANSLATION)
+  motion_state_(MotionState::TRANSLATION) // 默认初始为平移模型
 {
   auto r = radius;
   priority = armor.priority;
@@ -64,7 +62,6 @@ Target::Target(
 
 Target::Target(double x, double vyaw, double radius, double h) 
 : armor_num_(4),
-  reject_count_(0), // [新增] 初始化拒收计数器
   motion_state_(MotionState::TRANSLATION)
 {
   // 恢复 11 维
@@ -93,10 +90,10 @@ void Target::predict(std::chrono::steady_clock::time_point t)
 
 void Target::predict(double dt)
 {
-  // 计算当前线速度和角速度的绝对值
   double vyaw = std::abs(ekf_.x[7]);
-  double v_linear = std::hypot(ekf_.x[1], ekf_.x[3]); // sqrt(vx^2 + vy^2)
-
+  // 计算 X 和 Y 方向的合成线速度 (m/s)
+  double v_linear = std::hypot(ekf_.x[1], ekf_.x[3]); 
+  
   // 状态机滞回阈值配置 (需要根据实际底盘性能微调)
   const double OMEGA_HIGH = 1.5;   // 进入旋转的角速度阈值 (rad/s)
   const double OMEGA_LOW = 0.5;    // 退出旋转的角速度阈值 (rad/s)
@@ -128,7 +125,7 @@ void Target::predict(double dt)
       }
       break;
   }
-
+  
   // 11维基础转移矩阵
   Eigen::MatrixXd F = Eigen::MatrixXd::Identity(11, 11);
   F(0, 1) = dt; F(2, 3) = dt; F(4, 5) = dt; F(6, 7) = dt;
@@ -137,24 +134,24 @@ void Target::predict(double dt)
   if (name == ArmorName::outpost) {
     v1 = 5;     v2 = 0.05;
   } else {
-    // ================= 核心：对三种模式分配不同的过程噪声 =================
+    // ================= 核心：利用枚举分配不同的噪声 =================
     switch (motion_state_) {
       case MotionState::TRANSLATION:
-        // 平移模式：高度信任观测量，紧跟平移机动
-        v1 = 100.0;   
-        v2 = 400.0;   
+        // 纯平移：灵活跟踪平移，过滤 Yaw 的干扰
+        v1 = 100;
+        v2 = 20;
         break;
-      
+
       case MotionState::IN_PLACE_ROTATION:
-        // 原地旋转：极度信任位置模型(速度为0)，过滤装甲板切换导致的中心抖动
-        v1 = 0.1;     
-        v2 = 0.1;     // 信任匀角速度模型，平滑相位
+        // 原地旋转：抑制 X/Y 轴的乱跳，紧随 Yaw 角的变化
+        v1 = 1;    
+        v2 = 0.1;
         break;
-      
+
       case MotionState::TRANSLATION_ROTATION:
-        // 走位小陀螺：适度信任位置模型（允许中心移动但加以平滑），信任匀角速度模型
-        v1 = 10.0;    // 相比平移调小，防止旋转时的测距突变干扰线速度
-        v2 = 0.1;     
+        // 平移 + 旋转：车辆同时剧烈平移和自转，赋予全部坐标轴较高的灵活性
+        v1 = 100;
+        v2 = 400;
         break;
     }
   }
@@ -182,62 +179,49 @@ void Target::predict(double dt)
   ekf_.predict(F, Q, f);
 }
 
-void Target::update(const std::vector<Armor> & armors)
+void Target::update(const Armor & armor)
 {
-  if (armors.empty()) return;
-
-  int m = armors.size();
-  int n = armor_num_; // EKF预测的ID数量 (通常为4)
+  int id = 0;
+  auto min_angle_error = 1e10;
   const std::vector<Eigen::Vector4d> & xyza_list = armor_xyza_list();
 
-  // 1. 构建代价矩阵 (Cost Matrix)
-  std::vector<std::vector<double>> cost_matrix(m, std::vector<double>(n, 0.0));
-  for (int i = 0; i < m; ++i) {
-    for (int j = 0; j < n; ++j) {
-      Eigen::Vector3d ypd = tools::xyz2ypd(xyza_list[j].head(3));
-      double yaw_error = tools::limit_rad(armors[i].ypr_in_world[0] - xyza_list[j][3]);
-      double pitch_error = tools::limit_rad(armors[i].ypd_in_world[0] - ypd[0]);
-      // 将角度偏差作为匹配代价
-      cost_matrix[i][j] = std::abs(yaw_error) + std::abs(pitch_error);
+  std::vector<std::pair<Eigen::Vector4d, int>> xyza_i_list;
+  for (int i = 0; i < armor_num_; i++) {
+    xyza_i_list.push_back({xyza_list[i], i});
+  }
+
+  std::sort(
+    xyza_i_list.begin(), xyza_i_list.end(),
+    [](const std::pair<Eigen::Vector4d, int> & a, const std::pair<Eigen::Vector4d, int> & b) {
+      Eigen::Vector3d ypd1 = tools::xyz2ypd(a.first.head(3));
+      Eigen::Vector3d ypd2 = tools::xyz2ypd(b.first.head(3));
+      return ypd1[2] < ypd2[2];
+    });
+
+  for (int i = 0; i < 3; i++) {
+    const auto & xyza = xyza_i_list[i].first;
+    Eigen::Vector3d ypd = tools::xyz2ypd(xyza.head(3));
+    auto angle_error = std::abs(tools::limit_rad(armor.ypr_in_world[0] - xyza[3])) +
+                       std::abs(tools::limit_rad(armor.ypd_in_world[0] - ypd[0]));
+
+    if (std::abs(angle_error) < std::abs(min_angle_error)) {
+      id = xyza_i_list[i].second;
+      min_angle_error = angle_error;
     }
   }
 
-  // 2. 使用全排列暴搜寻找全局最优分配（替代外部匈牙利算法库，N<=4时等效且更快）
-  std::vector<int> best_assignment(m, -1);
-  double min_total_cost = 1e9;
+  if (id != 0) jumped = true;
   
-  std::vector<int> current_assignment(m, -1);
-  std::vector<bool> used_id(n, false);
+  if(name == ArmorName::outpost){
+    double a = 0.1;
+    tower_armor_h = a*armor.xyz_in_world[2] + (1-a)*last_tower_armor_h[id];
+    tower_armor_hs_datas[id] += tower_armor_h;
+    last_tower_armor_h[id] = tower_armor_h;
+    tower_armor_hs_datas_ptr[id]++;     
+  }
 
-  std::function<void(int, double)> dfs = [&](int depth, double current_cost) {
-    if (depth == m) {
-      // 记录全局最小代价及其匹配方案
-      if (current_cost < min_total_cost) {
-        min_total_cost = current_cost;
-        best_assignment = current_assignment;
-      }
-      return;
-    }
-    for (int j = 0; j < n; ++j) {
-      if (!used_id[j]) {
-        used_id[j] = true;
-        current_assignment[depth] = j;
-        dfs(depth + 1, current_cost + cost_matrix[depth][j]);
-        used_id[j] = false;
-      }
-    }
-  };
-  
-  dfs(0, 0.0);
-
-  // 3. 根据最优匹配结果，依次对 EKF 进行更新
-  for (int i = 0; i < m; ++i) {
-    int id = best_assignment[i];
-    const Armor & armor = armors[i];
-
-    if (id != 0) jumped = true;
-    
-    // --- 延续原有的前哨站和记录逻辑 ---
+  if (id != last_id) {
+    is_switch_ = true;
     if(name == ArmorName::outpost){
       double a = 0.1;
       tower_armor_h = a*armor.xyz_in_world[2] + (1-a)*last_tower_armor_h[id];
@@ -246,40 +230,27 @@ void Target::update(const std::vector<Armor> & armors)
       tower_armor_hs_datas_ptr[id]++;     
     }
 
-    if (id != last_id) {
-      is_switch_ = true;
-      if(name == ArmorName::outpost){
-        double a = 0.1;
-        tower_armor_h = a*armor.xyz_in_world[2] + (1-a)*last_tower_armor_h[id];
-        tower_armor_hs_datas[id] += tower_armor_h;
-        last_tower_armor_h[id] = tower_armor_h;
-        tower_armor_hs_datas_ptr[id]++;     
-      }
-
-      if(tower_armor_hs_datas[id] > 10000){
-        tower_armor_hs_datas[id] = tower_armor_hs_datas[id] / (tower_armor_hs_datas_ptr[id] + 1);
-        tower_armor_hs_datas[id] *=600;
-        tower_armor_hs_datas_ptr[id] = 599;
-      }
-    } else {
-      is_switch_ = false;
+    if(tower_armor_hs_datas[id] > 10000){
+      tower_armor_hs_datas[id] = tower_armor_hs_datas[id] / (tower_armor_hs_datas_ptr[id] + 1);
+      tower_armor_hs_datas[id] *=600;
+      tower_armor_hs_datas_ptr[id] = 599;
     }
-      
-    if (id != last_id) {
-      is_switch_ = true;
-      if(name == ArmorName::outpost){
-        tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / (tower_armor_hs_datas_ptr[last_id] + 1);
-      }
-    } 
-
-    last_id = id;
-    update_count_++;    
-    xyz_in_world = armor.xyz_in_world;
-    // ----------------------------------
-
-    // 将匹配好的装甲板依次送入 EKF 观测更新（卡尔曼可以安全地连续多次迭代更新）
-    update_ypda(armor, id); 
+  } else {
+    is_switch_ = false;
   }
+    
+  if (id != last_id) {
+    is_switch_ = true;
+    if(name == ArmorName::outpost){
+      tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / (tower_armor_hs_datas_ptr[last_id] + 1);
+    }
+  } 
+
+  last_id = id;
+  update_count_++;    
+  xyz_in_world = armor.xyz_in_world;
+
+  update_ypda(armor, id);
 }
 
 void Target::update_ypda(const Armor & armor, int id)
@@ -289,8 +260,7 @@ void Target::update_ypda(const Armor & armor, int id)
 
   auto r2_azimuth = 4e-3;
   auto r2_pitch = 4e-3;
-  // [修改] 提高角度观测的基础噪声，从 9e-2 提高到 0.15，降低滤波器对单帧跳动数据的敏感度
-  auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2; 
+  auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2;
   auto r2_d = log(std::abs(delta_angle) + 1) + 1;
   
   if(last_cam_is_short != cam_is_short){
@@ -329,46 +299,7 @@ void Target::update_ypda(const Armor & armor, int id)
 
   Eigen::MatrixXd H = h_jacobian(ekf_.x, id);
 
-  // ==================== [新增] 马氏距离门控与防死锁机制 ====================
-  bool should_update = true;
-  
-  // 仅在 EKF 初始化完成并有了一定置信度后，才开启残差过滤，防止初始收敛困难
-  if (update_count_ > 10) {
-    Eigen::VectorXd z_pred = h(ekf_.x);
-    Eigen::VectorXd y = z_subtract(z, z_pred); // 观测残差 Innovation
-    
-    // 计算新息协方差矩阵 S = H * P * H^T + R
-    Eigen::MatrixXd S = H * ekf_.P * H.transpose() + R;
-    
-    // 计算马氏距离平方 D^2 = y^T * S^-1 * y
-    double mahalanobis_sq = y.transpose() * S.inverse() * y;
-    
-    // 观测维度自由度为 4 (azimuth, pitch, d, angle)
-    // 根据卡方分布表，自由度4，99%置信度对应的阈值为 13.277
-    double chi_square_threshold = 13.277; 
-
-    if (mahalanobis_sq > chi_square_threshold) {
-      reject_count_++;
-      // 防死锁：如果连续 8 帧观测数据都被判定为异常，说明很可能不是噪声，而是目标发生急停/反转
-      if (reject_count_ > 8) {
-        should_update = true; // 强行拉回
-        reject_count_ = 0;
-        
-        // 放大协方差矩阵，强制 EKF 大幅降低对过往状态的自信，重新相信最新观测
-        ekf_.P *= 10.0; 
-      } else {
-        should_update = false; // 抛弃异常帧，只使用 predict 预测的结果
-      }
-    } else {
-      reject_count_ = 0; // 观测正常，重置拒收计数器
-    }
-  }
-
-  // 根据判断结果决定是否进行卡尔曼更新
-  if (should_update) {
-    ekf_.update(z, H, R, h, z_subtract);
-  }
-  // =========================================================================
+  ekf_.update(z, H, R, h, z_subtract);
 }
 
 Eigen::VectorXd Target::ekf_x() const { return ekf_.x; }
