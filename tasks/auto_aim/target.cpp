@@ -2,6 +2,7 @@
 
 #include <numeric>
 #include <cmath>
+#include <functional>
 
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
@@ -21,6 +22,7 @@ Target::Target(
   jumped(false),
   last_id(0),
   update_count_(0),
+  reject_count_(0), // [新增] 初始化拒收计数器
   armor_num_(armor_num),
   t_(t),
   is_switch_(false),
@@ -62,6 +64,7 @@ Target::Target(
 
 Target::Target(double x, double vyaw, double radius, double h) 
 : armor_num_(4),
+  reject_count_(0), // [新增] 初始化拒收计数器
   is_rotation_cv_(false)
 {
   // 恢复 11 维
@@ -116,12 +119,12 @@ void Target::predict(double dt)
     // ================= 核心：对两种 CV 分配不同的噪声 =================
     if (is_rotation_cv_) {
       // 旋转 CV：锁定车辆中心(v1极小)，紧盯小陀螺自转(v2极大)
-      v1 = 2.0;   // 抑制 X/Y 轴的乱跳，认为车辆中心大致不动或缓慢匀速
-      v2 = 400.0; // 紧随 Yaw 角的变化
+      v1 = 20.0;   // 抑制 X/Y 轴的乱跳，认为车辆中心大致不动或缓慢匀速
+      v2 = 0.1;    // 紧随 Yaw 角的变化
     } else {
       // 平移 CV：跟踪车辆平移机动(v1大)，过滤 Yaw 的干扰(v2小)
       v1 = 300.0;  // 灵活跟踪平移
-      v2 = 80.0;   // 认为车体朝向不会突变
+      v2 = 0.1;    // 认为车体朝向不会突变
     }
   }
 
@@ -148,49 +151,62 @@ void Target::predict(double dt)
   ekf_.predict(F, Q, f);
 }
 
-void Target::update(const Armor & armor)
+void Target::update(const std::vector<Armor> & armors)
 {
-  int id = 0;
-  auto min_angle_error = 1e10;
+  if (armors.empty()) return;
+
+  int m = armors.size();
+  int n = armor_num_; // EKF预测的ID数量 (通常为4)
   const std::vector<Eigen::Vector4d> & xyza_list = armor_xyza_list();
 
-  std::vector<std::pair<Eigen::Vector4d, int>> xyza_i_list;
-  for (int i = 0; i < armor_num_; i++) {
-    xyza_i_list.push_back({xyza_list[i], i});
-  }
-
-  std::sort(
-    xyza_i_list.begin(), xyza_i_list.end(),
-    [](const std::pair<Eigen::Vector4d, int> & a, const std::pair<Eigen::Vector4d, int> & b) {
-      Eigen::Vector3d ypd1 = tools::xyz2ypd(a.first.head(3));
-      Eigen::Vector3d ypd2 = tools::xyz2ypd(b.first.head(3));
-      return ypd1[2] < ypd2[2];
-    });
-
-  for (int i = 0; i < 3; i++) {
-    const auto & xyza = xyza_i_list[i].first;
-    Eigen::Vector3d ypd = tools::xyz2ypd(xyza.head(3));
-    auto angle_error = std::abs(tools::limit_rad(armor.ypr_in_world[0] - xyza[3])) +
-                       std::abs(tools::limit_rad(armor.ypd_in_world[0] - ypd[0]));
-
-    if (std::abs(angle_error) < std::abs(min_angle_error)) {
-      id = xyza_i_list[i].second;
-      min_angle_error = angle_error;
+  // 1. 构建代价矩阵 (Cost Matrix)
+  std::vector<std::vector<double>> cost_matrix(m, std::vector<double>(n, 0.0));
+  for (int i = 0; i < m; ++i) {
+    for (int j = 0; j < n; ++j) {
+      Eigen::Vector3d ypd = tools::xyz2ypd(xyza_list[j].head(3));
+      double yaw_error = tools::limit_rad(armors[i].ypr_in_world[0] - xyza_list[j][3]);
+      double pitch_error = tools::limit_rad(armors[i].ypd_in_world[0] - ypd[0]);
+      // 将角度偏差作为匹配代价
+      cost_matrix[i][j] = std::abs(yaw_error) + std::abs(pitch_error);
     }
   }
 
-  if (id != 0) jumped = true;
+  // 2. 使用全排列暴搜寻找全局最优分配（替代外部匈牙利算法库，N<=4时等效且更快）
+  std::vector<int> best_assignment(m, -1);
+  double min_total_cost = 1e9;
   
-  if(name == ArmorName::outpost){
-    double a = 0.1;
-    tower_armor_h = a*armor.xyz_in_world[2] + (1-a)*last_tower_armor_h[id];
-    tower_armor_hs_datas[id] += tower_armor_h;
-    last_tower_armor_h[id] = tower_armor_h;
-    tower_armor_hs_datas_ptr[id]++;     
-  }
+  std::vector<int> current_assignment(m, -1);
+  std::vector<bool> used_id(n, false);
 
-  if (id != last_id) {
-    is_switch_ = true;
+  std::function<void(int, double)> dfs = [&](int depth, double current_cost) {
+    if (depth == m) {
+      // 记录全局最小代价及其匹配方案
+      if (current_cost < min_total_cost) {
+        min_total_cost = current_cost;
+        best_assignment = current_assignment;
+      }
+      return;
+    }
+    for (int j = 0; j < n; ++j) {
+      if (!used_id[j]) {
+        used_id[j] = true;
+        current_assignment[depth] = j;
+        dfs(depth + 1, current_cost + cost_matrix[depth][j]);
+        used_id[j] = false;
+      }
+    }
+  };
+  
+  dfs(0, 0.0);
+
+  // 3. 根据最优匹配结果，依次对 EKF 进行更新
+  for (int i = 0; i < m; ++i) {
+    int id = best_assignment[i];
+    const Armor & armor = armors[i];
+
+    if (id != 0) jumped = true;
+    
+    // --- 延续原有的前哨站和记录逻辑 ---
     if(name == ArmorName::outpost){
       double a = 0.1;
       tower_armor_h = a*armor.xyz_in_world[2] + (1-a)*last_tower_armor_h[id];
@@ -199,27 +215,40 @@ void Target::update(const Armor & armor)
       tower_armor_hs_datas_ptr[id]++;     
     }
 
-    if(tower_armor_hs_datas[id] > 10000){
-      tower_armor_hs_datas[id] = tower_armor_hs_datas[id] / (tower_armor_hs_datas_ptr[id] + 1);
-      tower_armor_hs_datas[id] *=600;
-      tower_armor_hs_datas_ptr[id] = 599;
+    if (id != last_id) {
+      is_switch_ = true;
+      if(name == ArmorName::outpost){
+        double a = 0.1;
+        tower_armor_h = a*armor.xyz_in_world[2] + (1-a)*last_tower_armor_h[id];
+        tower_armor_hs_datas[id] += tower_armor_h;
+        last_tower_armor_h[id] = tower_armor_h;
+        tower_armor_hs_datas_ptr[id]++;     
+      }
+
+      if(tower_armor_hs_datas[id] > 10000){
+        tower_armor_hs_datas[id] = tower_armor_hs_datas[id] / (tower_armor_hs_datas_ptr[id] + 1);
+        tower_armor_hs_datas[id] *=600;
+        tower_armor_hs_datas_ptr[id] = 599;
+      }
+    } else {
+      is_switch_ = false;
     }
-  } else {
-    is_switch_ = false;
+      
+    if (id != last_id) {
+      is_switch_ = true;
+      if(name == ArmorName::outpost){
+        tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / (tower_armor_hs_datas_ptr[last_id] + 1);
+      }
+    } 
+
+    last_id = id;
+    update_count_++;    
+    xyz_in_world = armor.xyz_in_world;
+    // ----------------------------------
+
+    // 将匹配好的装甲板依次送入 EKF 观测更新（卡尔曼可以安全地连续多次迭代更新）
+    update_ypda(armor, id); 
   }
-    
-  if (id != last_id) {
-    is_switch_ = true;
-    if(name == ArmorName::outpost){
-      tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / (tower_armor_hs_datas_ptr[last_id] + 1);
-    }
-  } 
-
-  last_id = id;
-  update_count_++;    
-  xyz_in_world = armor.xyz_in_world;
-
-  update_ypda(armor, id);
 }
 
 void Target::update_ypda(const Armor & armor, int id)
@@ -229,7 +258,8 @@ void Target::update_ypda(const Armor & armor, int id)
 
   auto r2_azimuth = 4e-3;
   auto r2_pitch = 4e-3;
-  auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2;
+  // [修改] 提高角度观测的基础噪声，从 9e-2 提高到 0.15，降低滤波器对单帧跳动数据的敏感度
+  auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2; 
   auto r2_d = log(std::abs(delta_angle) + 1) + 1;
   
   if(last_cam_is_short != cam_is_short){
@@ -268,7 +298,46 @@ void Target::update_ypda(const Armor & armor, int id)
 
   Eigen::MatrixXd H = h_jacobian(ekf_.x, id);
 
-  ekf_.update(z, H, R, h, z_subtract);
+  // ==================== [新增] 马氏距离门控与防死锁机制 ====================
+  bool should_update = true;
+  
+  // 仅在 EKF 初始化完成并有了一定置信度后，才开启残差过滤，防止初始收敛困难
+  if (update_count_ > 10) {
+    Eigen::VectorXd z_pred = h(ekf_.x);
+    Eigen::VectorXd y = z_subtract(z, z_pred); // 观测残差 Innovation
+    
+    // 计算新息协方差矩阵 S = H * P * H^T + R
+    Eigen::MatrixXd S = H * ekf_.P * H.transpose() + R;
+    
+    // 计算马氏距离平方 D^2 = y^T * S^-1 * y
+    double mahalanobis_sq = y.transpose() * S.inverse() * y;
+    
+    // 观测维度自由度为 4 (azimuth, pitch, d, angle)
+    // 根据卡方分布表，自由度4，99%置信度对应的阈值为 13.277
+    double chi_square_threshold = 13.277; 
+
+    if (mahalanobis_sq > chi_square_threshold) {
+      reject_count_++;
+      // 防死锁：如果连续 8 帧观测数据都被判定为异常，说明很可能不是噪声，而是目标发生急停/反转
+      if (reject_count_ > 8) {
+        should_update = true; // 强行拉回
+        reject_count_ = 0;
+        
+        // 放大协方差矩阵，强制 EKF 大幅降低对过往状态的自信，重新相信最新观测
+        ekf_.P *= 10.0; 
+      } else {
+        should_update = false; // 抛弃异常帧，只使用 predict 预测的结果
+      }
+    } else {
+      reject_count_ = 0; // 观测正常，重置拒收计数器
+    }
+  }
+
+  // 根据判断结果决定是否进行卡尔曼更新
+  if (should_update) {
+    ekf_.update(z, H, R, h, z_subtract);
+  }
+  // =========================================================================
 }
 
 Eigen::VectorXd Target::ekf_x() const { return ekf_.x; }

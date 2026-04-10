@@ -32,7 +32,7 @@ public:
 
   void predict(std::chrono::steady_clock::time_point t);
   void predict(double dt);
-  void update(const Armor & armor);
+  void update(const std::vector<Armor> & armors);
 
   Eigen::VectorXd ekf_x() const;
   const tools::ExtendedKalmanFilter & ekf() const; 
@@ -72,6 +72,7 @@ private:
   int armor_num_;
   int switch_count_;
   int update_count_;
+  int reject_count_; // [新增] 马氏距离连续拒收计数器，用于防死锁
 
   bool is_switch_, is_converged_;
 
@@ -81,7 +82,7 @@ private:
   std::chrono::steady_clock::time_point t_;
 
   // 记录当前使用的 CV 模型 (false: 平移 CV, true: 旋转 CV)
-  bool is_rotation_cv_ = false;
+  bool is_rotation_cv_ = true;
 
   void update_ypda(const Armor & armor, int id);  // yaw pitch distance angle
   Eigen::MatrixXd h_jacobian(const Eigen::VectorXd & x, int id) const;

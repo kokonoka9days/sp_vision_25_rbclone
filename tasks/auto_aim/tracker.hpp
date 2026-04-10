@@ -5,6 +5,7 @@
 #include <chrono>
 #include <list>
 #include <string>
+#include <vector>
 
 #include "io/gimbal/gimbal.hpp"
 #include "armor.hpp"
@@ -41,7 +42,7 @@ public:
   void set_gimbal(io::Gimbal* gimbal) { gimbal_ = gimbal; }
 private:
   Solver * solver_;
-  io::Gimbal* gimbal_ = nullptr; // 新增一个云台指针，默认为空
+  io::Gimbal* gimbal_ = nullptr; 
   Color enemy_color_;
   std::string enemy_color_str_;
   int min_detect_count_;
@@ -61,7 +62,6 @@ private:
   bool set_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
 
   bool update_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
-
   
 };
 
