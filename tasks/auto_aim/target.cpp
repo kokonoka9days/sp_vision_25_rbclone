@@ -28,7 +28,7 @@ Target::Target(
   is_switch_(false),
   is_converged_(false),
   switch_count_(0),
-  is_rotation_cv_(false) // 默认初始为平移 CV 模型
+  motion_state_(MotionState::TRANSLATION)
 {
   auto r = radius;
   priority = armor.priority;
@@ -65,7 +65,7 @@ Target::Target(
 Target::Target(double x, double vyaw, double radius, double h) 
 : armor_num_(4),
   reject_count_(0), // [新增] 初始化拒收计数器
-  is_rotation_cv_(false)
+  motion_state_(MotionState::TRANSLATION)
 {
   // 恢复 11 维
   Eigen::VectorXd x0 = Eigen::VectorXd::Zero(11);
@@ -93,21 +93,42 @@ void Target::predict(std::chrono::steady_clock::time_point t)
 
 void Target::predict(double dt)
 {
-  // ================= 平移/旋转 CV 滞回比较逻辑 =================
+  // 计算当前线速度和角速度的绝对值
   double vyaw = std::abs(ekf_.x[7]);
-  
-  if (!is_rotation_cv_) {
-    // 当前是平移 CV，如果角速度 >= 1.5 rad/s，切到旋转 CV
-    if (vyaw >= 1.5) {
-      is_rotation_cv_ = true;
-    }
-  } else {
-    // 当前是旋转 CV，如果角速度 <= 0.5 rad/s，切回平移 CV
-    if (vyaw <= 0.5) {
-      is_rotation_cv_ = false;
-    }
+  double v_linear = std::hypot(ekf_.x[1], ekf_.x[3]); // sqrt(vx^2 + vy^2)
+
+  // 状态机滞回阈值配置 (需要根据实际底盘性能微调)
+  const double OMEGA_HIGH = 1.5;   // 进入旋转的角速度阈值 (rad/s)
+  const double OMEGA_LOW = 0.5;    // 退出旋转的角速度阈值 (rad/s)
+  const double V_HIGH = 0.6;       // 进入平移旋转的线速度阈值 (m/s)
+  const double V_LOW = 0.3;        // 退出平移旋转的线速度阈值 (m/s)
+
+  // ================= 状态转移逻辑 =================
+  switch (motion_state_) {
+    case MotionState::TRANSLATION:
+      if (vyaw > OMEGA_HIGH) {
+        if (v_linear > V_HIGH) motion_state_ = MotionState::TRANSLATION_ROTATION;
+        else motion_state_ = MotionState::IN_PLACE_ROTATION;
+      }
+      break;
+
+    case MotionState::IN_PLACE_ROTATION:
+      if (vyaw < OMEGA_LOW) {
+        motion_state_ = MotionState::TRANSLATION;
+      } else if (v_linear > V_HIGH) {
+        motion_state_ = MotionState::TRANSLATION_ROTATION;
+      }
+      break;
+
+    case MotionState::TRANSLATION_ROTATION:
+      if (vyaw < OMEGA_LOW) {
+        motion_state_ = MotionState::TRANSLATION;
+      } else if (v_linear < V_LOW) {
+        motion_state_ = MotionState::IN_PLACE_ROTATION;
+      }
+      break;
   }
-  
+
   // 11维基础转移矩阵
   Eigen::MatrixXd F = Eigen::MatrixXd::Identity(11, 11);
   F(0, 1) = dt; F(2, 3) = dt; F(4, 5) = dt; F(6, 7) = dt;
@@ -116,15 +137,25 @@ void Target::predict(double dt)
   if (name == ArmorName::outpost) {
     v1 = 5;     v2 = 0.05;
   } else {
-    // ================= 核心：对两种 CV 分配不同的噪声 =================
-    if (is_rotation_cv_) {
-      // 旋转 CV：锁定车辆中心(v1极小)，紧盯小陀螺自转(v2极大)
-      v1 = 5.0;   // 抑制 X/Y 轴的乱跳，认为车辆中心大致不动或缓慢匀速
-      v2 = 0.1; // 紧随 Yaw 角的变化
-    } else {
-      // 平移 CV：跟踪车辆平移机动(v1大)，过滤 Yaw 的干扰(v2小)
-      v1 = 100;  // 灵活跟踪平移
-      v2 = 400;   // 认为车体朝向不会突变
+    // ================= 核心：对三种模式分配不同的过程噪声 =================
+    switch (motion_state_) {
+      case MotionState::TRANSLATION:
+        // 平移模式：高度信任观测量，紧跟平移机动
+        v1 = 100.0;   
+        v2 = 400.0;   
+        break;
+      
+      case MotionState::IN_PLACE_ROTATION:
+        // 原地旋转：极度信任位置模型(速度为0)，过滤装甲板切换导致的中心抖动
+        v1 = 0.1;     
+        v2 = 0.1;     // 信任匀角速度模型，平滑相位
+        break;
+      
+      case MotionState::TRANSLATION_ROTATION:
+        // 走位小陀螺：适度信任位置模型（允许中心移动但加以平滑），信任匀角速度模型
+        v1 = 10.0;    // 相比平移调小，防止旋转时的测距突变干扰线速度
+        v2 = 0.1;     
+        break;
     }
   }
 

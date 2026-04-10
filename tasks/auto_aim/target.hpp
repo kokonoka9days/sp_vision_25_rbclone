@@ -81,8 +81,13 @@ private:
 
   std::chrono::steady_clock::time_point t_;
 
-  // 记录当前使用的 CV 模型 (false: 平移 CV, true: 旋转 CV)
-  bool is_rotation_cv_ = true;
+  enum class MotionState {
+    TRANSLATION,          // 纯平移
+    IN_PLACE_ROTATION,    // 原地旋转
+    TRANSLATION_ROTATION  // 平移旋转(走位小陀螺)
+  };
+
+  MotionState motion_state_ = MotionState::TRANSLATION;
 
   void update_ypda(const Armor & armor, int id);  // yaw pitch distance angle
   Eigen::MatrixXd h_jacobian(const Eigen::VectorXd & x, int id) const;
