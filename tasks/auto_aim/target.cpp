@@ -181,40 +181,90 @@ void Target::predict(double dt)
 
 void Target::update(const Armor & armor)
 {
-  int id = 0;
-  auto min_angle_error = 1e10;
-  const std::vector<Eigen::Vector4d> & xyza_list = armor_xyza_list();
+  // ================= 1. 提前构造测量噪声矩阵 R (复用 update_ypda 中的逻辑) =================
+  auto center_yaw = std::atan2(armor.xyz_in_world[1], armor.xyz_in_world[0]);
+  auto delta_angle = tools::limit_rad(armor.ypr_in_world[0] - center_yaw);
 
-  std::vector<std::pair<Eigen::Vector4d, int>> xyza_i_list;
+  auto r2_azimuth = 4e-3;
+  auto r2_pitch = 4e-3;
+  auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2;
+  auto r2_d = log(std::abs(delta_angle) + 1) + 1;
+  
+  if (last_cam_is_short != cam_is_short) {
+    cam_is_switch_time_point = std::chrono::steady_clock::now();
+    last_cam_is_short = cam_is_short;
+  }
+  auto now = std::chrono::steady_clock::now();
+  double cam_is_switch_lter_dt = tools::delta_time(now, cam_is_switch_time_point);
+  if (cam_is_switch_lter_dt < 0.7 && update_count_ > 50) {
+    r2_azimuth = 4e+4;
+    r2_angle *= 300;
+    r2_d *= 300;
+  }
+  
+  Eigen::VectorXd R_dig{{r2_azimuth, r2_pitch, r2_d, r2_angle}};
+  Eigen::MatrixXd R = R_dig.asDiagonal();
+
+  // ================= 2. 构造当前实际的观测向量 z =================
+  const Eigen::VectorXd & ypd = armor.ypd_in_world;
+  const Eigen::VectorXd & ypr = armor.ypr_in_world;
+  Eigen::VectorXd z{{ypd[0], ypd[1], ypd[2], ypr[0]}};
+
+  // ================= 3. 基于马氏距离寻找最佳匹配装甲板 =================
+  int best_id = 0;
+  double min_mahalanobis_dist = 1e10;
+  std::vector<double> md_list(armor_num_, 1e10);
+
   for (int i = 0; i < armor_num_; i++) {
-    xyza_i_list.push_back({xyza_list[i], i});
+    // 3.1 计算预测观测值 h(x)
+    Eigen::VectorXd xyz_pred = h_armor_xyz(ekf_.x, i);
+    Eigen::VectorXd ypd_pred = tools::xyz2ypd(xyz_pred);
+    auto angle_pred = tools::limit_rad(ekf_.x[6] + i * 2 * CV_PI / armor_num_);
+    Eigen::VectorXd z_pred{{ypd_pred[0], ypd_pred[1], ypd_pred[2], angle_pred}};
+
+    // 3.2 计算残差 y = z - h(x)
+    Eigen::VectorXd y = z - z_pred;
+    y[0] = tools::limit_rad(y[0]);
+    y[1] = tools::limit_rad(y[1]);
+    y[3] = tools::limit_rad(y[3]);
+
+    // 3.3 获取雅克比矩阵 H
+    Eigen::MatrixXd H = h_jacobian(ekf_.x, i);
+
+    // 3.4 计算新息协方差矩阵 S = H * P * H^T + R
+    // 注意：这要求 ekf_.P 是可访问的。若在你的 ExtendedKalmanFilter 类中 P 是 public 的，可以直接使用
+    Eigen::MatrixXd S = H * ekf_.P * H.transpose() + R;
+
+    // 3.5 计算马氏距离平方 D_M^2 = y^T * S^-1 * y
+    double mahalanobis_dist = y.transpose() * S.inverse() * y;
+    md_list[i] = mahalanobis_dist;
+
+    if (mahalanobis_dist < min_mahalanobis_dist) {
+      min_mahalanobis_dist = mahalanobis_dist;
+      best_id = i;
+    }
   }
 
-  std::sort(
-    xyza_i_list.begin(), xyza_i_list.end(),
-    [](const std::pair<Eigen::Vector4d, int> & a, const std::pair<Eigen::Vector4d, int> & b) {
-      Eigen::Vector3d ypd1 = tools::xyz2ypd(a.first.head(3));
-      Eigen::Vector3d ypd2 = tools::xyz2ypd(b.first.head(3));
-      return ypd1[2] < ypd2[2];
-    });
+  // ================= 4. 迟滞防抖动（Hysteresis）限制跳变 =================
+  int id = best_id;
+  // 4自由度的卡方分布 95% 置信度阈值约为 9.488，99% 为 13.277
+  double CHI_SQ_THRESHOLD = 13.277; 
+  double HYSTERESIS_MARGIN = 5.0; // 迟滞裕度，用于防止在两块装甲板马氏距离接近时反复横跳
 
-  for (int i = 0; i < 3; i++) {
-    const auto & xyza = xyza_i_list[i].first;
-    Eigen::Vector3d ypd = tools::xyz2ypd(xyza.head(3));
-    auto angle_error = std::abs(tools::limit_rad(armor.ypr_in_world[0] - xyza[3])) +
-                       std::abs(tools::limit_rad(armor.ypd_in_world[0] - ypd[0]));
-
-    if (std::abs(angle_error) < std::abs(min_angle_error)) {
-      id = xyza_i_list[i].second;
-      min_angle_error = angle_error;
+  // 如果保持上一次的 ID 仍然在一个合理且可信的范围内
+  if (md_list[last_id] < CHI_SQ_THRESHOLD) {
+    // 除非新的匹配度显著地好于原来的匹配度（好过迟滞裕度），否则拒接跳变
+    if (min_mahalanobis_dist > md_list[last_id] - HYSTERESIS_MARGIN) {
+      id = last_id;
     }
   }
 
   if (id != 0) jumped = true;
   
+  // ================= 5. 更新前哨站和切换状态（保留原逻辑）=================
   if(name == ArmorName::outpost){
     double a = 0.1;
-    tower_armor_h = a*armor.xyz_in_world[2] + (1-a)*last_tower_armor_h[id];
+    tower_armor_h = a * armor.xyz_in_world[2] + (1 - a) * last_tower_armor_h[id];
     tower_armor_hs_datas[id] += tower_armor_h;
     last_tower_armor_h[id] = tower_armor_h;
     tower_armor_hs_datas_ptr[id]++;     
@@ -224,7 +274,7 @@ void Target::update(const Armor & armor)
     is_switch_ = true;
     if(name == ArmorName::outpost){
       double a = 0.1;
-      tower_armor_h = a*armor.xyz_in_world[2] + (1-a)*last_tower_armor_h[id];
+      tower_armor_h = a * armor.xyz_in_world[2] + (1 - a) * last_tower_armor_h[id];
       tower_armor_hs_datas[id] += tower_armor_h;
       last_tower_armor_h[id] = tower_armor_h;
       tower_armor_hs_datas_ptr[id]++;     
@@ -232,7 +282,7 @@ void Target::update(const Armor & armor)
 
     if(tower_armor_hs_datas[id] > 10000){
       tower_armor_hs_datas[id] = tower_armor_hs_datas[id] / (tower_armor_hs_datas_ptr[id] + 1);
-      tower_armor_hs_datas[id] *=600;
+      tower_armor_hs_datas[id] *= 600;
       tower_armor_hs_datas_ptr[id] = 599;
     }
   } else {
@@ -250,6 +300,7 @@ void Target::update(const Armor & armor)
   update_count_++;    
   xyz_in_world = armor.xyz_in_world;
 
+  // 最后调用更新滤波器
   update_ypda(armor, id);
 }
 
