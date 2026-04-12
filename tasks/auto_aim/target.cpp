@@ -95,8 +95,8 @@ void Target::predict(double dt)
   double v_linear = std::hypot(ekf_.x[1], ekf_.x[3]); 
   
   // 状态机滞回阈值配置 (需要根据实际底盘性能微调)
-  const double OMEGA_HIGH = 1.5;   // 进入旋转的角速度阈值 (rad/s)
-  const double OMEGA_LOW = 0.5;    // 退出旋转的角速度阈值 (rad/s)
+  const double OMEGA_HIGH = 3;   // 进入旋转的角速度阈值 (rad/s)
+  const double OMEGA_LOW = 1.5;    // 退出旋转的角速度阈值 (rad/s)
   const double V_HIGH = 0.6;       // 进入平移旋转的线速度阈值 (m/s)
   const double V_LOW = 0.3;        // 退出平移旋转的线速度阈值 (m/s)
 
@@ -155,6 +155,8 @@ void Target::predict(double dt)
         break;
     }
   }
+
+  // tools::logger()->info("[Target] 当前目标ekf模式: {}", static_cast<int>(motion_state_));
 
   auto a_ = dt * dt * dt * dt / 4;
   auto b_ = dt * dt * dt / 2;
@@ -248,7 +250,7 @@ void Target::update(const Armor & armor)
   // ================= 4. 迟滞防抖动（Hysteresis）限制跳变 =================
   int id = best_id;
   // 4自由度的卡方分布 95% 置信度阈值约为 9.488，99% 为 13.277
-  double CHI_SQ_THRESHOLD = 13.277; 
+  double CHI_SQ_THRESHOLD = 9.488; 
   double HYSTERESIS_MARGIN = 5.0; // 迟滞裕度，用于防止在两块装甲板马氏距离接近时反复横跳
 
   // 如果保持上一次的 ID 仍然在一个合理且可信的范围内
