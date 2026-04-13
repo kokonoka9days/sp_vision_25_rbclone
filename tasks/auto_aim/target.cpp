@@ -46,7 +46,11 @@ Target::Target(
 
   // 恢复 11 维：纯 CV 状态
   Eigen::VectorXd x0 = Eigen::VectorXd::Zero(11);
-  x0 << center_x, 0, center_y, 0, center_z, 0, ypr[0], 0, r, 0, 0;
+
+  // 如果是前哨站，将 x[10] 的初始值设为物理理论值 0.108
+  double initial_dz = (name == ArmorName::outpost) ? 0.108 : 0.0;
+
+  x0 << center_x, 0, center_y, 0, center_z, 0, ypr[0], 0, r, 0, initial_dz;
   
   Eigen::MatrixXd P0 = Eigen::MatrixXd::Identity(11, 11) * 10.0;
   P0.block(0, 0, 11, 11) = P0_dig.asDiagonal();
@@ -65,6 +69,7 @@ Target::Target(double x, double vyaw, double radius, double h)
   motion_state_(MotionState::TRANSLATION)
 {
   // 恢复 11 维
+  // x vx y vy z vz yaw vyaw r r_ z_
   Eigen::VectorXd x0 = Eigen::VectorXd::Zero(11);
   x0 << x, 0, 0, 0, 0, 0, 0, vyaw, radius, 0, h;
 
@@ -132,8 +137,14 @@ void Target::predict(double dt)
 
   double v1, v2;
   if (name == ArmorName::outpost) {
-    v1 = 5;     v2 = 0.05;
-  } else {
+    if (this->convergened()) {
+        v1 = 1e-3;  // 极小的位置噪声，锁死 X, Y, Z 中心
+    } else {
+        v1 = 5.0;   // 未收敛时保持较大的噪声，以便快速寻找真实中心
+    }
+    v2 = 0.05;      // 允许自转速度存在波动
+  } 
+  else {
     // ================= 核心：利用枚举分配不同的噪声 =================
     switch (motion_state_) {
       case MotionState::TRANSLATION:
@@ -315,6 +326,11 @@ void Target::update_ypda(const Armor & armor, int id)
   auto r2_pitch = 4e-3;
   auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2;
   auto r2_d = log(std::abs(delta_angle) + 1) + 1;
+
+  if (name == ArmorName::outpost && is_switch_) {
+      r2_pitch *= 100.0; // 极度不信任换板瞬间的俯仰角 (高度)
+      r2_d     *= 100.0; // 极度不信任换板瞬间的距离 (深度)
+  }
   
   if(last_cam_is_short != cam_is_short){
     cam_is_switch_time_point = std::chrono::steady_clock::now();
@@ -400,20 +416,21 @@ Eigen::Vector3d Target::h_armor_xyz(const Eigen::VectorXd & x, int id) const
 
   double armor_z;
   if(name == ArmorName::outpost){
-    double dz = tower_armor_hs[id] - tower_armor_hs[0];
-    int dz_px = dz > 0 ? 1 : -1;
-    int dz_mu;
-    if(abs(dz) > 0.16){
-      dz_mu = 2;
-    }else if(abs(dz) < 0.16 && abs(dz) > 0.05){
-      dz_mu = 1;
-    }else if(abs(dz) < 0.05){
-      dz_mu = 0;
+      double dz = tower_armor_hs[id] - tower_armor_hs[0];
+      int dz_px = dz > 0 ? 1 : -1;
+      int dz_mu;
+      if(abs(dz) > 0.16){
+        dz_mu = 2;
+      }else if(abs(dz) < 0.16 && abs(dz) > 0.05){
+        dz_mu = 1;
+      }else if(abs(dz) < 0.05){
+        dz_mu = 0;
+      }
+      // 将 TOWTER_ARMOR_DH 替换为 x[10]
+      armor_z = x[4] + x[10] * dz_px * dz_mu; 
+    } else {
+      armor_z = (use_l_h) ? x[4] + x[10] : x[4];
     }
-    armor_z = x[4] + TOWTER_ARMOR_DH * dz_px * dz_mu;
-  }else{
-    armor_z = (use_l_h) ? x[4] + x[10] : x[4];
-  }
   return {armor_x, armor_y, armor_z};
 }
 
