@@ -6,9 +6,10 @@
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 
-constexpr double TOWTER_ARMOR_DH = 0.108; //前哨站两个装甲板之间的最短高低差m
-constexpr double TOWER_ARMOR_DTB = 0.16;  //前哨装甲大跳变m
-constexpr double TOWER_ARMOR_XTB = 0.05;  //前哨装甲小跳变m
+// 物理常量定义
+constexpr double TOWER_ARMOR_DH = 0.108;  // 前哨站两个装甲板之间的标准高低差(m)
+constexpr double TOWER_ARMOR_DTB = 0.16;  // 前哨装甲大跳变阈值(m)
+constexpr double TOWER_ARMOR_XTB = 0.05;  // 前哨装甲小跳变阈值(m)
 
 namespace auto_aim
 {
@@ -26,35 +27,41 @@ Target::Target(
   is_switch_(false),
   is_converged_(false),
   switch_count_(0),
-  motion_state_(MotionState::TRANSLATION) // 默认初始为平移模型
+  motion_state_(MotionState::TRANSLATION) // 默认初始状态为平移模型
 {
   auto r = radius;
   priority = armor.priority;
   const Eigen::VectorXd & xyz = armor.xyz_in_world;
   const Eigen::VectorXd & ypr = armor.ypr_in_world;
 
-  // 旋转中心的坐标
+  // 根据当前装甲板位置和半径，反推旋转中心的坐标
   auto center_x = xyz[0] + r * std::cos(ypr[0]);
   auto center_y = xyz[1] + r * std::sin(ypr[0]);
   auto center_z = xyz[2];
 
   if(name == ArmorName::outpost){
-    tower_armor_hs[0] = center_z;
+    tower_armor_hs[0] = center_z; // 将第一块装甲板的高度设为基准锚点
   }
 
   cam_is_switch_time_point = std::chrono::steady_clock::time_point{};
 
-  // 恢复 11 维：纯 CV 状态
+  // ==========================================
+  // EKF 11维状态向量定义:
+  // [0]x, [1]vx, [2]y, [3]vy, [4]z, [5]vz, 
+  // [6]yaw(偏航角), [7]vyaw(自转角速度), 
+  // [8]r(基础半径), [9]r_(半径补偿量), [10]z_(高度补偿量)
+  // ==========================================
   Eigen::VectorXd x0 = Eigen::VectorXd::Zero(11);
 
-  // 如果是前哨站，将 x[10] 的初始值设为物理理论值 0.108
-  double initial_dz = (name == ArmorName::outpost) ? 0.108 : 0.0;
+  // 如果是前哨站，将 z_ (x[10]) 的初始值设为物理理论值
+  double initial_dz = (name == ArmorName::outpost) ? TOWER_ARMOR_DH : 0.0;
 
   x0 << center_x, 0, center_y, 0, center_z, 0, ypr[0], 0, r, 0, initial_dz;
   
   Eigen::MatrixXd P0 = Eigen::MatrixXd::Identity(11, 11) * 10.0;
   P0.block(0, 0, 11, 11) = P0_dig.asDiagonal();
 
+  // 自定义状态加法，确保角度(Yaw)在 -PI 到 PI 之间
   auto x_add = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
     Eigen::VectorXd c = a + b;
     c[6] = tools::limit_rad(c[6]);
@@ -64,12 +71,11 @@ Target::Target(
   ekf_ = tools::ExtendedKalmanFilter(x0, P0, x_add);
 }
 
+// 供手动初始化使用的构造函数
 Target::Target(double x, double vyaw, double radius, double h) 
 : armor_num_(4),
   motion_state_(MotionState::TRANSLATION)
 {
-  // 恢复 11 维
-  // x vx y vy z vz yaw vyaw r r_ z_
   Eigen::VectorXd x0 = Eigen::VectorXd::Zero(11);
   x0 << x, 0, 0, 0, 0, 0, 0, vyaw, radius, 0, h;
 
@@ -96,16 +102,16 @@ void Target::predict(std::chrono::steady_clock::time_point t)
 void Target::predict(double dt)
 {
   double vyaw = std::abs(ekf_.x[7]);
-  // 计算 X 和 Y 方向的合成线速度 (m/s)
-  double v_linear = std::hypot(ekf_.x[1], ekf_.x[3]); 
+  double v_linear = std::hypot(ekf_.x[1], ekf_.x[3]); // 计算XY方向合成线速度 
   
-  // 状态机滞回阈值配置 (需要根据实际底盘性能微调)
-  const double OMEGA_HIGH = 3;   // 进入旋转的角速度阈值 (rad/s)
+  // 状态机滞回阈值配置
+  const double OMEGA_HIGH = 3;     // 进入旋转的角速度阈值 (rad/s)
   const double OMEGA_LOW = 1.5;    // 退出旋转的角速度阈值 (rad/s)
   const double V_HIGH = 0.6;       // 进入平移旋转的线速度阈值 (m/s)
   const double V_LOW = 0.3;        // 退出平移旋转的线速度阈值 (m/s)
 
-  // ================= 状态转移逻辑 =================
+  // ================= 运动状态转移逻辑 =================
+  // 核心目的是根据车辆当前的平移和自转速度，动态调整过程噪声Q，使得滤波器既能跟得紧，又不会乱漂
   switch (motion_state_) {
     case MotionState::TRANSLATION:
       if (vyaw > OMEGA_HIGH) {
@@ -131,44 +137,36 @@ void Target::predict(double dt)
       break;
   }
   
-  // 11维基础转移矩阵
+  // 11维基础转移矩阵 F (x = F*x)
   Eigen::MatrixXd F = Eigen::MatrixXd::Identity(11, 11);
   F(0, 1) = dt; F(2, 3) = dt; F(4, 5) = dt; F(6, 7) = dt;
 
   double v1, v2;
   if (name == ArmorName::outpost) {
+    // 前哨站位置固定，收敛后极大限制平移噪声
     if (this->convergened()) {
-        v1 = 1e-3;  // 极小的位置噪声，锁死 X, Y, Z 中心
+        v1 = 0.1;  // 锁死 X, Y, Z 中心
     } else {
-        v1 = 5.0;   // 未收敛时保持较大的噪声，以便快速寻找真实中心
+        v1 = 5;   // 允许前期寻找中心
     }
-    v2 = 0.05;      // 允许自转速度存在波动
+    v2 = 0.1;      // 允许自转速度存在微小波动
   } 
   else {
-    // ================= 核心：利用枚举分配不同的噪声 =================
+    // 根据状态机分配不同的噪声
     switch (motion_state_) {
       case MotionState::TRANSLATION:
-        // 纯平移：灵活跟踪平移，过滤 Yaw 的干扰
-        v1 = 100;
-        v2 = 20;
+        v1 = 100; v2 = 20; // 灵活平移
         break;
-
       case MotionState::IN_PLACE_ROTATION:
-        // 原地旋转：抑制 X/Y 轴的乱跳，紧随 Yaw 角的变化
-        v1 = 1;    
-        v2 = 0.1;
+        v1 = 1;   v2 = 0.1; // 抑制平移漂移，紧跟自转
         break;
-
       case MotionState::TRANSLATION_ROTATION:
-        // 平移 + 旋转：车辆同时剧烈平移和自转，赋予全部坐标轴较高的灵活性
-        v1 = 100;
-        v2 = 400;
+        v1 = 100; v2 = 400; // 高机动状态，全部放开
         break;
     }
   }
 
-  // tools::logger()->info("[Target] 当前目标ekf模式: {}", static_cast<int>(motion_state_));
-
+  // 构造过程噪声矩阵 Q
   auto a_ = dt * dt * dt * dt / 4;
   auto b_ = dt * dt * dt / 2;
   auto c_ = dt * dt;
@@ -185,6 +183,7 @@ void Target::predict(double dt)
     return x_prior;
   };
 
+  // 前哨站收敛后限制最大转速防飞
   if (this->convergened() && this->name == ArmorName::outpost) {
     if (std::abs(this->ekf_.x[7]) > 2) this->ekf_.x[7] = this->ekf_.x[7] > 0 ? 2.51 : -2.51;
   }
@@ -194,126 +193,156 @@ void Target::predict(double dt)
 
 void Target::update(const Armor & armor)
 {
-  // ================= 1. 提前构造测量噪声矩阵 R (复用 update_ypda 中的逻辑) =================
-  auto center_yaw = std::atan2(armor.xyz_in_world[1], armor.xyz_in_world[0]);
-  auto delta_angle = tools::limit_rad(armor.ypr_in_world[0] - center_yaw);
+  int id = 0;
 
-  auto r2_azimuth = 4e-3;
-  auto r2_pitch = 4e-3;
-  auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2;
-  auto r2_d = log(std::abs(delta_angle) + 1) + 1;
-  
-  if (last_cam_is_short != cam_is_short) {
-    cam_is_switch_time_point = std::chrono::steady_clock::now();
-    last_cam_is_short = cam_is_short;
-  }
-  auto now = std::chrono::steady_clock::now();
-  double cam_is_switch_lter_dt = tools::delta_time(now, cam_is_switch_time_point);
-  if (cam_is_switch_lter_dt < 0.7 && update_count_ > 50) {
-    r2_azimuth = 4e+4;
-    r2_angle *= 300;
-    r2_d *= 300;
-  }
-  
-  Eigen::VectorXd R_dig{{r2_azimuth, r2_pitch, r2_d, r2_angle}};
-  Eigen::MatrixXd R = R_dig.asDiagonal();
+  // =====================================================================
+  // 匹配逻辑分支：根据兵种采取不同的装甲板数据关联策略
+  // =====================================================================
+  if (this->name == ArmorName::outpost) {
+    // 【策略 A：前哨站专用】
+    // 纯几何匹配(距离+复合角度)，绕开因高度阶梯跳变导致 EKF 协方差波动的干扰
+    auto min_angle_error = 1e10;
+    const std::vector<Eigen::Vector4d> & xyza_list = armor_xyza_list();
 
-  // ================= 2. 构造当前实际的观测向量 z =================
-  const Eigen::VectorXd & ypd = armor.ypd_in_world;
-  const Eigen::VectorXd & ypr = armor.ypr_in_world;
-  Eigen::VectorXd z{{ypd[0], ypd[1], ypd[2], ypr[0]}};
+    std::vector<std::pair<Eigen::Vector4d, int>> xyza_i_list;
+    for (int i = 0; i < armor_num_; i++) {
+      xyza_i_list.push_back({xyza_list[i], i});
+    }
 
-  // ================= 3. 基于马氏距离寻找最佳匹配装甲板 =================
-  int best_id = 0;
-  double min_mahalanobis_dist = 1e10;
-  std::vector<double> md_list(armor_num_, 1e10);
+    // 按距离(ypd[2])由近及远排序
+    std::sort(
+      xyza_i_list.begin(), xyza_i_list.end(),
+      [](const std::pair<Eigen::Vector4d, int> & a, const std::pair<Eigen::Vector4d, int> & b) {
+        Eigen::Vector3d ypd1 = tools::xyz2ypd(a.first.head(3));
+        Eigen::Vector3d ypd2 = tools::xyz2ypd(b.first.head(3));
+        return ypd1[2] < ypd2[2];
+      });
 
-  for (int i = 0; i < armor_num_; i++) {
-    // 3.1 计算预测观测值 h(x)
-    Eigen::VectorXd xyz_pred = h_armor_xyz(ekf_.x, i);
-    Eigen::VectorXd ypd_pred = tools::xyz2ypd(xyz_pred);
-    auto angle_pred = tools::limit_rad(ekf_.x[6] + i * 2 * CV_PI / armor_num_);
-    Eigen::VectorXd z_pred{{ypd_pred[0], ypd_pred[1], ypd_pred[2], angle_pred}};
+    // 只取最近的3个装甲板验证角度匹配度
+    for (int i = 0; i < 3; i++) {
+      const auto & xyza = xyza_i_list[i].first;
+      Eigen::Vector3d ypd = tools::xyz2ypd(xyza.head(3));
+      
+      auto angle_error = std::abs(tools::limit_rad(armor.ypr_in_world[0] - xyza[3])) +
+                         std::abs(tools::limit_rad(armor.ypd_in_world[0] - ypd[0]));
 
-    // 3.2 计算残差 y = z - h(x)
-    Eigen::VectorXd y = z - z_pred;
-    y[0] = tools::limit_rad(y[0]);
-    y[1] = tools::limit_rad(y[1]);
-    y[3] = tools::limit_rad(y[3]);
+      if (std::abs(angle_error) < std::abs(min_angle_error)) {
+        id = xyza_i_list[i].second;
+        min_angle_error = angle_error;
+      }
+    }
 
-    // 3.3 获取雅克比矩阵 H
-    Eigen::MatrixXd H = h_jacobian(ekf_.x, i);
+  } else {
+    // 【策略 B：其他兵种通用】
+    // 马氏距离匹配 + 迟滞防抖，有效应对平移带来的透视形变
+    auto center_yaw = std::atan2(armor.xyz_in_world[1], armor.xyz_in_world[0]);
+    auto delta_angle = tools::limit_rad(armor.ypr_in_world[0] - center_yaw);
 
-    // 3.4 计算新息协方差矩阵 S = H * P * H^T + R
-    // 注意：这要求 ekf_.P 是可访问的。若在你的 ExtendedKalmanFilter 类中 P 是 public 的，可以直接使用
-    Eigen::MatrixXd S = H * ekf_.P * H.transpose() + R;
+    auto r2_azimuth = 4e-3;
+    auto r2_pitch = 4e-3;
+    auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2;
+    auto r2_d = log(std::abs(delta_angle) + 1) + 1;
+    
+    // 处理镜头长短焦切换时的噪声激增
+    if (last_cam_is_short != cam_is_short) {
+      cam_is_switch_time_point = std::chrono::steady_clock::now();
+      last_cam_is_short = cam_is_short;
+    }
+    auto now = std::chrono::steady_clock::now();
+    double cam_is_switch_lter_dt = tools::delta_time(now, cam_is_switch_time_point);
+    if (cam_is_switch_lter_dt < 0.7 && update_count_ > 50) {
+      r2_azimuth = 4e+4;
+      r2_angle *= 300;
+      r2_d *= 300;
+    }
+    
+    Eigen::VectorXd R_dig{{r2_azimuth, r2_pitch, r2_d, r2_angle}};
+    Eigen::MatrixXd R = R_dig.asDiagonal();
 
-    // 3.5 计算马氏距离平方 D_M^2 = y^T * S^-1 * y
-    double mahalanobis_dist = y.transpose() * S.inverse() * y;
-    md_list[i] = mahalanobis_dist;
+    const Eigen::VectorXd & ypd = armor.ypd_in_world;
+    const Eigen::VectorXd & ypr = armor.ypr_in_world;
+    Eigen::VectorXd z{{ypd[0], ypd[1], ypd[2], ypr[0]}};
 
-    if (mahalanobis_dist < min_mahalanobis_dist) {
-      min_mahalanobis_dist = mahalanobis_dist;
-      best_id = i;
+    int best_id = 0;
+    double min_mahalanobis_dist = 1e10;
+    std::vector<double> md_list(armor_num_, 1e10);
+
+    for (int i = 0; i < armor_num_; i++) {
+      Eigen::VectorXd xyz_pred = h_armor_xyz(ekf_.x, i);
+      Eigen::VectorXd ypd_pred = tools::xyz2ypd(xyz_pred);
+      auto angle_pred = tools::limit_rad(ekf_.x[6] + i * 2 * CV_PI / armor_num_);
+      Eigen::VectorXd z_pred{{ypd_pred[0], ypd_pred[1], ypd_pred[2], angle_pred}};
+
+      Eigen::VectorXd y = z - z_pred;
+      y[0] = tools::limit_rad(y[0]);
+      y[1] = tools::limit_rad(y[1]);
+      y[3] = tools::limit_rad(y[3]);
+
+      Eigen::MatrixXd H = h_jacobian(ekf_.x, i);
+      Eigen::MatrixXd S = H * ekf_.P * H.transpose() + R;
+
+      double mahalanobis_dist = y.transpose() * S.inverse() * y;
+      md_list[i] = mahalanobis_dist;
+
+      if (mahalanobis_dist < min_mahalanobis_dist) {
+        min_mahalanobis_dist = mahalanobis_dist;
+        best_id = i;
+      }
+    }
+
+    // 迟滞防抖动（Hysteresis）机制：倾向于保持上一次匹配的ID
+    id = best_id;
+    double CHI_SQ_THRESHOLD = 9.488; 
+    double HYSTERESIS_MARGIN = 5.0; 
+
+    if (md_list[last_id] < CHI_SQ_THRESHOLD) {
+      if (min_mahalanobis_dist > md_list[last_id] - HYSTERESIS_MARGIN) {
+        id = last_id;
+      }
     }
   }
 
-  // ================= 4. 迟滞防抖动（Hysteresis）限制跳变 =================
-  int id = best_id;
-  // 4自由度的卡方分布 95% 置信度阈值约为 9.488，99% 为 13.277
-  double CHI_SQ_THRESHOLD = 9.488; 
-  double HYSTERESIS_MARGIN = 5.0; // 迟滞裕度，用于防止在两块装甲板马氏距离接近时反复横跳
-
-  // 如果保持上一次的 ID 仍然在一个合理且可信的范围内
-  if (md_list[last_id] < CHI_SQ_THRESHOLD) {
-    // 除非新的匹配度显著地好于原来的匹配度（好过迟滞裕度），否则拒接跳变
-    if (min_mahalanobis_dist > md_list[last_id] - HYSTERESIS_MARGIN) {
-      id = last_id;
-    }
-  }
-
+  // =====================================================================
+  // 统一的后处理与高度历史数据更新逻辑 (消除了原代码中的冗余复制)
+  // =====================================================================
   if (id != 0) jumped = true;
-  
-  // ================= 5. 更新前哨站和切换状态（保留原逻辑）=================
-  if(name == ArmorName::outpost){
-    double a = 0.1;
-    tower_armor_h = a * armor.xyz_in_world[2] + (1 - a) * last_tower_armor_h[id];
-    tower_armor_hs_datas[id] += tower_armor_h;
-    last_tower_armor_h[id] = tower_armor_h;
-    tower_armor_hs_datas_ptr[id]++;     
-  }
 
+  // 检测换板事件
   if (id != last_id) {
     is_switch_ = true;
-    if(name == ArmorName::outpost){
-      double a = 0.1;
-      tower_armor_h = a * armor.xyz_in_world[2] + (1 - a) * last_tower_armor_h[id];
-      tower_armor_hs_datas[id] += tower_armor_h;
-      last_tower_armor_h[id] = tower_armor_h;
-      tower_armor_hs_datas_ptr[id]++;     
-    }
-
-    if(tower_armor_hs_datas[id] > 10000){
-      tower_armor_hs_datas[id] = tower_armor_hs_datas[id] / (tower_armor_hs_datas_ptr[id] + 1);
-      tower_armor_hs_datas[id] *= 600;
-      tower_armor_hs_datas_ptr[id] = 599;
+    switch_count_++;
+    
+    // 换板时，将上一块装甲板的历史累加数据计算为平均高度锚点
+    if (name == ArmorName::outpost) {
+      if (tower_armor_hs_datas_ptr[last_id] > 0) {
+        tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / tower_armor_hs_datas_ptr[last_id];
+      }
     }
   } else {
     is_switch_ = false;
   }
+
+  // 累加当前块装甲板的高度特征
+  if(name == ArmorName::outpost){
+    double a = 0.1; // 互补滤波系数
+    tower_armor_h = a * armor.xyz_in_world[2] + (1 - a) * last_tower_armor_h[id];
     
-  if (id != last_id) {
-    is_switch_ = true;
-    if(name == ArmorName::outpost){
-      tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / (tower_armor_hs_datas_ptr[last_id] + 1);
+    tower_armor_hs_datas[id] += tower_armor_h;
+    last_tower_armor_h[id] = tower_armor_h;
+    tower_armor_hs_datas_ptr[id]++;     
+
+    // 历史高度数据保护机制，防止长时间追踪导致累加溢出
+    if(tower_armor_hs_datas[id] > 10000){
+      tower_armor_hs_datas[id] = (tower_armor_hs_datas[id] / tower_armor_hs_datas_ptr[id]) * 600;
+      tower_armor_hs_datas_ptr[id] = 600;
     }
-  } 
+  }
 
   last_id = id;
   update_count_++;    
   xyz_in_world = armor.xyz_in_world;
 
-  // 最后调用更新滤波器
+  // 调用 EKF 更新观测值
   update_ypda(armor, id);
 }
 
@@ -327,9 +356,10 @@ void Target::update_ypda(const Armor & armor, int id)
   auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2;
   auto r2_d = log(std::abs(delta_angle) + 1) + 1;
 
+  // 前哨站换板瞬间，放宽距离和高度噪声信任度防跳变
   if (name == ArmorName::outpost && is_switch_) {
-      r2_pitch *= 100.0; // 极度不信任换板瞬间的俯仰角 (高度)
-      r2_d     *= 100.0; // 极度不信任换板瞬间的距离 (深度)
+      r2_pitch *= 100.0; 
+      r2_d     *= 100.0; 
   }
   
   if(last_cam_is_short != cam_is_short){
@@ -347,6 +377,7 @@ void Target::update_ypda(const Armor & armor, int id)
   Eigen::VectorXd R_dig{{r2_azimuth, r2_pitch, r2_d, r2_angle}};
   Eigen::MatrixXd R = R_dig.asDiagonal();
 
+  // 预测观测函数 h(x)
   auto h = [&](const Eigen::VectorXd & x) -> Eigen::Vector4d {
     Eigen::VectorXd xyz = h_armor_xyz(x, id);
     Eigen::VectorXd ypd = tools::xyz2ypd(xyz);
@@ -354,6 +385,7 @@ void Target::update_ypda(const Armor & armor, int id)
     return {ypd[0], ypd[1], ypd[2], angle};
   };
 
+  // 自定义减法（处理角度越界）
   auto z_subtract = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
     Eigen::VectorXd c = a - b;
     c[0] = tools::limit_rad(c[0]);
@@ -371,10 +403,13 @@ void Target::update_ypda(const Armor & armor, int id)
   ekf_.update(z, H, R, h, z_subtract);
 }
 
+// 获取 EKF 状态向量
 Eigen::VectorXd Target::ekf_x() const { return ekf_.x; }
 
+// 获取滤波器常引用
 const tools::ExtendedKalmanFilter & Target::ekf() const { return ekf_; }
 
+// 返回所有装甲板的预测四维状态 (X, Y, Z, Angle) 列表
 std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
 {
   std::vector<Eigen::Vector4d> _armor_xyza_list;
@@ -386,6 +421,7 @@ std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
   return _armor_xyza_list;
 }
 
+// 检查滤波器半径是否发散
 bool Target::diverged() const
 {
   auto r_ok = ekf_.x[8] > 0.05 && ekf_.x[8] < 0.5;
@@ -394,6 +430,7 @@ bool Target::diverged() const
   return true;
 }
 
+// 判断当前目标是否收敛
 bool Target::convergened()
 {
   if (this->name != ArmorName::outpost && update_count_ > 3 && !this->diverged()) {
@@ -405,6 +442,7 @@ bool Target::convergened()
   return is_converged_;
 }
 
+// 核心函数：根据 EKF 状态和 ID 推算该装甲板在世界坐标系下的理论位置 XYZ
 Eigen::Vector3d Target::h_armor_xyz(const Eigen::VectorXd & x, int id) const
 {
   auto angle = tools::limit_rad(x[6] + id * 2 * CV_PI / armor_num_);
@@ -419,14 +457,17 @@ Eigen::Vector3d Target::h_armor_xyz(const Eigen::VectorXd & x, int id) const
       double dz = tower_armor_hs[id] - tower_armor_hs[0];
       int dz_px = dz > 0 ? 1 : -1;
       int dz_mu;
-      if(abs(dz) > 0.16){
-        dz_mu = 2;
-      }else if(abs(dz) < 0.16 && abs(dz) > 0.05){
-        dz_mu = 1;
-      }else if(abs(dz) < 0.05){
-        dz_mu = 0;
+      
+      // 使用定义的常量区分大跳变和小跳变阶梯
+      if (std::abs(dz) > TOWER_ARMOR_DTB) {
+        dz_mu = 2; // 相隔两个阶梯 (大跳变)
+      } else if (std::abs(dz) > TOWER_ARMOR_XTB) {
+        dz_mu = 1; // 相隔一个阶梯 (小跳变)
+      } else {
+        dz_mu = 0; // 同一阶梯
       }
-      // 将 TOWTER_ARMOR_DH 替换为 x[10]
+      
+      // 结合滤波器的高度参数 x[10]
       armor_z = x[4] + x[10] * dz_px * dz_mu; 
     } else {
       armor_z = (use_l_h) ? x[4] + x[10] : x[4];
@@ -434,6 +475,7 @@ Eigen::Vector3d Target::h_armor_xyz(const Eigen::VectorXd & x, int id) const
   return {armor_x, armor_y, armor_z};
 }
 
+// 计算当前预测观测函数的雅可比矩阵
 Eigen::MatrixXd Target::h_jacobian(const Eigen::VectorXd & x, int id) const
 {
   auto angle = tools::limit_rad(x[6] + id * 2 * CV_PI / armor_num_);
@@ -452,11 +494,13 @@ Eigen::MatrixXd Target::h_jacobian(const Eigen::VectorXd & x, int id) const
     double dz = tower_armor_hs[id] - tower_armor_hs[0];
     int dz_px = dz > 0 ? 1 : -1;
     int dz_mu;
-    if(abs(dz) > 0.16){
+    
+    // 使用定义的常量区分跳变阶梯
+    if (std::abs(dz) > TOWER_ARMOR_DTB) {
       dz_mu = 2;
-    }else if(abs(dz) < 0.16 && abs(dz) > 0.05){
+    } else if (std::abs(dz) > TOWER_ARMOR_XTB) {
       dz_mu = 1;
-    }else if(abs(dz) < 0.05){
+    } else {
       dz_mu = 0;
     }
     dz_dh = dz_mu * dz_px;
@@ -464,13 +508,14 @@ Eigen::MatrixXd Target::h_jacobian(const Eigen::VectorXd & x, int id) const
     dz_dh = (use_l_h) ? 1.0 : 0.0;
   }
   
-  // 恢复 11 维大小
+  // 11 维位置偏导雅可比矩阵
   Eigen::MatrixXd H_armor_xyza = Eigen::MatrixXd::Zero(4, 11);
   H_armor_xyza(0, 0) = 1; H_armor_xyza(0, 6) = dx_da; H_armor_xyza(0, 8) = dx_dr; H_armor_xyza(0, 9) = dx_dl;
   H_armor_xyza(1, 2) = 1; H_armor_xyza(1, 6) = dy_da; H_armor_xyza(1, 8) = dy_dr; H_armor_xyza(1, 9) = dy_dl;
   H_armor_xyza(2, 4) = 1; H_armor_xyza(2, 10) = dz_dh;
   H_armor_xyza(3, 6) = 1;
 
+  // 将 XYZ 偏导转换到 YPD 球坐标系下
   Eigen::VectorXd armor_xyz = h_armor_xyz(x, id);
   Eigen::MatrixXd H_armor_ypd = tools::xyz2ypd_jacobian(armor_xyz);
 
@@ -481,9 +526,11 @@ Eigen::MatrixXd Target::h_jacobian(const Eigen::VectorXd & x, int id) const
     {                0,                 0,                 0, 1}
   };
 
+  // 链式求导法 H_Final = H_ypda * H_xyza
   return H_armor_ypda * H_armor_xyza;
 }
 
+// 检查是否完成初始化
 bool Target::checkinit() { return isinit; }
 
 }  // namespace auto_aim
