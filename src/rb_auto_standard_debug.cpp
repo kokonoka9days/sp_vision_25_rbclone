@@ -149,6 +149,9 @@ int main(int argc, char * argv[])
     }
   });
 
+  auto t0_main = std::chrono::steady_clock::now();
+  uint16_t last_bullet_count_main = 0;
+
   cv::Mat img;
   std::chrono::steady_clock::time_point t;
   std::chrono::steady_clock::time_point last_t;
@@ -178,9 +181,9 @@ int main(int argc, char * argv[])
         
     // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
     // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
-    if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
-    tools::draw_text(img, fmt::format("rb_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 128, 255});
-    tools::draw_text(img, fmt::format("rb_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 255, 255});
+    // if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
+    // tools::draw_text(img, fmt::format("rb_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 128, 255});
+    // tools::draw_text(img, fmt::format("rb_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 255, 255});
     // std::cout << "Roll: " << roll_deg << std::endl;
 
     // 【修改】如果是打符模式
@@ -207,6 +210,72 @@ int main(int argc, char * argv[])
       gimbal.send(
         buff_plan.control, buff_plan.fire, buff_plan.yaw, buff_plan.yaw_vel, buff_plan.yaw_acc,
         buff_plan.pitch, buff_plan.pitch_vel, buff_plan.pitch_acc);
+
+      // ================== 绘制打符的预测目标框 ==================
+      // 确保当前识别到了能量机关，且位姿解算成功
+      if (power_runes.has_value() && !power_runes->is_unsolve()) {
+        
+        // buff_aimer.angle 存储了预测后的扇叶绝对角度 (对应 solver 中的 row，即 roll)
+        double pred_angle = buff_aimer.angle; 
+        
+        // 调用打符专属的重投影函数
+        auto image_points = buff_solver.reproject_buff(
+            power_runes->xyz_in_world,     // 大符圆心的世界坐标
+            power_runes->ypr_in_world[0],  // 大符平面的 yaw 偏角
+            pred_angle                     // 预测后的扇叶角度
+        );
+
+        // buff_solver 中的 OBJECT_POINTS 包含了7个点，前4个为装甲板四角
+        if (image_points.size() >= 4) {
+          // 提取装甲板4个角点并绘制红框
+          std::vector<cv::Point2f> armor_pts(image_points.begin(), image_points.begin() + 4);
+          tools::draw_points(img, armor_pts, {0, 0, 255}, 2); // 红色预测框
+
+          if (image_points.size() >= 7) {
+            // image_points[4]: 装甲板中心 (0, 0, 700e-3)
+            // image_points[6]: 能量机关 R 标中心 (0, 0, 0)
+            
+            // 绘制预测的装甲板中心点 (黄色)
+            cv::circle(img, image_points[4], 6, cv::Scalar(0, 255, 255), -1);
+            
+            // 绘制能量机关 R 标中心点 (紫色)
+            cv::circle(img, image_points[6], 6, cv::Scalar(255, 0, 255), -1);
+            
+            // 绘制 R标 到 装甲板中心 的预测连线 (绿色，用来直观显示预测后的扇叶悬臂位置)
+            cv::line(img, image_points[6], image_points[4], cv::Scalar(0, 255, 0), 2);
+          }
+        }
+      }
+      // =======================================================
+
+      auto fired = gs.bullet_count > last_bullet_count_main;
+      last_bullet_count_main = gs.bullet_count;
+
+      nlohmann::json data;
+      data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0_main);
+
+      data["gimbal_yaw"] = gs.yaw;
+      data["gimbal_yaw_vel"] = gs.yaw_vel;
+      data["gimbal_pitch"] = gs.pitch;
+      data["gimbal_pitch_vel"] = gs.pitch_vel;
+
+      data["target_yaw"] = buff_plan.target_yaw;
+      data["target_pitch"] = buff_plan.target_pitch;
+
+      data["plan_mode"] = buff_plan.control ? (buff_plan.fire ? 2 : 1) : 0;
+      data["plan_yaw"] = buff_plan.yaw / CV_PI * 180.;
+      data["plan_yaw_vel"] = buff_plan.yaw_vel;
+      data["plan_yaw_acc"] = buff_plan.yaw_acc;
+
+      data["plan_pitch"] = buff_plan.pitch * 57.3;
+      data["plan_pitch_vel"] = buff_plan.pitch_vel;
+      data["plan_pitch_acc"] = buff_plan.pitch_acc;
+
+      data["fire"] = buff_plan.fire ? 1 : 0;
+      data["fired"] = fired ? 1 : 0;
+
+
+      plotter.plot(data);
     }
     // 【修改】除打符模式外，全认为是自瞄
     else {
