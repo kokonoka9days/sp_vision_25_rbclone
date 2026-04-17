@@ -23,30 +23,13 @@ std::vector<YOLO11_BUFF::Object> YOLO11_BUFF::get_multicandidateboxes(cv::Mat & 
 {
   const int64 start = cv::getTickCount();  // 设置模型输入
 
-  /// 预处理
-
-  // const float factor = fill_tensor_data_image(input_tensor, image);  // 填充图片到合适的input size
-
   if (image.empty()) {
     tools::logger()->warn("Empty img!, camera drop!");
     return std::vector<YOLO11_BUFF::Object> ();
   }
 
-  cv::Mat bgr_img = image;
-
-  auto x_scale = static_cast<double>(640) / bgr_img.rows;
-  auto y_scale = static_cast<double>(640) / bgr_img.cols;
-  auto scale = std::min(x_scale, y_scale);
-  auto h = static_cast<int>(bgr_img.rows * scale);
-  auto w = static_cast<int>(bgr_img.cols * scale);
-
-  double factor = scale;  
-
-  // preproces
-  auto input = cv::Mat(640, 640, CV_8UC3, cv::Scalar(0, 0, 0));
-  auto roi = cv::Rect(0, 0, w, h);
-  cv::resize(bgr_img, input(roi), {w, h});
-  ov::Tensor input_tensor(ov::element::u8, {1, 640, 640, 3}, input.data);
+  /// 预处理：调用统一的图像填充转换函数，并获取正确的缩放 factor
+  const float factor = fill_tensor_data_image(input_tensor, image);
 
   /// 执行推理计算
   infer_request.infer();
@@ -84,8 +67,8 @@ std::vector<YOLO11_BUFF::Object> YOLO11_BUFF::get_multicandidateboxes(cv::Mat & 
       confidences.push_back(score);
 
       // 获取关键点
-      std::vector<float> keypoints;
-      cv::Mat kpts = det_output.col(i).rowRange(NUM_POINTS, 15);
+     std::vector<float> keypoints;
+      cv::Mat kpts = det_output.col(i).rowRange(5, 5 + NUM_POINTS * 2);
       for (int j = 0; j < NUM_POINTS; ++j) {
         const float x = kpts.at<float>(j * 2 + 0, 0) * factor;
         const float y = kpts.at<float>(j * 2 + 1, 0) * factor;
@@ -110,9 +93,9 @@ std::vector<YOLO11_BUFF::Object> YOLO11_BUFF::get_multicandidateboxes(cv::Mat & 
     obj.prob = confidences[index];
 
     const std::vector<float> & keypoint = objects_keypoints[index];
-    for (int i = 0; i < NUM_POINTS; ++i) {
-      const float x_coord = keypoint[i * 2];
-      const float y_coord = keypoint[i * 2 + 1];
+    for (int j = 0; j < NUM_POINTS; ++j) {
+      const float x_coord = keypoint[j * 2];
+      const float y_coord = keypoint[j * 2 + 1];
       obj.kpt.push_back(cv::Point2f(x_coord, y_coord));
     }
     object_result.push_back(obj);
@@ -129,8 +112,8 @@ std::vector<YOLO11_BUFF::Object> YOLO11_BUFF::get_multicandidateboxes(cv::Mat & 
       cv::Scalar(0, 0, 0));
     const int radius = 2;  // 绘制关键点
     const cv::Size & shape = image.size();
-    for (int i = 0; i < NUM_POINTS; ++i)
-      cv::circle(image, obj.kpt[i], radius, cv::Scalar(255, 0, 0), -1, cv::LINE_AA);
+    for (int k = 0; k < NUM_POINTS; ++k)
+      cv::circle(image, obj.kpt[k], radius, cv::Scalar(255, 0, 0), -1, cv::LINE_AA);
   }
   /// 计算FPS
   const float t = (cv::getTickCount() - start) / static_cast<float>(cv::getTickFrequency());

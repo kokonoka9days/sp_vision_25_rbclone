@@ -191,7 +191,7 @@ int main(int argc, char * argv[])
       auto gs = gimbal.state();
       buff_solver.set_R_gimbal2world(q);
 
-      auto power_runes = buff_detector.detect(img);
+      auto power_runes = buff_detector.detect_24(img);
 
       buff_solver.solve(power_runes);
 
@@ -208,46 +208,27 @@ int main(int argc, char * argv[])
       
       // 直接发送打符相关的控制指令
       gimbal.send(
-        buff_plan.control, buff_plan.fire, buff_plan.yaw, buff_plan.yaw_vel, buff_plan.yaw_acc,
+        buff_plan.control, buff_plan.fire, buff_plan.yaw, buff_plan.yaw_vel, 0,
         buff_plan.pitch, buff_plan.pitch_vel, buff_plan.pitch_acc);
+      // gimbal.send(
+      //   1, 1, 0, buff_plan.yaw_vel, buff_plan.yaw_acc,
+      //   buff_plan.pitch, buff_plan.pitch_vel, buff_plan.pitch_acc);
 
-      // ================== 绘制打符的预测目标框 ==================
-      // 确保当前识别到了能量机关，且位姿解算成功
+     // ================== 绘制打符的识别目标点 ==================
+      // 确保当前识别到了能量机关，且没有处于丢失状态
       if (power_runes.has_value() && !power_runes->is_unsolve()) {
         
-        // buff_aimer.angle 存储了预测后的扇叶绝对角度 (对应 solver 中的 row，即 roll)
-        double pred_angle = buff_aimer.angle; 
+        // 直接从 PowerRune 中取出锁定的 target 的原始 2D 像素中心点
+        cv::Point2f target_center = power_runes->target().center; 
+
+        // 1. 画一个识别到的装甲板中心点 (黄色实心圆)
+        cv::circle(img, target_center, 6, cv::Scalar(0, 255, 255), -1);
         
-        // 调用打符专属的重投影函数
-        auto image_points = buff_solver.reproject_buff(
-            power_runes->xyz_in_world,     // 大符圆心的世界坐标
-            power_runes->ypr_in_world[0],  // 大符平面的 yaw 偏角
-            pred_angle                     // 预测后的扇叶角度
-        );
-
-        // buff_solver 中的 OBJECT_POINTS 包含了7个点，前4个为装甲板四角
-        if (image_points.size() >= 4) {
-          // 提取装甲板4个角点并绘制红框
-          std::vector<cv::Point2f> armor_pts(image_points.begin(), image_points.begin() + 4);
-          tools::draw_points(img, armor_pts, {0, 0, 255}, 2); // 红色预测框
-
-          if (image_points.size() >= 7) {
-            // image_points[4]: 装甲板中心 (0, 0, 700e-3)
-            // image_points[6]: 能量机关 R 标中心 (0, 0, 0)
-            
-            // 绘制预测的装甲板中心点 (黄色)
-            cv::circle(img, image_points[4], 6, cv::Scalar(0, 255, 255), -1);
-            
-            // 绘制能量机关 R 标中心点 (紫色)
-            cv::circle(img, image_points[6], 6, cv::Scalar(255, 0, 255), -1);
-            
-            // 绘制 R标 到 装甲板中心 的预测连线 (绿色，用来直观显示预测后的扇叶悬臂位置)
-            cv::line(img, image_points[6], image_points[4], cv::Scalar(0, 255, 0), 2);
-          }
-        }
+        // 2. 在点右上方写上 "target"
+        cv::putText(img, "target", target_center + cv::Point2f(10, -10), 
+                    cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 255), 2);
       }
       // =======================================================
-
       auto fired = gs.bullet_count > last_bullet_count_main;
       last_bullet_count_main = gs.bullet_count;
 

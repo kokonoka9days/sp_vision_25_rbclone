@@ -90,7 +90,7 @@ auto_aim::Plan Aimer::mpc_aim(
     std::abs(last_yaw_ - yaw) > 5 / 57.3 || std::abs(last_pitch_ - pitch) > 5 / 57.3;
   if (get_send_angle(target, future, bullet_speed, to_now, yaw, pitch)) {
     plan.yaw = yaw;
-    plan.pitch = -pitch;  //世界坐标系下的pitch向上为负
+    plan.pitch = pitch;  //世界坐标系下的pitch向上为负
     if (mistake_count_ > 3) {
       switch_fanblade_ = true;
       mistake_count_ = 0;

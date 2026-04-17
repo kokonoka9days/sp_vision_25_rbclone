@@ -21,57 +21,45 @@ PowerRune::PowerRune(
   std::vector<FanBlade> & ts, const cv::Point2f center, std::optional<PowerRune> last_powerrune)
 : r_center(center), light_num(ts.size())
 {
-  /// 找出target
-
-  // 只有一个fanblade，就为target
-  if (light_num == 1) ts[0].type = _target;
-  // 没有新亮起来的fanblade
-  else if (last_powerrune.has_value() && ts.size() == last_powerrune.value().light_num) {
-    auto last_target_center = last_powerrune.value().fanblades[0].center;
-    auto target_fanblade_it = ts.begin();  // 初始化为 fanblades 的第一个元素
-    float min_distance = norm(ts[0].center - last_target_center);
-    for (auto it = ts.begin(); it != ts.end(); ++it) {
-      float distance = norm(it->center - last_target_center);
-      if (distance < min_distance) {
-        min_distance = distance;
-        target_fanblade_it = it;  // 更新最近的 fanblade 的迭代器
-      }
-    }
-    target_fanblade_it->type = _target;  // 设置最近的 fanblade 的 type
-    std::iter_swap(ts.begin(), target_fanblade_it);
-  }
-  // 有新亮起来的fanblade
-  else if (last_powerrune.has_value() && light_num == last_powerrune.value().light_num + 1) {
-    auto last_fanblades = last_powerrune.value().fanblades;
-    float max_min_distance = -1.0f;        // 初始化最大最小距离为-1
-    auto target_fanblade_it = ts.begin();  // 用于存储目标 fanblade 的迭代器
-    for (auto it = ts.begin(); it != ts.end(); ++it) {
-      float min_distance = std::numeric_limits<float>::max();  // 初始化最小距离为最大浮点数
-      // 计算当前 fanblade 到 last_fanblades 中每个 fanblade 的最小距离
-      for (const auto & last_fanblade : last_fanblades) {
-        if (last_fanblade.type == _unlight) continue;
-        float distance = norm(it->center - last_fanblade.center);
-        if (distance < min_distance) {
-          min_distance = distance;
-        }
-      }
-      if (min_distance > max_min_distance) {
-        max_min_distance = min_distance;
-        target_fanblade_it = it;
-      }
-    }
-    target_fanblade_it->type = _target;
-    std::iter_swap(ts.begin(), target_fanblade_it);
-  }
-  // error
-  else {
-    tools::logger()->debug("[PowerRune] 识别出错!");
+  /// 找出target，并实现【死锁+超时重置】机制
+  if (ts.empty()) {
     unsolvable_ = true;
     return;
   }
 
-  /// 填充FanBlade.angle
+  auto target_fanblade_it = ts.begin();
 
+  if (last_powerrune.has_value() && !last_powerrune.value().is_unsolve()) {
+    auto last_target_center = last_powerrune.value().fanblades[0].center;
+    float min_distance = std::numeric_limits<float>::max();
+    
+    // 寻找距离上一帧目标最近的扇叶
+    for (auto it = ts.begin(); it != ts.end(); ++it) {
+      float distance = cv::norm(it->center - last_target_center);
+      if (distance < min_distance) {
+        min_distance = distance;
+        target_fanblade_it = it;
+      }
+    }
+
+    // ========== 核心死锁验证逻辑 ==========
+    // 计算大符半径（中心 R 标到上一帧靶子中心的距离）
+    double radius = cv::norm(last_target_center - r_center);
+    
+    // 大符相邻两个扇叶的物理距离约为 半径 * 1.17
+    // 如果算出来的最短距离依然大于 0.4 倍半径，说明我们死锁的那个靶子在这帧漏检了！
+    // 此时视野里即便有别的靶子，也绝对不能切过去，直接判定本帧无法解算。
+    if (radius > 10.0 && min_distance > radius * 0.4) {
+      unsolvable_ = true;
+      return; // 直接 return，触发 detector 的 handle_lose() 累计丢失帧
+    }
+    // ======================================
+  }
+
+  target_fanblade_it->type = _target;
+  std::iter_swap(ts.begin(), target_fanblade_it);
+
+  /// 填充FanBlade.angle
   double angle = atan_angle(ts[0].center);
   for (auto & t : ts) {
     t.angle = atan_angle(t.center) - angle;
@@ -79,7 +67,6 @@ PowerRune::PowerRune(
   }
 
   /// fanblades调整顺序
-
   std::sort(ts.begin(), ts.end(), [](const FanBlade & a, const FanBlade & b) {
     return a.angle < b.angle;
   });  // 按照 t.angle 从小到大排序 ts
