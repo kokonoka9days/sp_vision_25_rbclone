@@ -51,6 +51,23 @@ public:
     queue_.pop();
   }
 
+  bool try_pop(T & value)
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+
+    // not_empty_condition_.wait(lock, [this] { return !queue_.empty(); });
+
+    if (queue_.empty()) {
+      return false;
+    }else{
+      value = queue_.front();
+      queue_.pop();     
+      return true;
+    }
+
+
+  }
+
   T pop()
   {
     std::unique_lock<std::mutex> lock(mutex_);

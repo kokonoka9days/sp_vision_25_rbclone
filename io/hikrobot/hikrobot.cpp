@@ -51,6 +51,19 @@ void HikRobot::read(cv::Mat & img, std::chrono::steady_clock::time_point & times
   timestamp = data.timestamp;
 }
 
+bool HikRobot::try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp)
+{
+  CameraData data;
+  bool read_full =  queue_.try_pop(data);
+
+  img = data.img;
+  if(read_full) {
+    timestamp = data.timestamp;
+    last_read_t = data.timestamp;
+  }  
+  return read_full;
+}
+
 
 bool HikRobot::ChoiceCamrea(MV_CC_DEVICE_INFO** pDeviceInfo, unsigned char* sn, size_t& cameraIndex){
     for(size_t i = 0; i < nDeviceNum; i++){

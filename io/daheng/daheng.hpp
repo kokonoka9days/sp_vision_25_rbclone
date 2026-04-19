@@ -48,7 +48,8 @@ public:
      * @param img 输出的图像
      * @param timestamp 时间戳
      */
-    void read(cv::Mat& img, std::chrono::steady_clock::time_point& timestamp);
+    void read(cv::Mat& img, std::chrono::steady_clock::time_point& timestamp) override;
+    bool try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) override;
 
 private:
 
