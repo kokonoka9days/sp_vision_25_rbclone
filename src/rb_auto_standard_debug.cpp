@@ -35,7 +35,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/xiaohuang.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/xiaohei.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -216,47 +216,52 @@ int main(int argc, char * argv[])
 
      // ================== 绘制打符的识别目标点 ==================
       // 确保当前识别到了能量机关，且没有处于丢失状态
-      if (power_runes.has_value() && !power_runes->is_unsolve()) {
+      // if (power_runes.has_value() && !power_runes->is_unsolve()) {
         
-        // 直接从 PowerRune 中取出锁定的 target 的原始 2D 像素中心点
-        cv::Point2f target_center = power_runes->target().center; 
+      //   // 直接从 PowerRune 中取出锁定的 target 的原始 2D 像素中心点
+      //   cv::Point2f target_center = power_runes->target().center; 
 
-        // 1. 画一个识别到的装甲板中心点 (黄色实心圆)
-        cv::circle(img, target_center, 6, cv::Scalar(0, 255, 255), -1);
+      //   // 1. 画一个识别到的装甲板中心点 (黄色实心圆)
+      //   cv::circle(img, target_center, 6, cv::Scalar(0, 255, 255), -1);
         
-        // 2. 在点右上方写上 "target"
-        cv::putText(img, "target", target_center + cv::Point2f(10, -10), 
-                    cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 255), 2);
-      }
+      //   // 2. 在点右上方写上 "target"
+      //   cv::putText(img, "target", target_center + cv::Point2f(10, -10), 
+      //               cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 255), 2);
+      // }
       // =======================================================
       auto fired = gs.bullet_count > last_bullet_count_main;
       last_bullet_count_main = gs.bullet_count;
 
-      nlohmann::json data;
-      data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0_main);
+      if(buff_plan.control != 0)
+      {
+        nlohmann::json data;
+              data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0_main);
 
-      data["gimbal_yaw"] = gs.yaw;
-      data["gimbal_yaw_vel"] = gs.yaw_vel;
-      data["gimbal_pitch"] = gs.pitch;
-      data["gimbal_pitch_vel"] = gs.pitch_vel;
+              data["gimbal_yaw"] = gs.yaw;
+              data["gimbal_yaw_vel"] = gs.yaw_vel;
+              data["gimbal_pitch"] = gs.pitch;
+              data["gimbal_pitch_vel"] = gs.pitch_vel;
 
-      data["target_yaw"] = buff_plan.target_yaw;
-      data["target_pitch"] = buff_plan.target_pitch;
+              data["target_yaw"] = buff_plan.target_yaw;
+              data["target_pitch"] = buff_plan.target_pitch;
 
-      data["plan_mode"] = buff_plan.control ? (buff_plan.fire ? 2 : 1) : 0;
-      data["plan_yaw"] = buff_plan.yaw / CV_PI * 180.;
-      data["plan_yaw_vel"] = buff_plan.yaw_vel;
-      data["plan_yaw_acc"] = buff_plan.yaw_acc;
+              data["plan_mode"] = buff_plan.control ? (buff_plan.fire ? 2 : 1) : 0;
+              data["plan_yaw"] = buff_plan.yaw / CV_PI * 180.;
+              data["plan_yaw_vel"] = buff_plan.yaw_vel;
+              data["plan_yaw_acc"] = buff_plan.yaw_acc;
 
-      data["plan_pitch"] = buff_plan.pitch * 57.3;
-      data["plan_pitch_vel"] = buff_plan.pitch_vel;
-      data["plan_pitch_acc"] = buff_plan.pitch_acc;
+              data["plan_pitch"] = buff_plan.pitch * 57.3;
+              data["plan_pitch_vel"] = buff_plan.pitch_vel;
+              data["plan_pitch_acc"] = buff_plan.pitch_acc;
 
-      data["fire"] = buff_plan.fire ? 1 : 0;
-      data["fired"] = fired ? 1 : 0;
+              data["fire"] = buff_plan.fire ? 1 : 0;
+              data["fired"] = fired ? 1 : 0;
 
 
-      plotter.plot(data);
+              plotter.plot(data);
+      }
+
+      
     }
     // 【修改】除打符模式外，全认为是自瞄
     else {

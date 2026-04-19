@@ -216,7 +216,7 @@ void Gimbal::read_thread()
 
     // 4. 检查 CRC 校验和
     if (!tools::check_crc16(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
-      tools::logger()->debug("[Gimbal] CRC16 check failed.");
+      // tools::logger()->debug("[Gimbal] CRC16 check failed.");
       error_count++;
       continue;
     }
@@ -250,7 +250,7 @@ void Gimbal::read_thread()
     state_.enemy_color = !rx_data_.color;
     state_.bullet_speed = rx_data_.bullet_speed;
     state_.bullet_count = rx_data_.bullet_count;
-    rx_data_.mode = 3;
+    rx_data_.mode = 2;
     state_.mode = rx_data_.mode;
 
     switch (rx_data_.mode) {
