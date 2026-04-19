@@ -7,6 +7,9 @@
 #include "../tasks/auto_aim/tracker.hpp"
 #include "../tools/logger.hpp"
 
+using namespace std::chrono_literals;
+
+
 template<typename T> 
 class BinocularType{
 public:
