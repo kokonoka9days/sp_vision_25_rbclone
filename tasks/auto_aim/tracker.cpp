@@ -7,6 +7,7 @@
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 
+
 namespace auto_aim
 {
 Tracker::Tracker(const std::string & config_path, Solver * solver)
@@ -149,8 +150,11 @@ std::list<Target> Tracker::track(
   //   [](const auto_aim::Armor & a, const auto_aim::Armor & b) { return a.priority < b.priority; });
 
   bool found = 0;
+
+  static uint8_t last_mode = g.mode;
+  bool mode_switch_1to0 = (last_mode == 1 && g.mode == 0);
   //按下右键时，mouse为1则跟随上一次的目标，不按则瞄准最近的装甲板
-  if(g.mode == 1)
+  if(!mode_switch_1to0)
   {
     if (state_ == "lost") {
         found = set_target(armors, t);
@@ -159,7 +163,7 @@ std::list<Target> Tracker::track(
     else {
       found = update_target(armors, t);
     }
-  }else if(g.mode == 0){
+  }else {
     if (state_ == "lost") {
         found = set_target(armors, t);
     }
@@ -178,6 +182,7 @@ std::list<Target> Tracker::track(
      
     }
   }
+  last_mode = g.mode;
   // found = set_target(armors, t);
 
   state_machine(found);
