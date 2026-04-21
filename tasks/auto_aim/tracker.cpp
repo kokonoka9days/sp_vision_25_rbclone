@@ -152,9 +152,9 @@ std::list<Target> Tracker::track(
   bool found = 0;
 
   static uint8_t last_mode = g.mode;
-  bool mode_switch_1to0 = (last_mode == 1 && g.mode == 0);
+  bool mode_switch_0to1 = (last_mode == 0 && g.mode == 1);
   //按下右键时，mouse为1则跟随上一次的目标，不按则瞄准最近的装甲板
-  if(!mode_switch_1to0)
+  if(!mode_switch_0to1)
   {
     if (state_ == "lost") {
         found = set_target(armors, t);
