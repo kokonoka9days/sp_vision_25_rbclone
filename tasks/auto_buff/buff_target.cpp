@@ -57,7 +57,7 @@ void SmallTarget::get_target(
   if (!p.has_value()) {
     lost_cn++;
     // 如果丢失超过容忍阈值(6帧)或系统尚未初始化，放弃解算
-    if (lost_cn > 60 || first_in_) {
+    if (lost_cn > 5 || first_in_) {
       unsolvable_ = true;
       first_in_ = true;
       // tools::logger()->debug("[Target] 小符丢失过久，停止盲推");
