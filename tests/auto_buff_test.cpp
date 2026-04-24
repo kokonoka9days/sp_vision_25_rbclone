@@ -18,10 +18,10 @@
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明 }"
-  "{config-path c  | ../configs/xiaohuang.yaml    | yaml配置文件的路径}"
+  "{config-path c  | ../configs/demo.yaml    | yaml配置文件的路径}"
   "{start-index s  | 0                      | 视频起始帧下标    }"
   "{end-index e    | 0                      | 视频结束帧下标    }"
-  "{@input-path    |           /home/cyn/Desktop/sp_vision_25_rbclone/buff   | avi和txt文件的路径}";
+  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/val_image   | avi和txt文件的路径}";
 
 int main(int argc, char * argv[])
 {
@@ -46,8 +46,8 @@ int main(int argc, char * argv[])
 
   auto_buff::Buff_Detector detector(config_path);
   auto_buff::Solver solver(config_path);
-  // auto_buff::SmallTarget target;
-  auto_buff::BigTarget target;
+  auto_buff::SmallTarget target;
+  // auto_buff::BigTarget target;
   auto_buff::Aimer aimer(config_path);
 
   cv::Mat img, drawing;
@@ -114,23 +114,23 @@ int main(int argc, char * argv[])
       tools::draw_point(img, p.r_center, {0, 0, 255}, 3);
 
       // 当前帧target更新后buff
-      auto Rxyz_in_world_now = target.point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
-      auto image_points =
-        solver.reproject_buff(Rxyz_in_world_now, target.ekf_x()[4], target.ekf_x()[5]);
-      tools::draw_points(
-        img, std::vector<cv::Point2f>(image_points.begin(), image_points.begin() + 4), {0, 255, 0});
-      tools::draw_points(
-        img, std::vector<cv::Point2f>(image_points.begin() + 4, image_points.end()), {0, 255, 0});
+      // auto Rxyz_in_world_now = target.point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
+      // auto image_points =
+      //   solver.reproject_buff(Rxyz_in_world_now, target.ekf_x()[4], target.ekf_x()[5]);
+      // tools::draw_points(
+      //   img, std::vector<cv::Point2f>(image_points.begin(), image_points.begin() + 4), {0, 255, 0});
+      // tools::draw_points(
+      //   img, std::vector<cv::Point2f>(image_points.begin() + 4, image_points.end()), {0, 255, 0});
 
-      // buff瞄准位置(预测)
-      double dangle = target.ekf_x()[5] - target_copy.ekf_x()[5];
-      auto Rxyz_in_world_pre = target.point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
-      image_points =
-        solver.reproject_buff(Rxyz_in_world_pre, target_copy.ekf_x()[4], target_copy.ekf_x()[5]);
-      tools::draw_points(
-        img, std::vector<cv::Point2f>(image_points.begin(), image_points.begin() + 4), {255, 0, 0});
-      tools::draw_points(
-        img, std::vector<cv::Point2f>(image_points.begin() + 4, image_points.end()), {255, 0, 0});
+      // // buff瞄准位置(预测)
+      // double dangle = target.ekf_x()[5] - target_copy.ekf_x()[5];
+      // auto Rxyz_in_world_pre = target.point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
+      // image_points =
+      //   solver.reproject_buff(Rxyz_in_world_pre, target_copy.ekf_x()[4], target_copy.ekf_x()[5]);
+      // tools::draw_points(
+      //   img, std::vector<cv::Point2f>(image_points.begin(), image_points.begin() + 4), {255, 0, 0});
+      // tools::draw_points(
+      //   img, std::vector<cv::Point2f>(image_points.begin() + 4, image_points.end()), {255, 0, 0});
 
       // 观测器内部数据
       Eigen::VectorXd x = target.ekf_x();

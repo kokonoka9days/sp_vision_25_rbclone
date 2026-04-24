@@ -46,46 +46,89 @@ Eigen::VectorXd Target::ekf_x() const { return ekf_.x; }
 
 SmallTarget::SmallTarget() : Target() {}
 
+// void SmallTarget::get_target(
+//   const std::optional<PowerRune> & p, std::chrono::steady_clock::time_point & timestamp)
+// {
+//   static int lost_cn = 0;
+//   static std::chrono::steady_clock::time_point start_timestamp = timestamp;
+//   auto time_gap = tools::delta_time(timestamp, start_timestamp);
+
+//   // 1. 处理视觉丢帧（触发盲推或彻底丢失）
+//   if (!p.has_value()) {
+//     lost_cn++;
+//     // 如果丢失超过容忍阈值(6帧)或系统尚未初始化，放弃解算
+//     if (lost_cn > 5 || first_in_) {
+//       unsolvable_ = true;
+//       first_in_ = true;
+//       // tools::logger()->debug("[Target] 小符丢失过久，停止盲推");
+//     } else {
+//       // 短暂丢失，触发盲推机制
+//       predict(time_gap - lasttime_); // 纯推演卡尔曼先验状态，不引入测量更新
+//       lasttime_ = time_gap;          // 更新时间戳，供下次计算 dt 使用
+//       unsolvable_ = false;           // 保持可解算状态，让 Aimer 继续下发指令
+//       tools::logger()->debug("[Target] 小符盲推中，连续丢失帧数: {}", lost_cn);
+//     }
+//     return; // 盲推结束，直接返回
+//   }
+
+//   // 2. 正常识别到目标，重置丢失计数
+//   lost_cn = 0;
+
+//   // 3. 冷启动初始化
+//   if (first_in_) {
+//     unsolvable_ = true;
+//     init(time_gap, p.value());
+//     first_in_ = false;
+//   }
+
+//   // 4. 正常卡尔曼滤波测量更新
+//   unsolvable_ = false;
+//   update(time_gap, p.value());
+
+//   // 5. 处理滤波器发散
+//   if (std::abs(ekf_.x[6]) > SMALL_W + CV_PI / 18 || std::abs(ekf_.x[6]) < SMALL_W - CV_PI / 18) {
+//     unsolvable_ = true;
+//     tools::logger()->debug("[Target] 小符角度发散spd: {:.2f}", ekf_.x[6] * 180 / CV_PI);
+//     first_in_ = true;
+//     return;
+//   }
+// }
+
 void SmallTarget::get_target(
   const std::optional<PowerRune> & p, std::chrono::steady_clock::time_point & timestamp)
 {
+  // 如果没有识别，退出函数
   static int lost_cn = 0;
+  if (!p.has_value()) {
+    unsolvable_ = true;
+    lost_cn++;
+    return;
+  }
+
   static std::chrono::steady_clock::time_point start_timestamp = timestamp;
   auto time_gap = tools::delta_time(timestamp, start_timestamp);
 
-  // 1. 处理视觉丢帧（触发盲推或彻底丢失）
-  if (!p.has_value()) {
-    lost_cn++;
-    // 如果丢失超过容忍阈值(6帧)或系统尚未初始化，放弃解算
-    if (lost_cn > 5 || first_in_) {
-      unsolvable_ = true;
-      first_in_ = true;
-      // tools::logger()->debug("[Target] 小符丢失过久，停止盲推");
-    } else {
-      // 短暂丢失，触发盲推机制
-      predict(time_gap - lasttime_); // 纯推演卡尔曼先验状态，不引入测量更新
-      lasttime_ = time_gap;          // 更新时间戳，供下次计算 dt 使用
-      unsolvable_ = false;           // 保持可解算状态，让 Aimer 继续下发指令
-      tools::logger()->debug("[Target] 小符盲推中，连续丢失帧数: {}", lost_cn);
-    }
-    return; // 盲推结束，直接返回
-  }
-
-  // 2. 正常识别到目标，重置丢失计数
-  lost_cn = 0;
-
-  // 3. 冷启动初始化
+  // init
   if (first_in_) {
     unsolvable_ = true;
     init(time_gap, p.value());
     first_in_ = false;
   }
 
-  // 4. 正常卡尔曼滤波测量更新
+  // 处理识别时间间隔过大
+  if (lost_cn > 6) {
+    unsolvable_ = true;
+    tools::logger()->debug("[Target] 丢失buff");
+    lost_cn = 0;
+    first_in_ = true;
+    return;
+  }
+
+  // kalman update
   unsolvable_ = false;
   update(time_gap, p.value());
 
-  // 5. 处理滤波器发散
+  // 处理发散
   if (std::abs(ekf_.x[6]) > SMALL_W + CV_PI / 18 || std::abs(ekf_.x[6]) < SMALL_W - CV_PI / 18) {
     unsolvable_ = true;
     tools::logger()->debug("[Target] 小符角度发散spd: {:.2f}", ekf_.x[6] * 180 / CV_PI);
@@ -361,50 +404,94 @@ Eigen::MatrixXd SmallTarget::h_jacobian() const
 
 BigTarget::BigTarget() : Target(), spd_fitter_(100, 0.5, 1.884, 2.000) {}
 
+// void BigTarget::get_target(
+//   const std::optional<PowerRune> & p, std::chrono::steady_clock::time_point & timestamp)
+// {
+//   static int lost_cn = 0;
+//   static std::chrono::steady_clock::time_point start_timestamp = timestamp;
+//   auto time_gap = tools::delta_time(timestamp, start_timestamp);
+
+//   // 1. 处理视觉丢帧（触发盲推或彻底丢失）
+//   if (!p.has_value()) {
+//     lost_cn++;
+//     // 如果丢失超过容忍阈值(6帧)或系统尚未初始化，放弃解算
+//     if (lost_cn > 60 || first_in_) {
+//       unsolvable_ = true;
+//       first_in_ = true;
+//       // tools::logger()->debug("[Target] 大符丢失过久，停止盲推");
+//     } else {
+//       // 短暂丢失，触发盲推机制
+//       predict(time_gap - lasttime_); // 纯推演卡尔曼先验状态
+//       lasttime_ = time_gap;          // 更新时间戳
+//       unsolvable_ = false;           // 保持可解算状态
+//       tools::logger()->debug("[Target] 大符盲推中，连续丢失帧数: {}", lost_cn);
+//     }
+//     return; // 盲推结束，直接返回
+//   }
+
+//   // 2. 正常识别到目标，重置丢失计数
+//   lost_cn = 0;
+
+//   // 3. 冷启动初始化
+//   if (first_in_) {
+//     unsolvable_ = true;
+//     init(time_gap, p.value());
+//     first_in_ = false;
+//   }
+
+//   // 4. 正常卡尔曼滤波测量更新
+//   unsolvable_ = false;
+//   update(time_gap, p.value());
+
+//   // 5. 处理滤波器发散
+//   if (
+//     ekf_.x[7] > 1.045 * 1.5 || ekf_.x[7] < 0.78 / 1.5 || ekf_.x[8] > 2.0 * 1.5 ||
+//     ekf_.x[8] < 1.884 / 1.5) {
+//     unsolvable_ = true;
+//     tools::logger()->debug("[Target] 大符角度发散a: {:.2f}b:{:.2f}", ekf_.x[7], ekf_.x[8]);
+//     first_in_ = true;
+//     return;
+//   }
+// }
+
 void BigTarget::get_target(
   const std::optional<PowerRune> & p, std::chrono::steady_clock::time_point & timestamp)
 {
+  // 如果没有识别，退出函数
   static int lost_cn = 0;
+  if (!p.has_value()) {
+    unsolvable_ = true;
+    lost_cn++;
+    return;
+  }
+
   static std::chrono::steady_clock::time_point start_timestamp = timestamp;
   auto time_gap = tools::delta_time(timestamp, start_timestamp);
 
-  // 1. 处理视觉丢帧（触发盲推或彻底丢失）
-  if (!p.has_value()) {
-    lost_cn++;
-    // 如果丢失超过容忍阈值(6帧)或系统尚未初始化，放弃解算
-    if (lost_cn > 60 || first_in_) {
-      unsolvable_ = true;
-      first_in_ = true;
-      // tools::logger()->debug("[Target] 大符丢失过久，停止盲推");
-    } else {
-      // 短暂丢失，触发盲推机制
-      predict(time_gap - lasttime_); // 纯推演卡尔曼先验状态
-      lasttime_ = time_gap;          // 更新时间戳
-      unsolvable_ = false;           // 保持可解算状态
-      tools::logger()->debug("[Target] 大符盲推中，连续丢失帧数: {}", lost_cn);
-    }
-    return; // 盲推结束，直接返回
-  }
-
-  // 2. 正常识别到目标，重置丢失计数
-  lost_cn = 0;
-
-  // 3. 冷启动初始化
+  // init
   if (first_in_) {
     unsolvable_ = true;
     init(time_gap, p.value());
     first_in_ = false;
   }
 
-  // 4. 正常卡尔曼滤波测量更新
+  // 处理识别时间间隔过大
+  if (lost_cn > 6) {
+    unsolvable_ = true;
+    tools::logger()->debug("[Target] 丢失buff");
+    lost_cn = 0;
+    first_in_ = true;
+    return;
+  }
+
+  // kalman update
   unsolvable_ = false;
   update(time_gap, p.value());
 
-  // 5. 处理滤波器发散
+  // 处理发散
   if (
     ekf_.x[7] > 1.045 * 1.5 || ekf_.x[7] < 0.78 / 1.5 || ekf_.x[8] > 2.0 * 1.5 ||
     ekf_.x[8] < 1.884 / 1.5) {
-    unsolvable_ = true;
     tools::logger()->debug("[Target] 大符角度发散a: {:.2f}b:{:.2f}", ekf_.x[7], ekf_.x[8]);
     first_in_ = true;
     return;

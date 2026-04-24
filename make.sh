@@ -8,7 +8,7 @@
 
 
 cmake -B build
-make -C build/ -j12
+make -C build/ -j10
 
 # exec "$@"
 # make -C build/ -j4

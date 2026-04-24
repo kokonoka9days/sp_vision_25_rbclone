@@ -1,6 +1,7 @@
 #include "yolo11_buff.hpp"
+#include <openvino/core/preprocess/pre_post_process.hpp> // 新增 PPP 头文件
 
-const double ConfidenceThreshold = 0.3f;
+const double ConfidenceThreshold = 0.7f;
 const double IouThreshold = 0.4f;
 namespace auto_buff
 {
@@ -8,15 +9,43 @@ YOLO11_BUFF::YOLO11_BUFF(const std::string & config)
 {
   auto yaml = YAML::LoadFile(config);
   std::string model_path = yaml["model"].as<std::string>();
+  
+  // 1. 读取模型
   model = core.read_model(model_path);
-  // printInputAndOutputsInfo(*model);  // 打印模型信息
-  /// 载入并编译模型
-  compiled_model = core.compile_model(model, "CPU");
-  /// 创建推理请求
+
+  // ======================= 新增的 PPP 预处理代码 开始 =======================
+  ov::preprocess::PrePostProcessor ppp(model);
+
+  ppp.input()
+      .tensor()
+      .set_element_type(ov::element::u8)  // OpenCV 的 Mat 默认是 uint8
+      .set_layout("NHWC")                 // OpenCV 默认是 NHWC 格式
+      .set_color_format(ov::preprocess::ColorFormat::BGR); 
+
+  ppp.input()
+      .preprocess()
+      .convert_element_type(ov::element::f32) 
+      .convert_color(ov::preprocess::ColorFormat::RGB) 
+      .scale({255.0, 255.0, 255.0});      
+
+  ppp.input().model().set_layout("NCHW");
+
+  model = ppp.build();
+  // ======================= 新增的 PPP 预处理代码 结束 =======================
+
+  /// 2. 载入并编译模型 (替换为你需要的 LATENCY 低延迟模式)
+  compiled_model = core.compile_model(model, "CPU", ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY));
+  
+  /// 3. 创建推理请求
   infer_request = compiled_model.create_infer_request();
-  // 获取模型输入节点
+  
+  // 4. 获取模型输入节点
   input_tensor = infer_request.get_input_tensor();
-  input_tensor.set_shape({1, 3, 640, 640});
+  
+  // 自动从预处理后的模型中获取输入形状，再也不用手动改数字了！
+auto input_shape = compiled_model.input().get_shape();
+// 因为我们加了 PPP 把输入设为 NHWC，所以这里的 input_shape 通常就是 {1, H, W, 3}
+input_tensor.set_shape(input_shape);
 }
 
 std::vector<YOLO11_BUFF::Object> YOLO11_BUFF::get_multicandidateboxes(cv::Mat & image)
@@ -223,40 +252,27 @@ void YOLO11_BUFF::convert(
 
 float YOLO11_BUFF::fill_tensor_data_image(ov::Tensor & input_tensor, const cv::Mat & input_image) const
 {
-  /// letterbox变换: 不改变宽高比(aspect ratio), 将input_image缩放并放置到blob_image左上角
   const ov::Shape tensor_shape = input_tensor.get_shape();
-  const size_t num_channels = tensor_shape[1];
-  const size_t height = tensor_shape[2];
-  const size_t width = tensor_shape[3];
-  // 缩放因子
+  // 因为使用了 PPP，tensor_shape 现在是 NHWC 格式，即 [1, 640, 640, 3]
+  const size_t height = tensor_shape[1];
+  const size_t width = tensor_shape[2];
+
+  // 计算缩放因子 (letterbox)
   const float scale = std::min(height / float(input_image.rows), width / float(input_image.cols));
   const cv::Matx23f matrix{
     scale, 0.0, 0.0, 0.0, scale, 0.0,
   };
+  
   cv::Mat blob_image;
-  // 下面根据scale范围进行数据转换, 这只是为了提高一点速度(主要是提高了交换通道的速度)
-  // 如果不在意这点速度提升的可以固定一种做法(两个if分支随便一个都可以)
-  if (scale < 1.0f) {
-    // 要缩小, 那么先缩小再交换通道
-    cv::warpAffine(input_image, blob_image, matrix, cv::Size(width, height));
-    convert(blob_image, blob_image, true, true);
-  } else {
-    // 要放大, 那么先交换通道再放大
-    convert(input_image, blob_image, true, true);
-    cv::warpAffine(blob_image, blob_image, matrix, cv::Size(width, height));
-  }
+  // 直接进行仿射变换缩放
+  cv::warpAffine(input_image, blob_image, matrix, cv::Size(width, height));
 
-  /// 将图像数据填入input_tensor
-  float * const input_tensor_data = input_tensor.data<float>();
-  // 原有图片数据为 HWC格式，模型输入节点要求的为 CHW 格式
-  for (size_t c = 0; c < num_channels; c++) {
-    for (size_t h = 0; h < height; h++) {
-      for (size_t w = 0; w < width; w++) {
-        input_tensor_data[c * width * height + h * width + w] =
-          blob_image.at<cv::Vec<float, 3>>(h, w)[c];
-      }
-    }
-  }
+  // 【提速核心】：因为预处理已经交给了 OpenVINO，
+  // 这里直接把 uint8_t 的 BGR 像素数据通过 memcpy 内存拷贝进 tensor 即可。
+  // 彻底去掉了原来极其耗时的 3 层 for 循环！
+  uint8_t* input_tensor_data = input_tensor.data<uint8_t>();
+  std::memcpy(input_tensor_data, blob_image.data, blob_image.total() * blob_image.elemSize());
+
   return 1 / scale;
 }
 
