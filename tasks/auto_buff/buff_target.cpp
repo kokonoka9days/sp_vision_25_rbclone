@@ -243,8 +243,11 @@ void SmallTarget::update(double nowtime, const PowerRune & p)
   const Eigen::VectorXd & ypr = p.ypr_in_world;
   const Eigen::VectorXd & B_ypd = p.blade_ypd_in_world;  // center of blade
 
+  bool is_jumped = false; // 新增：标记当前帧是否发生了目标跳变
+
   // 处理扇叶跳变 angle/row
   if (abs(ypr[2] - ekf_.x[5]) > CV_PI / 12) {
+    is_jumped = true; // 记录发生跳变
     for (int i = -5; i <= 5; i++) {
       double angle_c = ekf_.x[5] + i * 2 * CV_PI / 5;
       if (std::fabs(angle_c - ypr[2]) < CV_PI / 5) {
@@ -254,8 +257,11 @@ void SmallTarget::update(double nowtime, const PowerRune & p)
     }
   }
 
-  // vote判断是顺时针还是逆时针旋转
-  voter.vote(ekf_.x[5], ypr[2]);
+  // 修改：只有在连续跟踪同一个扇叶时，才信任观测差值并进行投票
+  if (!is_jumped) {
+    voter.vote(ekf_.x[5], ypr[2]);
+  }
+  
   if (voter.clockwise() * ekf_.x[6] < 0) ekf_.x[6] *= -1;  // spd
 
   // 预测下一个状态
@@ -638,8 +644,11 @@ void BigTarget::update(double nowtime, const PowerRune & p)
   const Eigen::VectorXd & ypr = p.ypr_in_world;
   const Eigen::VectorXd & B_ypd = p.blade_ypd_in_world;  // center of blade
 
+  bool is_jumped = false; // 新增：标记当前帧是否发生了目标跳变
+
   // 处理扇叶跳变 angle/row
   if (abs(ypr[2] - ekf_.x[5]) > CV_PI / 12) {
+    is_jumped = true; // 记录发生跳变
     for (int i = -5; i <= 5; i++) {
       double angle_c = ekf_.x[5] + i * 2 * CV_PI / 5;
       if (std::fabs(angle_c - ypr[2]) < CV_PI / 5) {
@@ -649,8 +658,10 @@ void BigTarget::update(double nowtime, const PowerRune & p)
     }
   }
 
-  // vote判断是顺时针还是逆时针旋转
-  voter.vote(ekf_.x[5], ypr[2]);
+  // 修改：只有在连续跟踪同一个扇叶时，才信任观测差值并进行投票
+  if (!is_jumped) {
+    voter.vote(ekf_.x[5], ypr[2]);
+  }
 
   auto anglelast = ekf_.x[5];  ///
 

@@ -162,6 +162,12 @@ bool Aimer::get_send_angle(
   double d = std::sqrt(aim_in_world[0] * aim_in_world[0] + aim_in_world[1] * aim_in_world[1]);
   double h = aim_in_world[2];
 
+  // 如果出现 NaN、无穷大，或者距离远超机器人战场可能的最大距离（如20米），直接抛弃本帧解算
+  if (std::isnan(d) || std::isnan(h) || std::isinf(d) || std::isinf(h) || d > 20.0) {
+    tools::logger()->debug("[Aimer] Invalid coordinate blocked: d={:.2f}, h={:.2f}", d, h);
+    return false;
+  }
+
   // 创建弹道对象
   tools::Trajectory trajectory0(bullet_speed, d, h);
   if (trajectory0.unsolvable) {  // 如果弹道无法解算，返回未命中结果

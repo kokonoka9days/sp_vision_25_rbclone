@@ -160,6 +160,11 @@ std::vector<YOLO11_BUFF::Object> YOLO11_BUFF::get_onecandidatebox(cv::Mat & imag
 {
   const int64 start = cv::getTickCount();  // 设置模型输入
 
+  if (image.empty()) {
+    tools::logger()->warn("Empty img!, camera drop!");
+    return std::vector<YOLO11_BUFF::Object> ();
+  }
+
   /// 预处理
   const float factor = fill_tensor_data_image(input_tensor, image);  // 填充图片到合适的input size
 

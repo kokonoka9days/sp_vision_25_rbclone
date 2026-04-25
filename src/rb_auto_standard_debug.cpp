@@ -166,6 +166,14 @@ int main(int argc, char * argv[])
     }
 
     camera.read(img, t);
+
+    if (img.empty()) {
+      tools::logger()->warn("Camera frame empty! Waiting...");
+      std::this_thread::sleep_for(1ms); // 稍微等一下相机曝光
+      continue; // 跳过这一帧，不往下执行
+    }
+
+
     auto q = gimbal.q(t - 3ms);
 
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
@@ -187,7 +195,7 @@ int main(int argc, char * argv[])
     // std::cout << "Roll: " << roll_deg << std::endl;
 
     // 【修改】如果是打符模式
-    if (mode.load() == io::GimbalMode::SMALL_BUFF || mode.load() == io::GimbalMode::BIG_BUFF) {
+   if (mode.load() == io::GimbalMode::SMALL_BUFF || mode.load() == io::GimbalMode::BIG_BUFF) {
       auto gs = gimbal.state();
       buff_solver.set_R_gimbal2world(q);
 
@@ -196,73 +204,113 @@ int main(int argc, char * argv[])
       buff_solver.solve(power_runes);
 
       auto_aim::Plan buff_plan;
+      auto_buff::Target* active_target = nullptr;
+      std::unique_ptr<auto_buff::Target> target_copy_ptr = nullptr;
+
       if (mode.load() == io::GimbalMode::SMALL_BUFF) {
         buff_small_target.get_target(power_runes, t);
+        active_target = &buff_small_target;
         auto target_copy = buff_small_target;
         buff_plan = buff_aimer.mpc_aim(target_copy, t, gs, true);
+        target_copy_ptr = std::make_unique<auto_buff::SmallTarget>(target_copy);
       } else if (mode.load() == io::GimbalMode::BIG_BUFF) {
         buff_big_target.get_target(power_runes, t);
+        active_target = &buff_big_target;
         auto target_copy = buff_big_target;
         buff_plan = buff_aimer.mpc_aim(target_copy, t, gs, true);
+        target_copy_ptr = std::make_unique<auto_buff::BigTarget>(target_copy);
       }
       
       // 直接发送打符相关的控制指令
       gimbal.send(
         buff_plan.control, buff_plan.fire, buff_plan.yaw, buff_plan.yaw_vel, 0,
         buff_plan.pitch, buff_plan.pitch_vel, buff_plan.pitch_acc);
-      // gimbal.send(
-      //   1, 1, 0, buff_plan.yaw_vel, buff_plan.yaw_acc,
-      //   buff_plan.pitch, buff_plan.pitch_vel, buff_plan.pitch_acc);
-
-     // ================== 绘制打符的识别目标点 ==================
-      // 确保当前识别到了能量机关，且没有处于丢失状态
-      // if (power_runes.has_value() && !power_runes->is_unsolve()) {
-        
-      //   // 直接从 PowerRune 中取出锁定的 target 的原始 2D 像素中心点
-      //   cv::Point2f target_center = power_runes->target().center; 
-
-      //   // 1. 画一个识别到的装甲板中心点 (黄色实心圆)
-      //   cv::circle(img, target_center, 6, cv::Scalar(0, 255, 255), -1);
-        
-      //   // 2. 在点右上方写上 "target"
-      //   cv::putText(img, "target", target_center + cv::Point2f(10, -10), 
-      //               cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 255), 2);
-      // }
-      // =======================================================
+      
       auto fired = gs.bullet_count > last_bullet_count_main;
       last_bullet_count_main = gs.bullet_count;
+
+      // ========================== 新增：打符图像调试重投影 ==========================
+      if (active_target && !active_target->is_unsolve() && power_runes.has_value()) {
+        auto & p = power_runes.value();
+
+        // 1. 显示识别的特征点和中心
+        for (int i = 0; i < 4; i++) tools::draw_point(img, p.target().points[i]);
+        tools::draw_point(img, p.target().center, {0, 0, 255}, 3);
+        tools::draw_point(img, p.r_center, {0, 0, 255}, 3);
+
+        // 2. 当前帧target更新后buff位置 (绿色)
+        auto Rxyz_in_world_now = active_target->point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
+        auto image_points_now =
+          buff_solver.reproject_buff(Rxyz_in_world_now, active_target->ekf_x()[4], active_target->ekf_x()[5]);
+        tools::draw_points(
+          img, std::vector<cv::Point2f>(image_points_now.begin(), image_points_now.begin() + 4), {0, 255, 0});
+        tools::draw_points(
+          img, std::vector<cv::Point2f>(image_points_now.begin() + 4, image_points_now.end()), {0, 255, 0});
+
+        // 3. buff瞄准预测位置 (红色)
+        if (target_copy_ptr) {
+          auto Rxyz_in_world_pre = active_target->point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
+          auto image_points_pre =
+            buff_solver.reproject_buff(Rxyz_in_world_pre, target_copy_ptr->ekf_x()[4], target_copy_ptr->ekf_x()[5]);
+          tools::draw_points(
+            img, std::vector<cv::Point2f>(image_points_pre.begin(), image_points_pre.begin() + 4), {255, 0, 0});
+          tools::draw_points(
+            img, std::vector<cv::Point2f>(image_points_pre.begin() + 4, image_points_pre.end()), {255, 0, 0});
+        }
+      }
+      // =========================================================================
 
       if(buff_plan.control != 0)
       {
         nlohmann::json data;
-              data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0_main);
 
-              data["gimbal_yaw"] = gs.yaw;
-              data["gimbal_yaw_vel"] = gs.yaw_vel;
-              data["gimbal_pitch"] = gs.pitch;
-              data["gimbal_pitch_vel"] = gs.pitch_vel;
+        data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0_main);
 
-              data["target_yaw"] = buff_plan.target_yaw;
-              data["target_pitch"] = buff_plan.target_pitch;
+        data["gimbal_yaw"] = gs.yaw;
+        data["gimbal_yaw_vel"] = gs.yaw_vel;
+        data["gimbal_pitch"] = gs.pitch;
+        data["gimbal_pitch_vel"] = gs.pitch_vel;
 
-              data["plan_mode"] = buff_plan.control ? (buff_plan.fire ? 2 : 1) : 0;
-              data["plan_yaw"] = buff_plan.yaw / CV_PI * 180.;
-              data["plan_yaw_vel"] = buff_plan.yaw_vel;
-              data["plan_yaw_acc"] = buff_plan.yaw_acc;
+        data["target_yaw"] = buff_plan.target_yaw;
+        data["target_pitch"] = buff_plan.target_pitch;
 
-              data["plan_pitch"] = buff_plan.pitch * 57.3;
-              data["plan_pitch_vel"] = buff_plan.pitch_vel;
-              data["plan_pitch_acc"] = buff_plan.pitch_acc;
+        data["plan_mode"] = buff_plan.control ? (buff_plan.fire ? 2 : 1) : 0;
+        data["plan_yaw"] = buff_plan.yaw / CV_PI * 180.;
+        data["plan_yaw_vel"] = buff_plan.yaw_vel;
+        data["plan_yaw_acc"] = buff_plan.yaw_acc;
 
-              data["fire"] = buff_plan.fire ? 1 : 0;
-              data["fired"] = fired ? 1 : 0;
+        data["plan_pitch"] = buff_plan.pitch * 57.3;
+        data["plan_pitch_vel"] = buff_plan.pitch_vel;
+        data["plan_pitch_acc"] = buff_plan.pitch_acc;
 
+        data["fire"] = buff_plan.fire ? 1 : 0;
+        data["fired"] = fired ? 1 : 0;
 
-              plotter.plot(data);
+        // ========================== 新增：打符内部数据上传PlotJuggler ==========================
+        if (active_target && !active_target->is_unsolve()) {
+          Eigen::VectorXd x = active_target->ekf_x();
+          data["R_yaw"] = x[0];
+          data["R_V_yaw"] = x[1];
+          data["R_pitch"] = x[2];
+          data["R_dis"] = x[3];
+          data["yaw"] = x[4] * 57.3;
+
+          data["angle"] = x[5] * 57.3;
+          data["spd"] = x[6] * 57.3;
+          if (x.size() >= 10) { // 大符状态量更多
+            data["spd"] = x[6];
+            data["a"] = x[7];
+            data["w"] = x[8];
+            data["fi"] = x[9];
+            data["spd0"] = active_target->spd;
+          }
+        }
+        // ==================================================================================
+
+        plotter.plot(data);
       }
-
-      
     }
+
     // 【修改】除打符模式外，全认为是自瞄
     else {
       // 原版自瞄逻辑

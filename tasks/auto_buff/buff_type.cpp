@@ -33,43 +33,52 @@ PowerRune::PowerRune(
 
   if (last_powerrune.has_value() && !last_powerrune.value().is_unsolve()) {
     auto last_target_center = last_powerrune.value().fanblades[0].center;
+    auto last_r_center = last_powerrune.value().r_center; // 获取上一帧的R标中心
+
+    // ================== 核心修复 1：相机运动补偿 ==================
+    // R 标是物理静止的（相对于大符支架），它在画面中的像素移动，纯粹是因为云台转了。
+    // 计算 R 标的位移，就是相机的像素位移。
+    cv::Point2f camera_shift = r_center - last_r_center;
+    
+    // 把上一帧的靶子中心，平移对齐到当前帧的画面坐标系下
+    cv::Point2f aligned_last_target = last_target_center + camera_shift;
+    // ==============================================================
+
     float min_distance = std::numeric_limits<float>::max();
     
-    // 寻找画面中距离上一帧目标最近的扇叶
+    // 寻找画面中距离【对齐后的上一帧目标】最近的扇叶
     for (auto it = ts.begin(); it != ts.end(); ++it) {
-      float distance = cv::norm(it->center - last_target_center);
+      float distance = cv::norm(it->center - aligned_last_target); // 用对齐后的坐标计算
       if (distance < min_distance) {
         min_distance = distance;
         target_fanblade_it = it;
       }
     }
 
-    // ========== 融合：追踪与击打跳变验证逻辑 ==========
-    // 计算大符半径（中心 R 标到上一帧靶子中心的距离）
-    double radius = cv::norm(last_target_center - r_center);
+    // ================== 核心修复 2：计算真实的当前帧半径 ==================
+    // 绝对不能跨帧计算！直接使用当前帧选中的扇叶中心到当前帧 R 标的距离
+    double radius = cv::norm(target_fanblade_it->center - r_center);
+    // tools::logger()->debug("[PowerRune] radius: {:.2f}", radius);
+    // ======================================================================
     
-    // 确保大符半径合理，排除刚启动时的畸形值（此处 10.0 为像素距离阈值，可依实际相机焦距微调）
+    // 确保大符半径合理，排除刚启动时的畸形值
     if (radius > 10.0) { 
       if (min_distance <= radius * 0.4) {
-        // 1. 正常连续追踪：当前找到的扇叶就在上一帧位置附近。
-        // target_fanblade_it 仍正确指向当前帧的同一目标，无需额外处理。
+        // 1. 正常连续追踪
       } 
-      else if (min_distance > radius * 0.8 && min_distance < radius * 1.5) {
-        // 2. 合法击打跳变：发生切换时，新扇叶与老扇叶的距离是弦长。
-        // 相邻扇叶的物理弦长 L = 2 * R * sin(72°/2) ≈ 1.175 * R。
-        // 设定 0.8R ~ 1.5R 的宽容区间，容忍 YOLO 的检测框抖动。
-        // 此时 target_fanblade_it 自然指向了新亮起的扇叶，放行。
-        tools::logger()->debug("[PowerRune] Target Switched! Jump distance: {:.2f}R", min_distance / radius);
+      // 严格限定跳变的弦长比例
+      else if ((min_distance > radius * 0.9 && min_distance < radius * 1.45) || 
+               (min_distance > radius * 1.5 && min_distance < radius * 2.2)) {
+        // 2. 合法击打跳变
+        tools::logger()->debug("[PowerRune] Valid Target Switched! Jump distance: {:.2f}R", min_distance / radius);
       } 
       else {
-        // 3. 死锁或误检：距离不合理。
-        // 例如跳跃距离跨越了对角线(>1.5R)，或者处在尴尬距离(0.4R~0.8R)说明框到了背景杂光。
-        // 说明我们想要的目标（或者下一个该打的目标）漏检了。
+        // 3. 错帧、反光干扰引起的“伪跳变” 
+        tools::logger()->debug("[PowerRune] FAKE Jump Blocked! min_d: {:.2f}, radius: {:.2f}, ratio: {:.2f}R", min_distance, radius, min_distance / radius);
         unsolvable_ = true;
-        return; // 直接丢弃本帧解算，交给后端的 Predictor / EKF 进行盲推
+        return; 
       }
     }
-    // ==================================================
   }
 
   // 确立 Target 属性并交换到首位
