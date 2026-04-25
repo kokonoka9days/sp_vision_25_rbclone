@@ -88,9 +88,11 @@ auto_aim::Plan Aimer::mpc_aim(
 
   bool angle_changed =
     std::abs(last_yaw_ - yaw) > 5 / 57.3 || std::abs(last_pitch_ - pitch) > 5 / 57.3;
-  if (get_send_angle(target, future, bullet_speed, to_now, yaw, pitch)) {
+
+  auto target_for_future = target.clone(); // 拷贝干净的状态
+  if (get_send_angle(*target_for_future, future, bullet_speed, to_now, yaw, pitch)) {
     plan.yaw = yaw;
-    plan.pitch = pitch;  //世界坐标系下的pitch向上为负
+    plan.pitch = pitch;
     if (mistake_count_ > 3) {
       switch_fanblade_ = true;
       mistake_count_ = 0;
@@ -111,30 +113,26 @@ auto_aim::Plan Aimer::mpc_aim(
     last_pitch_ = pitch;
 
     if (plan.control) {
-      if (first_in_aimer_) {
-        plan.yaw_vel = 0;
-        plan.yaw_acc = 0;
-        plan.pitch_vel = 0;
-        plan.pitch_acc = 0;
-        first_in_aimer_ = false;
-      } else {
-        auto dt = predict_time_;
-        double last_yaw_mpc, last_pitch_mpc;
-        get_send_angle(
-          target, predict_time_ * -1, bullet_speed, to_now, last_yaw_mpc, last_pitch_mpc);
-        plan.yaw_vel = tools::limit_rad(yaw - last_yaw_mpc) / (2 * dt);
-        // plan.yaw_vel = tools::limit_min_max(plan.yaw_vel, -6.28, 6.28);
-        plan.yaw_acc = (tools::limit_rad(yaw - gs.yaw) - tools::limit_rad(gs.yaw - last_yaw_mpc)) /
-                       std::pow(dt, 2);
-        // plan.yaw_acc = tools::limit_min_max(plan.yaw_acc, -50, 50);
+    if (first_in_aimer_) {
+      plan.yaw_vel = 0; plan.yaw_acc = 0;
+      plan.pitch_vel = 0; plan.pitch_acc = 0;
+      first_in_aimer_ = false;
+    } else {
+      auto dt = predict_time_;
+      double last_yaw_mpc, last_pitch_mpc;
 
-        plan.pitch_vel = tools::limit_rad(-pitch + last_pitch_mpc) / (2 * dt);
-        // plan.pitch_vel = tools::limit_min_max(plan.pitch_vel, -6.28, 6.28);
-        plan.pitch_acc = (-pitch - gs.pitch - (gs.pitch + last_pitch_mpc)) / std::pow(dt, 2);
-        // plan.pitch_acc = tools::limit_min_max(plan.pitch_acc, -100, 100);
-      }
+      // 使用另一个全新的副本，推算“当前瞬间”的位姿，而不是传入负时间！
+      auto target_for_now = target.clone();
+      double now_time = to_now ? detect_now_gap : 0.1; 
+      get_send_angle(*target_for_now, now_time, bullet_speed, to_now, last_yaw_mpc, last_pitch_mpc);
+
+      plan.yaw_vel = tools::limit_rad(yaw - last_yaw_mpc) / (2 * dt);
+      plan.yaw_acc = (tools::limit_rad(yaw - gs.yaw) - tools::limit_rad(gs.yaw - last_yaw_mpc)) / std::pow(dt, 2);
+      plan.pitch_vel = tools::limit_rad(-pitch + last_pitch_mpc) / (2 * dt);
+      plan.pitch_acc = (-pitch - gs.pitch - (gs.pitch + last_pitch_mpc)) / std::pow(dt, 2);
     }
   }
+}
 
   if (switch_fanblade_) {
     plan.fire = false;
