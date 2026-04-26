@@ -25,9 +25,9 @@
 
 const std::string keys =
   "{help h usage ? |                                             | 输出命令行参数说明}"
-  "{aim_camera   | ../configs/sb_088.yaml                          | 自瞄相机配置文件路径 }"
-  "{l_cam          | ../configs/omniperception/omn_camera_left.yaml | 左感知相机 }"
-  "{r_cam          | ../configs/omniperception/omn_camera_right.yaml  | 右感知相机 }";
+  "{aim_camera   | ../configs/sb_short.yaml                          | 自瞄相机配置文件路径 }"
+  "{l_cam          | ../configs/omn_camera_left.yaml | 左感知相机 }"
+  "{r_cam          | ../configs/omn_camera_right.yaml  | 右感知相机 }";
 
 using namespace std::chrono_literals;
 
@@ -356,13 +356,11 @@ int main(int argc, char * argv[])
     }
 
 
-    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    // cv::imshow("reprojection", img);
-    // auto key = cv::waitKey(1);
-    // if (key == 'q') break;
-    // if (key == 'c'){// 强制切换长短焦
-    //     bincameras.Switch(tracker);
-    // }
+    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    cv::imshow("reprojection", img);
+    auto key = cv::waitKey(1);
+    if (key == 'q') break;
+
 
 
 

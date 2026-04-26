@@ -70,17 +70,17 @@ io::VisionToGimbal Decider::decide_g(
 
     tools::logger()->debug(
       "[{} camera] delta yaw:{:.2f},target pitch:{:.2f},armor number:{},armor name:{}",
-      ( cams[count_]->main_and_secondary), delta_angle[0], delta_angle[1],
+      ( cams[count_]->main_and_secondary), delta_angle[0]*57.3, delta_angle[1]*57.3,
       armors.size(), auto_aim::ARMOR_NAMES[armors.front().name]);
 
 
       
-    if(abs(delta_angle[0]) < 95){
-      delta_angle[0] = delta_angle[0] > 0 ? 95 : -95;
+    if(abs(delta_angle[0]) < 95/57.3){
+      delta_angle[0] = delta_angle[0] > 0 ? 95/57.3 : -95/57.3;
     }
     
     vision_cmd.mode = 3;  // 全向感知模式识别到目标，控制大云台
-    vision_cmd.yaw = delta_angle[0];
+    vision_cmd.yaw = -delta_angle[0];
     vision_cmd.yaw_vel = 0.0f;  // 角速度设为0，可根据需要计算
     vision_cmd.yaw_acc = 0.0f;  // 角加速度设为0
     vision_cmd.pitch = tools::limit_rad(delta_angle[1]);
@@ -279,7 +279,7 @@ Eigen::Vector2d Decider::delta_angle_3d(
     left_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0,-(105. * CV_PI / 180.0)), Eigen::Vector3d(-0.127611, -0.136932, 0.16) );
     auto xyz = armors.front().xyz_in_gimbal;
     tools::logger()->info("omn_xyz :x{}, y{} ,z{}", xyz(0), xyz(1), xyz(2));
-    auto ypd_angle = 130/57.3 - std::atan2(xyz(0), xyz(1));
+    auto ypd_angle = 140 /57.3 - std::atan2(xyz(0), xyz(1));
     delta_angle[0] = ypd_angle;
     delta_angle[1] =std::atan2(xyz(2), std::sqrt(xyz(0) * xyz(0) + xyz(1) * xyz(1))); 
     return delta_angle;        

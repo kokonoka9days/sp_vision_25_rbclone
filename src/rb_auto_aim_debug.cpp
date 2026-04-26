@@ -28,7 +28,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/sb_088.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/sb_short.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -87,6 +87,8 @@ int main(int argc, char * argv[])
       data["gimbal_yaw_vel"] = gs.yaw_vel;
       data["gimbal_pitch"] = gs.pitch;
       data["gimbal_pitch_vel"] = gs.pitch_vel;
+      data["q2yaw"] = gs.q2yaw;
+      data["q2pitch"] = gs.pitch;
 
       data["target_yaw"] = plan.target_yaw;
       data["target_pitch"] = plan.target_pitch;
@@ -125,7 +127,7 @@ int main(int argc, char * argv[])
 
       plotter.plot(data);
 
-      std::this_thread::sleep_for(10ms);
+      std::this_thread::sleep_for(5ms);
     }
   });
 
@@ -141,7 +143,7 @@ int main(int argc, char * argv[])
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
     // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
     last_t = t;
-    // tools::logger()->info("fps:: {:.2f}", fps);
+    tools::logger()->info("fps:: {:.2f}", fps);
 
     auto ypr = tools::eulers(q, 2, 1, 0);
 
@@ -249,14 +251,14 @@ int main(int argc, char * argv[])
       tools::draw_points(img, image_points, {0, 0, 255});
     }
 
-    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    cv::imshow("reprojection", img);
-    auto key = cv::waitKey(1);
-    if (key == 'q') break;
-    if(key == 'r') {//TUDO :右键手动更改
-      io::GimbalState* g_demo = gimbal.set_state_();
-      g_demo->mode = !g_demo->mode;
-    }
+    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    // cv::imshow("reprojection", img);
+    // auto key = cv::waitKey(1);
+    // if (key == 'q') break;
+    // if(key == 'r') {//TUDO :右键手动更改
+    //   io::GimbalState* g_demo = gimbal.set_state_();
+    //   g_demo->mode = !g_demo->mode;
+    // }
     // if(key == 's') {
     //   stopkey = !stopkey;
     // }

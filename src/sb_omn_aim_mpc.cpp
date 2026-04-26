@@ -19,8 +19,8 @@
 
 const std::string keys =
   "{help h usage ? |                                             | 输出命令行参数说明}"
-  "{short_camera   | ../configs/sb_088.yaml                          | 短焦相机配置文件路径 }"
-  "{long_camera    | ../configs/sb_copy.yaml                     | 长焦相机配置文件路径 }"
+  "{short_camera   | ../configs/sb_short.yaml                          | 短焦相机配置文件路径 }"
+  "{long_camera    | ../configs/sb_long.yaml                     | 长焦相机配置文件路径 }"
   "{l_cam          | ../configs/omn_camera_left.yaml | 左感知相机 }"
   "{r_cam          | ../configs/omn_camera_right.yaml  | 右感知相机 }";
 
@@ -340,10 +340,10 @@ int main(int argc, char * argv[])
     }
 
 
-    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    cv::imshow("reprojection", img);
-    auto key = cv::waitKey(1);
-    if (key == 'q') break;
+    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    // cv::imshow("reprojection", img);
+    // auto key = cv::waitKey(1);
+    // if (key == 'q') break;
     // if (key == 'c'){// 强制切换长短焦
     //     bincameras.Switch(tracker);
     // }
