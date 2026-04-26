@@ -39,9 +39,10 @@ Target::Target(
   auto center_y = xyz[1] + r * std::sin(ypr[0]);
   auto center_z = xyz[2];
 
-  if(name == ArmorName::outpost){
-    tower_armor_hs[0] = center_z; // 将第一块装甲板的高度设为基准锚点
-  }
+ if(name == ArmorName::outpost){
+  tower_armor_hs[0].first = true;       // 标记 0 号位已成功初始化
+  tower_armor_hs[0].second = center_z;  // 记录真实高度
+}
 
   cam_is_switch_time_point = std::chrono::steady_clock::time_point{};
 
@@ -314,10 +315,11 @@ void Target::update(const Armor & armor)
     
     // 换板时，将上一块装甲板的历史累加数据计算为平均高度锚点
     if (name == ArmorName::outpost) {
-      if (tower_armor_hs_datas_ptr[last_id] > 0) {
-        tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / tower_armor_hs_datas_ptr[last_id];
-      }
-    }
+  if (tower_armor_hs_datas_ptr[last_id] > 0) {
+    tower_armor_hs[last_id].first = true; // 标记该装甲板已有有效的历史数据
+    tower_armor_hs[last_id].second = tower_armor_hs_datas[last_id] / tower_armor_hs_datas_ptr[last_id];
+  }
+}
   } else {
     is_switch_ = false;
   }
@@ -454,7 +456,7 @@ Eigen::Vector3d Target::h_armor_xyz(const Eigen::VectorXd & x, int id) const
 
   double armor_z;
   if(name == ArmorName::outpost){
-      double dz = tower_armor_hs[id] - tower_armor_hs[0];
+      double dz = tower_armor_hs[id].second - tower_armor_hs[0].second;
       int dz_px = dz > 0 ? 1 : -1;
       int dz_mu;
       
@@ -491,7 +493,7 @@ Eigen::MatrixXd Target::h_jacobian(const Eigen::VectorXd & x, int id) const
 
   double dz_dh;
   if(this->name == ArmorName::outpost){
-    double dz = tower_armor_hs[id] - tower_armor_hs[0];
+    double dz = tower_armor_hs[id].second - tower_armor_hs[0].second;
     int dz_px = dz > 0 ? 1 : -1;
     int dz_mu;
     

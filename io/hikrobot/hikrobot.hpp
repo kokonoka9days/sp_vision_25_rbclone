@@ -19,6 +19,7 @@ public:
   HikRobot(std::string sn, double exposure_us, double gain, const std::string & vid_pid, bool flip, bool mirror);
   ~HikRobot() override;
   void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) override;
+  bool try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) override;
 
 private:
   struct CameraData

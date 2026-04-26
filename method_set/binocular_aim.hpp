@@ -7,6 +7,9 @@
 #include "../tasks/auto_aim/tracker.hpp"
 #include "../tools/logger.hpp"
 
+using namespace std::chrono_literals;
+
+
 template<typename T> 
 class BinocularType{
 public:
@@ -21,6 +24,15 @@ public:
     aim_ptr = aim_ptr == &short_aim ? & long_aim: &short_aim;
   }
 };
+
+
+enum CameraState{
+  whack,                    //正常
+  long_camera_is_off_line,  // 长焦相机离线
+  short_camera_is_off_line, // 短焦相机离线
+  off_line                  // 双相机离线
+};
+
 struct BinocularAim{
   BinocularAim(
         io::Camera& cam_short, io::Camera& cam_long,
@@ -34,12 +46,14 @@ struct BinocularAim{
   BinocularType<auto_aim::Solver> solvers;
   BinocularType<auto_aim::Planner> planners;
   bool is_short = true;
+  CameraState camera_state = CameraState::whack;
+
 
   std::chrono::steady_clock::time_point switch_time_point;
 
-  //长短焦各射程范围 min_near到max_far
-  double short_min_near = 0, short_max_far = 3.3;
-  double long_min_near = 1.5, long_max_far = 5.5;
+  // //长短焦各射程范围 min_near到max_far
+  // double short_min_near = 0, short_max_far = 3.3;
+  // double long_min_near = 1.5, long_max_far = 5.5;
 
   // 缓冲区 far2near and near2far
   double short2long_point =  3.4;//(short_max_far + long_min_near)/2.;
@@ -47,12 +61,48 @@ struct BinocularAim{
 
   /// @brief 长短焦强制切换
   void Switch(auto_aim::Tracker& tracker){
-    this->cameras.Switch();
-    this->solvers.Switch();
-    this->planners.Switch();
-    is_short = !is_short;
-    switch_time_point = std::chrono::steady_clock::now();
-    tracker.setSolver(this->solvers.aim_ptr);
+
+    auto is_switch = [&](){
+      this->cameras.Switch();
+      this->solvers.Switch();
+      this->planners.Switch();
+      is_short = !is_short;
+      switch_time_point = std::chrono::steady_clock::now();
+      tracker.setSolver(this->solvers.aim_ptr);   
+    };
+    if(camera_state == CameraState::whack || camera_state == CameraState::off_line){
+      is_switch();
+    }else {
+      if(camera_state == CameraState::long_camera_is_off_line && is_short) is_switch();
+      if(camera_state == CameraState::short_camera_is_off_line && !is_short) is_switch();
+    }
+
+  }
+
+  void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp, auto_aim::Tracker& tracker){
+    bool is_full = this->cameras.aim_ptr->try_read(img, timestamp);
+    // std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();
+
+    while (!is_full)
+    {
+      std::this_thread::sleep_for(2ms);
+      is_full = this->cameras.aim_ptr->try_read(img, timestamp);
+      if(tools::delta_time(std::chrono::steady_clock::now(), 
+            this->cameras.aim_ptr->get_last_read_t()) > 1) {
+        if(camera_state == CameraState::whack){
+          camera_state = is_short ? CameraState::short_camera_is_off_line : CameraState::long_camera_is_off_line;
+        }else {
+          camera_state = CameraState::off_line;
+        }
+        Switch(tracker);//切换至另一个相机
+      }
+
+    }
+    if(is_full){
+      camera_state = camera_state != CameraState::off_line ? CameraState::whack : 
+                        is_short ?  CameraState::long_camera_is_off_line : CameraState::short_camera_is_off_line;
+    }
+    
   }
 
   /// @brief 长短焦自动切换逻辑

@@ -189,7 +189,7 @@ int main(int argc, char * argv[])
     last = now;
     
     // 读取主相机图像
-    bincameras.cameras.aim_ptr->read(img, timestamp);
+    bincameras.read(img, timestamp, tracker);
     
     // 获取云台姿态（四元数）
     Eigen::Quaterniond q = gimbal.q(timestamp);

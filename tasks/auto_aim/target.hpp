@@ -64,7 +64,8 @@ public:
   }
 
   //前哨站
-  double tower_armor_hs[3] = {0, 0, 0};  
+  std::pair<bool, double> tower_armor_hs[3] = {std::pair<bool, double>(false, 0), std::pair<bool, double>(false, 0), std::pair<bool, double>(false, 0)};
+  // double tower_armor_hs[3] = {0,0,0};  
   double tower_armor_h;
   double tower_armor_hs_datas[3] = {0,0,0}; 
   double last_tower_armor_h[3] = {0,0,0};

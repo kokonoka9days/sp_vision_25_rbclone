@@ -15,11 +15,12 @@ class CameraBase
 public:
   int64_t sensorWidth = -1, sensorHeight = -1; //相机分辨率
   std::atomic<bool> is_paused_{false};
+  std::chrono::steady_clock::time_point last_read_t;
 
   virtual ~CameraBase() = default;
   virtual void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) = 0;
+  virtual bool try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) = 0;
 
-  // 新增虚函数接口
   virtual void pause() {} //停止
   virtual void resume() {} //开启
 };
@@ -29,9 +30,11 @@ class Camera
 public:
   std::string main_and_secondary = "main"; //是否是主相机
   std::chrono::microseconds timestamp_offset = std::chrono::microseconds(0); //时间戳偏移量
+  
 
   Camera(const std::string & config_path);
   void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp);
+  bool try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp);
 
   // 新增对外调用的接口
   void pause() { if(camera_) camera_->pause(); }
@@ -39,7 +42,10 @@ public:
   bool is_paused()  {   
     if(camera_) return camera_->is_paused_;
     else return false;
-    }
+  }
+  std::chrono::steady_clock::time_point get_last_read_t( ){
+    return camera_->last_read_t;
+  }
   
 
 private:

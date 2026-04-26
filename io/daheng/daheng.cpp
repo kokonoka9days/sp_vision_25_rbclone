@@ -197,6 +197,21 @@ void DahengCamera::read(cv::Mat & img, std::chrono::steady_clock::time_point & t
   timestamp = data.timestamp;
 }
 
+bool DahengCamera::try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp)
+{
+  CameraData data;
+  bool read_full =  queue_.try_pop(data);
+
+  img = data.img;
+  if(read_full) {
+    timestamp = data.timestamp;
+    last_read_t = data.timestamp;
+  }
+  
+  return read_full;
+}
+
+
 bool DahengCamera::initialize_camera()
 {
     if (capture_quit_) {
