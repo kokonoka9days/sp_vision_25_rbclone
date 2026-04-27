@@ -39,7 +39,7 @@ private:
 
   void * handle_;
   std::thread capture_thread_;
-  std::atomic<bool> capturing_;
+  
   std::atomic<bool> capture_quit_;
   tools::ThreadSafeQueue<CameraData> queue_;
 

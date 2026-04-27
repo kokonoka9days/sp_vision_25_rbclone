@@ -55,6 +55,7 @@ io::VisionToGimbal Decider::decide_g(
   bool read_full = cams[count_]->try_read(omn_img, timestamp);
   if(!read_full){
     count_ = (count_ + 1) % camera_num;
+    // to
   }
   if(!read_full && !cams[count_]->try_read(omn_img, timestamp)){
     count_ = (count_ + 1) % camera_num;

@@ -202,15 +202,16 @@ int main(int argc, char * argv[])
     float yaw_deg = gimbal_euler[0] * 180.0 / M_PI;
     float pitch_deg = gimbal_euler[1] * 180.0 / M_PI;
     float roll_deg = gimbal_euler[2] * 180.0 / M_PI;
-    // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
-    // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
-    if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
-    //  tools::draw_text(img, fmt::format("DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 0, 255});
-    //   tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
-    // std::cout << "Roll: " << roll_deg << std::endl;
 
     // 主相机检测
     auto armors = yolo.detect(img);
+
+    // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
+    // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
+    if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
+     tools::draw_text(img, fmt::format("rb_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 128, 255});
+      tools::draw_text(img, fmt::format("rb_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 255, 255});
+    // std::cout << "Roll: " << roll_deg << std::endl;
     
     // // 更新无敌状态装甲板
     // decider.get_invincible_armor(ros2.subscribe_enemy_status());

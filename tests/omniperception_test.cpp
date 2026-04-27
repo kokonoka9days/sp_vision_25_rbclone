@@ -75,7 +75,7 @@ int main(int argc, char * argv[])
   // 新增一个变量用于记录全向相机是否处于暂停状态
   bool is_omn_paused = false; 
 
-  // 主循环
+  // 主循环5
   while (!exiter.exit()) {
 
     omn_caml.read(img1, t1);

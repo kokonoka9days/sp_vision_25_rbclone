@@ -15,6 +15,7 @@ class CameraBase
 public:
   int64_t sensorWidth = -1, sensorHeight = -1; //相机分辨率
   std::atomic<bool> is_paused_{false};
+  std::atomic<bool> capturing_{false};// 相机正常运行
   std::chrono::steady_clock::time_point last_read_t;
 
   virtual ~CameraBase() = default;
@@ -45,6 +46,9 @@ public:
   }
   std::chrono::steady_clock::time_point get_last_read_t( ){
     return camera_->last_read_t;
+  }
+  bool get_capturing(){
+    this->camera_->capturing_.load();
   }
   
 

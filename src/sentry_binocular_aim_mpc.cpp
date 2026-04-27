@@ -61,10 +61,10 @@ int main(int argc, char * argv[])
   omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
   omn_cam2.main_and_secondary = tools::read<std::string>(omn_r_yaml, "main_and_secondary");
   // io::Camera back_camera("configs/camera.yaml");
-  
+
   // 改为使用Gimbal串口通信（替代CBoard）
   io::Gimbal gimbal(short_camera_config_path);
-  
+
   // 视觉模块
   auto_aim::YOLO yolo(short_camera_config_path, false);  // 主相机YOLO
 
@@ -185,11 +185,16 @@ int main(int argc, char * argv[])
     auto mode = gimbal.mode();
     auto now = std::chrono::steady_clock::now();
     auto dt = tools::delta_time(now, last);
-    tools::logger()->info("{:.2f} fps", 1 / dt);
+    // tools::logger()->info("{:.2f} fps", 1 / dt);
     last = now;
     
     // 读取主相机图像
-    bincameras.read(img, timestamp, tracker);
+    bool is_full = bincameras.read(img, timestamp, tracker);
+
+    if(!is_full) {
+      tools::logger()->debug("[BinocularAim] 双目相机无法读到数据");
+      continue;
+    }
     
     // 获取云台姿态（四元数）
     Eigen::Quaterniond q = gimbal.q(timestamp);
@@ -206,15 +211,17 @@ int main(int argc, char * argv[])
     float pitch_deg = gimbal_euler[1] * 180.0 / M_PI;
     float roll_deg = gimbal_euler[2] * 180.0 / M_PI;
 
-    // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
-    // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
-    if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
-     tools::draw_text(img, fmt::format("DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 0, 255});
-      tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
-    // std::cout << "Roll: " << roll_deg << std::endl;
 
     // 主相机检测
     auto armors = yolo.detect(img);
+
+
+    // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
+    // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
+    if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
+     tools::draw_text(img, fmt::format("rb_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 128, 255});
+      tools::draw_text(img, fmt::format("rb_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 255, 255});
+    // std::cout << "Roll: " << roll_deg << std::endl;
     
     // 更新无敌状态装甲板
     decider.get_invincible_armor(ros2.subscribe_enemy_status());
@@ -334,7 +341,7 @@ int main(int argc, char * argv[])
      }
     }
 
-
+    
     cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
     cv::imshow("reprojection", img);
     auto key = cv::waitKey(1);

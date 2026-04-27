@@ -56,8 +56,9 @@ bool HikRobot::try_read(cv::Mat & img, std::chrono::steady_clock::time_point & t
   CameraData data;
   bool read_full =  queue_.try_pop(data);
 
-  img = data.img;
+  
   if(read_full) {
+    img = data.img;
     timestamp = data.timestamp;
     last_read_t = data.timestamp;
   }  
@@ -181,7 +182,7 @@ void HikRobot::capture_start()
         if (is_paused_) {
             continue; 
         }
-        tools::logger()->warn("MV_CC_GetImageBuffer failed: {:#x}", ret);
+        tools::logger()->warn("MV_CC_GetImageBuffer failed: {:#x} 海康相机无法读取到图像", ret);
         break;
       }
 
