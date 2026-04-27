@@ -40,7 +40,7 @@ Target::Target(
   
 
   if(name == ArmorName::outpost){
-    tower_armor_hs[0] = center_z;
+    tower_armor_hs[0].second = center_z;
     // for(int id = 0; id < 3; id++){
     //   double dz = tower_armor_hs[id] - tower_armor_hs[0];
     //   int dz_px = dz > 0 ? 1 : -1;
@@ -246,9 +246,21 @@ void Target::update(const Armor & armor)
       
       is_switch_ = true;
       if(name == ArmorName::outpost){
-        tower_armor_hs[last_id] = tower_armor_hs_datas[last_id] / (tower_armor_hs_datas_ptr + 1);//armor.xyz_in_world[2];
+        tower_armor_hs[last_id].second = tower_armor_hs_datas[last_id] / (tower_armor_hs_datas_ptr + 1);//armor.xyz_in_world[2];
+        tower_armor_hs[last_id].first = true;
         tower_armor_hs_datas_ptr = 0;
-        tower_armor_hs_datas[last_id] = 0;        
+        tower_armor_hs_datas[last_id] = 0;    
+        size_t armor_appear_num = 0, thoer_armor_id = 0;
+        for(int i = 0; i < 3; i++){
+          if(tower_armor_hs[i].first) armor_appear_num++;
+          else thoer_armor_id = i;
+        }
+        double armors_appear_dh = abs(tower_armor_hs[(thoer_armor_id + 1) % 3].second -  tower_armor_hs[(thoer_armor_id - 1) % 3].second);
+        if(armor_appear_num == 2 && 
+            !tower_armor_hs[thoer_armor_id].first 
+            && armors_appear_dh > TOWER_ARMOR_DTB
+          ) 
+          tower_armor_hs[thoer_armor_id].second = (tower_armor_hs[(thoer_armor_id + 1) % 3].second + tower_armor_hs[(thoer_armor_id - 1) % 3].second) / 2;
       }
 
     } else {
@@ -381,9 +393,9 @@ Eigen::Vector3d Target::h_armor_xyz(const Eigen::VectorXd & x, int id) const
   auto armor_y = x[2] - r * std::sin(angle);
 
   double armor_z ;
-
   if(name == ArmorName::outpost){
-    double dz = tower_armor_hs[id] - tower_armor_hs[0];
+    double armor_h = tower_armor_hs[id].second;
+    double dz = tower_armor_hs[id].second - tower_armor_hs[0].second;
     int dz_px = dz > 0 ? 1 : -1;
     int dz_mu;
     if(abs(dz) > 0.16){
@@ -418,7 +430,7 @@ Eigen::MatrixXd Target::h_jacobian(const Eigen::VectorXd & x, int id) const
   double dz_dh;
   if(this->name == ArmorName::outpost){
 
-    double dz = tower_armor_hs[id] - tower_armor_hs[0];
+    double dz = tower_armor_hs[id].second - tower_armor_hs[0].second;
     int dz_px = dz > 0 ? 1 : -1;
     int dz_mu;
     if(abs(dz) > 0.16){
