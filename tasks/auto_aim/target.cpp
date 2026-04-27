@@ -250,17 +250,17 @@ void Target::update(const Armor & armor)
         tower_armor_hs[last_id].first = true;
         tower_armor_hs_datas_ptr = 0;
         tower_armor_hs_datas[last_id] = 0;    
-        size_t armor_appear_num = 0, thoer_armor_id = 0;
-        for(int i = 0; i < 3; i++){
-          if(tower_armor_hs[i].first) armor_appear_num++;
-          else thoer_armor_id = i;
-        }
-        double armors_appear_dh = abs(tower_armor_hs[(thoer_armor_id + 1) % 3].second -  tower_armor_hs[(thoer_armor_id - 1) % 3].second);
-        if(armor_appear_num == 2 && 
-            !tower_armor_hs[thoer_armor_id].first 
-            && armors_appear_dh > TOWER_ARMOR_DTB
-          ) 
-          tower_armor_hs[thoer_armor_id].second = (tower_armor_hs[(thoer_armor_id + 1) % 3].second + tower_armor_hs[(thoer_armor_id - 1) % 3].second) / 2;
+        // size_t armor_appear_num = 0, thoer_armor_id = 0;
+        // for(int i = 0; i < 3; i++){
+        //   if(tower_armor_hs[i].first) armor_appear_num++;
+        //   else thoer_armor_id = i;
+        // }
+        // double armors_appear_dh = abs(tower_armor_hs[(thoer_armor_id + 1) % 3].second -  tower_armor_hs[(thoer_armor_id - 1) % 3].second);
+        // if(armor_appear_num == 2 && 
+        //     !tower_armor_hs[thoer_armor_id].first 
+        //     && armors_appear_dh > TOWER_ARMOR_DTB
+        //   ) 
+        //   tower_armor_hs[thoer_armor_id].second = (tower_armor_hs[(thoer_armor_id + 1) % 3].second + tower_armor_hs[(thoer_armor_id - 1) % 3].second) / 2;
       }
 
     } else {
