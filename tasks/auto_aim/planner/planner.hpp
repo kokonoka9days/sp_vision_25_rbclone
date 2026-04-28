@@ -105,6 +105,10 @@ private:
   Eigen::Matrix<double, 2, 1> heroaim(const Target & target, double bullet_speed, double gimbal_yaw);
   Trajectory get_trajectory(Target  target, double yaw0, double bullet_speed);
   Trajectory rbget_trajectory(Target target, double yaw0, double bullet_speed);
+
+  // 用于前哨站开火延迟的成员变量
+  double outpost_z_baseline_ = 0.0;
+  std::chrono::steady_clock::time_point outpost_z_stable_start_time_;
 };
 
 }  // namespace auto_aim
