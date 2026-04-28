@@ -189,7 +189,7 @@ int main(int argc, char * argv[])
     auto mode = gimbal.mode();
     auto now = std::chrono::steady_clock::now();
     auto dt = tools::delta_time(now, last);
-    // tools::logger()->info("{:.2f} fps", 1 / dt);
+    tools::logger()->info("{:.2f} fps", 1 / dt);
     last = now;
 
     // 读取主相机图像

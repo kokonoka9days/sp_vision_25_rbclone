@@ -88,11 +88,11 @@ DahengCamera::DahengCamera(std::string camera_sn,
                 capture_stop();                  // 安全停止采集线程
                 close_camera();                  // 关闭旧设备
                 stop_collecting_num = 0;
-                capturing_ = true;
                 capture_quit_ = false;
 
                 if (open_camera()) {
                     tools::logger()->info("Reconnected successfully.");
+                    capturing_ = true;
                 } else {
                     std::this_thread::sleep_for(std::chrono::seconds(1));
                 }
@@ -347,6 +347,7 @@ bool DahengCamera::initialize_camera()
                 stop_collecting_num++;
                 if(stop_collecting_num > 10) 
                 {
+                    stop_collecting_num = 11;
                     capturing_ = false;
                     tools::logger()->debug("[daheng] 相机{}读取不到数据", this->camera_sn_);
                 }
