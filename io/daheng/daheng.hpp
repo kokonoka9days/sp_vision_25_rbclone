@@ -94,8 +94,10 @@ private:
     // 线程控制
     std::atomic<bool> daemon_quit_{false};
     std::atomic<bool> capture_quit_{false};
+    // std::atomic<bool> is_stop_collecting{false};// 断采集
     std::thread daemon_thread_;
     std::thread capture_thread_;
+    size_t stop_collecting_num = 0;
     
     // 数据队列
     tools::ThreadSafeQueue<CameraData> queue_;

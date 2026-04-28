@@ -52,7 +52,6 @@ int main(int argc, char * argv[])
   auto_aim::Aimer aimer(config_path);
   auto_aim::Shooter shooter(config_path);
   auto_aim::Planner planner(config_path);
-  // tools::Recorder recor(90);
   bool stopkey = false;
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
@@ -87,6 +86,8 @@ int main(int argc, char * argv[])
       data["gimbal_yaw_vel"] = gs.yaw_vel;
       data["gimbal_pitch"] = gs.pitch;
       data["gimbal_pitch_vel"] = gs.pitch_vel;
+      data["q2yaw"] = gs.q2yaw;
+      data["q2pitch"] = gs.pitch;
 
       data["target_yaw"] = plan.target_yaw;
       data["target_pitch"] = plan.target_pitch;
@@ -125,7 +126,7 @@ int main(int argc, char * argv[])
 
       plotter.plot(data);
 
-      std::this_thread::sleep_for(10ms);
+      std::this_thread::sleep_for(5ms);
     }
   });
 
@@ -149,17 +150,18 @@ int main(int argc, char * argv[])
     float pitch_deg = ypr[1] * 180.0 / M_PI;
     float roll_deg = ypr[2] * 180.0 / M_PI;
         
+    solver.set_R_gimbal2world(q);
+    auto armors = yolo.detect(img);
+    auto targets = tracker.track(armors, t);
+    // recor.record(img, q, t);
+
+
     // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
     // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
     if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
      tools::draw_text(img, fmt::format("rb_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 128, 255});
       tools::draw_text(img, fmt::format("rb_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 255, 255});
     // std::cout << "Roll: " << roll_deg << std::endl;
-
-    solver.set_R_gimbal2world(q);
-    auto armors = yolo.detect(img);
-    auto targets = tracker.track(armors, t);
-    // recor.record(img, q, t);
 
 
     if (!targets.empty()){

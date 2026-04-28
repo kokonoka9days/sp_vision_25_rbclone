@@ -2,8 +2,10 @@ pattern_cols: 11      # 棋盘格每行的内角点数（格子数-1）
 pattern_rows: 8      # 棋盘格每列的内角点数（格子数-1）
 square_size_mm: 30   # 棋盘格方块大小（毫米）
 
-enemy_color: "auto"
+# enemy_color: "auto"
 # enemy_color: "blue"
+enemy_color: "red"
+
 
 #####-----神经网络参数-----#####
 yolo_name: yolov8
@@ -51,13 +53,13 @@ outpost_max_temp_lost_count: 75
 # low_speed_delay_time: 0.093 # s
 
 #####-----aimer参数-----##### 12mm
-yaw_offset: -2.4 # degree 
-pitch_offset: -4.5 # degree 2
+yaw_offset: 2.1 # degree 
+pitch_offset: -1.3 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
 high_speed_delay_time: 0.17 # s   远 0.25
-low_speed_delay_time: 0.3 # s    远 0.25
+low_speed_delay_time: 0.025 # s    远 0.25
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree
@@ -69,7 +71,7 @@ auto_fire: true # 是否由自瞄控制射击
 camera_name: "hikrobot"
 camera_sn: "DA7188471"
 exposure_us: 6000
-gain: 0.9
+gain: 0.4
 gamma: 0.5  
 vid_pid: "2ba2:4d55"
 flip: true
@@ -115,17 +117,16 @@ R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 # # _camera2gimbal第三位调pitch
 
 # #12mm camera
-# 重投影误差: 0.0595px
-camera_matrix: [3532.1460486919, 0, 634.3593794213599, 0, 3515.0978881501173, 634.5120817277106, 0, 0, 1]
-distort_coeffs: [-0.003716001866316131, -0.0009097311564408339, 0.005449351582213189, -0.002177277987425246, 1.342783480546418]
+# 重投影误差: 0.0853px
+camera_matrix: [4681.653883097916, 0, 725.7446327148419, 0, 4661.3725890173555, 326.23442113044234, 0, 0, 1]
+distort_coeffs: [0.026590192465433336, -0.7352618302855036, -0.010174637798476485, -0.0031705629777568213, 18.98822520827776]
 
-# 标定板到世界坐标系原点的水平距离: 3.54 m
-# 相机同理想情况的偏角: yaw-3.35 pitch2.25 roll0.08 degree
-R_camera2gimbal: [0.05854682128325339, 0.039113062659413424, 0.9975181392070158, -0.9982837735930182, 0.0036282220591907777, 0.05844949431408674, -0.001333078583595871, -0.9992282043327689, 0.0392583566568947]
-t_camera2gimbal: [0.2112085473115348, 0.04943202817819827, -0.013860360650502525]
+# 相机同理想情况的偏角: yaw1.03 pitch1.69 roll-3.93 degree
+R_camera2gimbal: [-0.019897094612457922, 0.02813277101894295, 0.9994061500815264, -0.9974540963450679, -0.06902441772257517, -0.01791522934554289, 0.0684794225328081, -0.9972182193245644, 0.029434533064378376]
+t_camera2gimbal: [0.16447953814473584, -0.045629125019119005, 0.17776865809790524]
 gimbal_y1: 1
 gimbal_p2: 2
-gimbal_r3: -3
+gimbal_r3: 3
 #####-----cboard参数-----#####
 quaternion_canid: 0x100
 bullet_speed_canid: 0x101
@@ -138,7 +139,7 @@ com_port: "/dev/ttyACM0"
 
 #####-----planner-----#####
 fire_thresh: 0.003 # 
-small_armor_tolerance: 0.12
+small_armor_tolerance: 0.03
 big_armor_tolerance: 0.22
 gimbal_control_delay: 0.06
 tower_pitch_prediction_time: 0.3

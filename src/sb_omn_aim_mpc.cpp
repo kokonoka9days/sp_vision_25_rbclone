@@ -19,8 +19,8 @@
 
 const std::string keys =
   "{help h usage ? |                                             | 输出命令行参数说明}"
-  "{short_camera   | ../configs/sb_088.yaml                          | 短焦相机配置文件路径 }"
-  "{long_camera    | ../configs/sb_copy.yaml                     | 长焦相机配置文件路径 }"
+  "{short_camera   | ../configs/sb_short.yaml                          | 短焦相机配置文件路径 }"
+  "{long_camera    | ../configs/sb_long.yaml                     | 长焦相机配置文件路径 }"
   "{l_cam          | ../configs/omn_camera_left.yaml | 左感知相机 }"
   "{r_cam          | ../configs/omn_camera_right.yaml  | 右感知相机 }";
 
@@ -189,7 +189,7 @@ int main(int argc, char * argv[])
     auto mode = gimbal.mode();
     auto now = std::chrono::steady_clock::now();
     auto dt = tools::delta_time(now, last);
-    tools::logger()->info("{:.2f} fps", 1 / dt);
+    // tools::logger()->info("{:.2f} fps", 1 / dt);
     last = now;
 
     // 读取主相机图像
@@ -210,15 +210,17 @@ int main(int argc, char * argv[])
     float yaw_deg = gimbal_euler[0] * 180.0 / M_PI;
     float pitch_deg = gimbal_euler[1] * 180.0 / M_PI;
     float roll_deg = gimbal_euler[2] * 180.0 / M_PI;
-    // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
-    // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
-    if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
-    //  tools::draw_text(img, fmt::format("DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 0, 255});
-    //   tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
-    // std::cout << "Roll: " << roll_deg << std::endl;
+
 
     // 主相机检测
     auto armors = yolo.detect(img);
+
+    // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
+    // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
+    if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
+     tools::draw_text(img, fmt::format("rb_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 128, 255});
+      tools::draw_text(img, fmt::format("rb_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 255, 255});
+    // std::cout << "Roll: " << roll_deg << std::endl;
     
     // // 更新无敌状态装甲板
     // decider.get_invincible_armor(ros2.subscribe_enemy_status());
@@ -344,9 +346,7 @@ int main(int argc, char * argv[])
     cv::imshow("reprojection", img);
     auto key = cv::waitKey(1);
     if (key == 'q') break;
-    // if (key == 'c'){// 强制切换长短焦
-    //     bincameras.Switch(tracker);
-    // }
+
 
 
 

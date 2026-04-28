@@ -21,8 +21,8 @@
 
 const std::string keys =
   "{help h usage ? |                                             | 输出命令行参数说明}"
-  "{l_cam          | ../configs/omniperception/omn_camera_left.yaml | 左感知相机 }"
-  "{r_cam          | ../configs/omniperception/omn_camera_right.yaml  | 右感知相机 }";
+  "{l_cam          | ../configs/omn_camera_left.yaml | 左感知相机 }"
+  "{r_cam          | ../configs/omn_camera_right.yaml  | 右感知相机 }";
 
 using namespace std::chrono_literals;
 
@@ -75,7 +75,7 @@ int main(int argc, char * argv[])
   // 新增一个变量用于记录全向相机是否处于暂停状态
   bool is_omn_paused = false; 
 
-  // 主循环
+  // 主循环5
   while (!exiter.exit()) {
 
     omn_caml.read(img1, t1);

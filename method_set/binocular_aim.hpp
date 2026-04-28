@@ -79,14 +79,20 @@ struct BinocularAim{
 
   }
 
-  void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp, auto_aim::Tracker& tracker){
+  bool read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp, auto_aim::Tracker& tracker){
     bool is_full = this->cameras.aim_ptr->try_read(img, timestamp);
     // std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();
+
+    tools::logger()->info("当前相机状态：{}", (int)camera_state);
 
     while (!is_full)
     {
       std::this_thread::sleep_for(2ms);
       is_full = this->cameras.aim_ptr->try_read(img, timestamp);
+      if(!this->cameras.aim_ptr->get_capturing()) {
+        Switch(tracker);//切换至另一个相机
+      }
+
       if(tools::delta_time(std::chrono::steady_clock::now(), 
             this->cameras.aim_ptr->get_last_read_t()) > 1) {
         if(camera_state == CameraState::whack){
@@ -94,14 +100,24 @@ struct BinocularAim{
         }else {
           camera_state = CameraState::off_line;
         }
-        Switch(tracker);//切换至另一个相机
       }
+    }
 
-    }
-    if(is_full){
-      camera_state = camera_state != CameraState::off_line ? CameraState::whack : 
-                        is_short ?  CameraState::long_camera_is_off_line : CameraState::short_camera_is_off_line;
-    }
+
+    // bool long_camera_is_running = this->cameras.long_aim.get_capturing();
+    // bool short_camera_is_running = this->cameras.short_aim.get_capturing();
+
+    // if(long_camera_is_running && short_camera_is_running){
+    //   camera_state = CameraState::whack;
+    // }
+    // if(!long_camera_is_running && short_camera_is_running){
+    //   camera_state =  CameraState::long_camera_is_off_line;
+    // }
+    // if(!long_camera_is_running && !short_camera_is_running){
+    //   camera_state = CameraState::off_line;
+    // }
+
+    return is_full;
     
   }
 

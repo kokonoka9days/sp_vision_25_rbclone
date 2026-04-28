@@ -42,7 +42,7 @@ constexpr double mSmall = 0.0032;
 TrajectoryV2::TrajectoryV2(const double v0, const double d, const double h){
   double k, m;
   bool isBigBullet = v0 > 18 ? false : true;
-  double fly_time = 0.;
+   fly_time = 0.;
   if (isBigBullet) {
       k = kBig;
       m = mBig;

@@ -45,6 +45,7 @@ bool DahengCamera::enum_and_check_camera()
     return false;
 }
 
+
 DahengCamera::DahengCamera(std::string camera_sn, 
                             double exposure_us, 
                             double gain, 
@@ -74,40 +75,38 @@ DahengCamera::DahengCamera(std::string camera_sn,
         tools::logger()->warn("Initial camera check failed, will retry in daemon thread...");
     }
     
-    std::this_thread::sleep_for(std::chrono::milliseconds(500)); // 给设备准备时间
+    std::this_thread::sleep_for(std::chrono::milliseconds(200)); // 给设备准备时间
     
-    // 修复：明确变量语义 - capture_running_ = true 表示正在运行
+
     daemon_thread_ = std::thread([this](){
-        tools::logger()->info("Daemon thread started.");
-        
-        // 初始连接相机
-        if (open_camera()) {
-            tools::logger()->info("Initial camera opened successfully.");
-        }
-        
-        // 守护循环 - 修复逻辑
+        if (open_camera()) { /* 初次连接 */ }
         while (!daemon_quit_) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            
-            // 修复：正确判断相机状态 - 如果不在采集状态，尝试重连
-            if (!capture_quit_ && hDevice == nullptr) {
-                tools::logger()->warn("Camera not connected, attempting to reconnect...");
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+            if ((!capture_quit_ && hDevice == nullptr) || !capturing_) {
+                tools::logger()->warn("Attempting reconnection...");
+                capture_stop();                  // 安全停止采集线程
+                close_camera();                  // 关闭旧设备
+                stop_collecting_num = 0;
+                capturing_ = true;
+                capture_quit_ = false;
+
                 if (open_camera()) {
-                    tools::logger()->info("Camera reconnected successfully.");
+                    tools::logger()->info("Reconnected successfully.");
                 } else {
-                    std::this_thread::sleep_for(std::chrono::seconds(1)); // 失败后等待更久
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
                 }
             }
         }
-        
-        // 清理
         capture_stop();
         close_camera();
-        tools::logger()->info("Daemon thread stopped.");
     });
     
     tools::logger()->info("Daheng Camera wrapper initialized.");
 }
+
+
+
 
 DahengCamera::~DahengCamera()
 {
@@ -126,6 +125,8 @@ DahengCamera::~DahengCamera()
         sdk_initialized_ = false;
     }
 }
+
+
 
 bool DahengCamera::capture_stop()
 {
@@ -171,6 +172,8 @@ bool DahengCamera::capture_stop()
     return true;
 }
 
+
+
 bool DahengCamera::close_camera()
 {
     if (hDevice == nullptr) {
@@ -188,6 +191,7 @@ bool DahengCamera::close_camera()
     return true;
 }
 
+
 void DahengCamera::read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp)
 {
   CameraData data;
@@ -202,8 +206,9 @@ bool DahengCamera::try_read(cv::Mat & img, std::chrono::steady_clock::time_point
   CameraData data;
   bool read_full =  queue_.try_pop(data);
 
-  img = data.img;
+  
   if(read_full) {
+    img = data.img;
     timestamp = data.timestamp;
     last_read_t = data.timestamp;
   }
@@ -317,7 +322,7 @@ bool DahengCamera::initialize_camera()
     
     tools::logger()->info("Daheng camera initialized and started successfully.");
     
-    // 启动采集线程
+        // 启动采集线程
     capture_thread_ = std::thread([&]() {
         tools::logger()->info("Capture thread started.");
         while (!capture_quit_) {
@@ -334,8 +339,19 @@ bool DahengCamera::initialize_camera()
                 data.img = frame;
                 data.timestamp = std::chrono::steady_clock::now();
                 queue_.push(data);
+                // tools::logger()->info("[daheng] 相机采集到数据");
+                capturing_ = true;
+                stop_collecting_num = 0;
             } else {
                 std::this_thread::sleep_for(std::chrono::milliseconds(5)); // 避免空转
+                stop_collecting_num++;
+                if(stop_collecting_num > 10) 
+                {
+                    capturing_ = false;
+                    tools::logger()->debug("[daheng] 相机{}读取不到数据", this->camera_sn_);
+                }
+                // tools::logger()->debug("[daheng] 相机读取不到数据");
+
             }
         }
         tools::logger()->info("Capture thread stopped.");
@@ -343,6 +359,9 @@ bool DahengCamera::initialize_camera()
     
     return true;
 }
+
+
+
 
 bool DahengCamera::open_camera()
 {

@@ -28,7 +28,7 @@ Camera::Camera(const std::string & config_path)
 
   else if (camera_name == "hikrobot") {
     auto gain = tools::read<double>(yaml, "gain");
-    auto vid_pid = tools::read<std::string>(yaml, "vid_pid");
+    auto vid_pid = "2bdf:0001";
     auto sn = tools::read<std::string>(yaml, "camera_sn");
     camera_ = std::make_unique<HikRobot>(sn, exposure_us, gain, vid_pid, flip, mirror);
   }
@@ -36,6 +36,7 @@ Camera::Camera(const std::string & config_path)
   else if(camera_name == "daheng"){
     auto gain = tools::read<double>(yaml, "gain");
     auto gamma = tools::read<double>(yaml, "gamma");
+    auto vid_pid = "2ba2:4d55";
     auto camera_sn = tools::read<std::string>(yaml, "camera_sn");
     camera_ = std::make_unique<DahengCamera>(camera_sn, exposure_us, gain, gamma, flip, mirror);
   }
