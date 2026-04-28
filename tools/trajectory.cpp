@@ -101,4 +101,64 @@ TrajectoryV2::TrajectoryV2(const double v0, const double d, const double h){
   unsolvable = false;
 }
 
+// V3：考虑阻力方向速度变化的数值积分模型
+TrajectoryV3::TrajectoryV3(const double v0, const double d, const double h)
+{
+  bool isBigBullet = v0 > 18 ? false : true;
+  double k = isBigBullet ? 0.000429838 : 0.000067165;
+  double m = isBigBullet ? 0.043 : 0.0032;
+  double coef = k / m; // 阻力加速度系数
+
+  // 1. 初始化
+  double dt = 0.001;               // 仿真步长：1ms（步长越小越准，算力消耗略增）
+  double pitch_guess = std::atan2(h, d); // 初始猜测角度：直接瞄准目标的直线角度
+  double y_aim = h;                // 虚拟瞄准高度，初始为实际目标高度
+  
+  unsolvable = true;
+  fly_time = 0.0;
+  pitch = 0.0;
+
+  // 2. 迭代求解 (最多允许 20 次迭代，通常 3~5 次就能收敛)
+  for (int i = 0; i < 20; ++i) {
+      double x = 0.0;
+      double y = 0.0;
+      double vx = v0 * std::cos(pitch_guess);
+      double vy = v0 * std::sin(pitch_guess);
+      double t = 0.0;
+
+      // 欧拉法数值积分仿真单次飞行
+      while (x < d && t < 3.0) { // 限制最大飞行时间 3 秒防死循环
+          double v = std::sqrt(vx * vx + vy * vy); // 实时合速度
+          
+          // 阻力加速度分解到 x 和 y 轴（这里的核心是耦合了速度矢量）
+          double ax = -coef * v * vx;
+          double ay = -g - coef * v * vy;
+          
+          vx += ax * dt;
+          vy += ay * dt;
+          x += vx * dt;
+          y += vy * dt;
+          t += dt;
+      }
+
+      // 计算到达目标水平距离 d 时的竖直误差
+      double error = h - y;
+
+      // 如果落点误差小于 1mm，认为已经命中，结束解算
+      if (std::abs(error) < 0.001) {
+          unsolvable = false;
+          pitch = pitch_guess;
+          fly_time = t;
+          return;
+      }
+
+      // 3. 迭代补偿核心逻辑
+      // 如果打低了 (error > 0)，就抬高虚拟瞄准高度；反之亦然
+      y_aim += error; 
+      pitch_guess = std::atan2(y_aim, d);
+  }
+  
+  // 如果 20 次迭代都没收敛，维持 unsolvable = true
+}
+
 }  // namespace tools
