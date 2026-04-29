@@ -27,8 +27,10 @@ add_subdirectory(tools)
 add_subdirectory(io)
 add_subdirectory(tasks/auto_aim)
 add_subdirectory(tasks/auto_buff)
+add_subdirectory(tasks/auto_drone)
 add_subdirectory(tasks/omniperception)
 add_subdirectory(sp_ws/src)
+
 
 
 
@@ -39,6 +41,7 @@ add_executable(sb_omn_aim_mpc src/sb_omn_aim_mpc.cpp)
 add_executable(hero  src/hero.cpp)
 add_executable(rb_auto_standard_debug  src/rb_auto_standard_debug.cpp)
 add_executable(rb_auto_standard  src/rb_auto_standard.cpp)
+add_executable(rb_auto_drone_debug  src/rb_auto_drone_debug.cpp)
 
 target_link_libraries(rb_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(sb_omn_aim_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io omniperception)
@@ -46,6 +49,7 @@ target_link_libraries(rb_binocular_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp au
 target_link_libraries(hero ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(rb_auto_standard_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(rb_auto_standard ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
+target_link_libraries(rb_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_drone tools io)
 
 ##################calibration################
 add_executable(capture calibration/capture.cpp)
