@@ -56,8 +56,8 @@ pitch_offset: -2.4 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
-high_speed_delay_time: 0.16 # s   远 0.25
-low_speed_delay_time: 0.16 # s    远 0.25
+high_speed_delay_time: 0.026 # s
+low_speed_delay_time: 0.026 # s
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree
