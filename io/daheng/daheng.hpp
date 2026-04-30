@@ -89,7 +89,7 @@ private:
     void *pGammaLut = nullptr;
     
     // std::atomic<bool> connected_{false};
-    std::atomic<bool> capturing_{false};
+    // std::atomic<bool> capturing_{false};
     
     // 线程控制
     std::atomic<bool> daemon_quit_{false};

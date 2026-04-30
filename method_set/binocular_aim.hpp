@@ -73,8 +73,8 @@ struct BinocularAim{
     if(camera_state == CameraState::whack || camera_state == CameraState::off_line){
       is_switch();
     }else {
-      if(camera_state == CameraState::long_camera_is_off_line && is_short) is_switch();
-      if(camera_state == CameraState::short_camera_is_off_line && !is_short) is_switch();
+      if(camera_state == CameraState::long_camera_is_off_line && !is_short) is_switch();
+      if(camera_state == CameraState::short_camera_is_off_line && is_short) is_switch();
     }
 
   }
@@ -83,39 +83,48 @@ struct BinocularAim{
     bool is_full = this->cameras.aim_ptr->try_read(img, timestamp);
     // std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();
 
-    tools::logger()->info("当前相机状态：{}", (int)camera_state);
+    bool long_camera_is_running = this->cameras.long_aim.get_capturing();
+    bool short_camera_is_running = this->cameras.short_aim.get_capturing();
+
+    // tools::logger()->info("当前相机状态：{}, long_camera:{}, short_camera:{}", (int)camera_state, long_camera_is_running, short_camera_is_running);
 
     while (!is_full)
     {
       std::this_thread::sleep_for(2ms);
       is_full = this->cameras.aim_ptr->try_read(img, timestamp);
-      if(!this->cameras.aim_ptr->get_capturing()) {
+      if(!is_full) {
         Switch(tracker);//切换至另一个相机
+        // tools::logger()->debug("切换相机");
       }
-
-      if(tools::delta_time(std::chrono::steady_clock::now(), 
-            this->cameras.aim_ptr->get_last_read_t()) > 1) {
-        if(camera_state == CameraState::whack){
-          camera_state = is_short ? CameraState::short_camera_is_off_line : CameraState::long_camera_is_off_line;
-        }else {
-          camera_state = CameraState::off_line;
-        }
-      }
+      
+      // tools::logger()->debug("死循环");
+      // if(tools::delta_time(std::chrono::steady_clock::now(), 
+      //       this->cameras.aim_ptr->get_last_read_t()) > 1) {
+      //   if(camera_state == CameraState::whack){
+      //     camera_state = is_short ? CameraState::short_camera_is_off_line : CameraState::long_camera_is_off_line;
+      //   }else {
+      //     camera_state = CameraState::off_line;
+      //   }
+      // }
     }
 
 
-    // bool long_camera_is_running = this->cameras.long_aim.get_capturing();
-    // bool short_camera_is_running = this->cameras.short_aim.get_capturing();
 
-    // if(long_camera_is_running && short_camera_is_running){
-    //   camera_state = CameraState::whack;
-    // }
-    // if(!long_camera_is_running && short_camera_is_running){
-    //   camera_state =  CameraState::long_camera_is_off_line;
-    // }
-    // if(!long_camera_is_running && !short_camera_is_running){
-    //   camera_state = CameraState::off_line;
-    // }
+    if(long_camera_is_running && short_camera_is_running){
+      camera_state = CameraState::whack;
+      this->is_short = this->cameras.aim_ptr == &this->cameras.short_aim ? true : false;
+    }
+    if(!long_camera_is_running && short_camera_is_running){
+      camera_state =  CameraState::long_camera_is_off_line;
+      this->is_short = true;
+    }
+    if(long_camera_is_running && !short_camera_is_running){
+      camera_state =  CameraState::short_camera_is_off_line;
+      this->is_short = false;
+    }
+    if(!long_camera_is_running && !short_camera_is_running){
+      camera_state = CameraState::off_line;
+    }
 
     return is_full;
     

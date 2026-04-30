@@ -87,6 +87,8 @@ int main(int argc, char * argv[])
   auto_aim::Solver left_solver(omnl_yaml_name);
   auto_aim::Solver right_solver(omnr_yaml_name);
   omniperception::Decider decider(omnl_yaml_name);
+
+  decider.set_gimbal(&gimbal);
   
   // 线程安全队列（用于MPC规划线程）
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
@@ -185,7 +187,7 @@ int main(int argc, char * argv[])
     auto mode = gimbal.mode();
     auto now = std::chrono::steady_clock::now();
     auto dt = tools::delta_time(now, last);
-    // tools::logger()->info("{:.2f} fps", 1 / dt);
+    tools::logger()->info("{:.2f} fps", 1 / dt);
     last = now;
     
     // 读取主相机图像
@@ -197,7 +199,7 @@ int main(int argc, char * argv[])
     }
     
     // 获取云台姿态（四元数）
-    Eigen::Quaterniond q = gimbal.q(timestamp);
+    Eigen::Quaterniond q = gimbal.q(timestamp - 3ms);
     
 
 
@@ -238,7 +240,8 @@ int main(int argc, char * argv[])
 
 
     // 只有在 lost 状态下才发送全向指令，避免干扰主线程控制
-    if (tracker.state() == "lost" && tools::delta_time(last_track_point, std::chrono::steady_clock::now()) > 1
+    if (tracker.state() == "lost" 
+    // && tools::delta_time(last_track_point, std::chrono::steady_clock::now()) > 1
       // && omn_detect_num == 3
     ) {
     // 只有需要时才执行重负载的 YOLO 和 决策
@@ -249,6 +252,10 @@ int main(int argc, char * argv[])
 
     if(tracker.state() != "lost"){
       last_track_point = std::chrono::steady_clock::now();
+      
+    }
+    if(tracker.state() == "lost"){//丢跟踪自动切换短焦
+      if(!bincameras.is_short) bincameras.Switch(tracker);
     }
 
 

@@ -48,7 +48,7 @@ public:
     return camera_->last_read_t;
   }
   bool get_capturing(){
-    this->camera_->capturing_.load();
+    return this->camera_->capturing_.load();
   }
   
 
