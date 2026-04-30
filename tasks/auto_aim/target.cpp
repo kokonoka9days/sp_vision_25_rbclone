@@ -358,6 +358,10 @@ void Target::update_ypda(const Armor & armor, int id)
   auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2;
   auto r2_d = log(std::abs(delta_angle) + 1) + 1;
 
+  if (motion_state_ == MotionState::IN_PLACE_ROTATION) {
+    r2_angle *= 3.0;  // 旋转时进一步增加对角度的不信任
+}
+
   // 前哨站换板瞬间，放宽距离和高度噪声信任度防跳变
   if (name == ArmorName::outpost && is_switch_) {
       r2_pitch *= 100.0; 

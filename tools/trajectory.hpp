@@ -22,13 +22,8 @@ struct TrajectoryV2 : TrajectoryV1{
   TrajectoryV2(const double v0, const double d, const double h);
 };
 
-// 新增 V3 声明
-struct TrajectoryV3 : TrajectoryV1{
-  TrajectoryV3(const double v0, const double d, const double h);
-};
 
-// 将默认使用的是别名切换为 V3（如果测试通过的话）
-using Trajectory = TrajectoryV3;
+using Trajectory = TrajectoryV2;
 
 }  // namespace tools
 
