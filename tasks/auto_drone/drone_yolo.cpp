@@ -28,9 +28,11 @@ YOLO::YOLO(const std::string& config_path, bool debug)
     
     this->input_w_ = 640;
     this->input_h_ = 640;
-    this->score_threshold_ = 0.5f;
-    this->nms_threshold_ = 0.45f;
-    this->num_classes_ = 2; // 0: blue, 1: red
+    this->score_threshold_ = 0.3f;
+    this->nms_threshold_ = 0.2f;
+    
+    // 【修复1】：单类模型必须填1，否则后处理解码器偏移量会整体错乱导致读取到坐标值
+    this->num_classes_ = 1; // 0: drone
     this->num_kpts_ = 8;    // 无人机 8 个关键点
     this->use_cuda_preproc_ = true; 
     
@@ -54,6 +56,15 @@ YOLO::YOLO(const std::string& config_path, bool debug)
     // 4. 获取输入/输出维度信息
     nvinfer1::Dims input_dims = this->engine_->getBindingDimensions(0);
     nvinfer1::Dims output_dims = this->engine_->getBindingDimensions(1);
+
+    // 【修复2】：终极安全锁，防止未来模型通道数不匹配导致静默错位
+    int channels = output_dims.d[1];
+    int expected_channels = 4 + this->num_classes_ + this->num_kpts_ * 3;
+    if (channels != expected_channels) {
+        tools::logger()->error("[YOLO] Dimension Mismatch! Engine channels: {}, expected: {} (4 + {} + 3*{})", 
+                               channels, expected_channels, this->num_classes_, this->num_kpts_);
+        throw std::runtime_error("TensorRT output dimension mismatch!");
+    }
 
     // 计算输入输出的内存大小
     int input_size_ = 1;

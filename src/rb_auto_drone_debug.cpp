@@ -74,10 +74,10 @@ int main(int argc, char * argv[])
         auto plan = planner.plan(target, gs.bullet_speed);
 
         // 发送控制指令给下位机
-        gimbal.send(
+        gimbal.drone_send(
           plan.control, plan.fire, 
-          plan.yaw, plan.yaw_vel, plan.yaw_acc, 
-          plan.pitch, plan.pitch_vel, plan.pitch_acc
+          plan.yaw * 57.3, plan.yaw_vel, plan.yaw_acc, 
+          plan.pitch * 57.3, plan.pitch_vel, plan.pitch_acc
         );      
 
         auto fired = gs.bullet_count > last_bullet_count;
@@ -105,7 +105,7 @@ int main(int argc, char * argv[])
       } 
       else {
         // 丢失目标，向云台发送当前姿态的空闲指令（防暴走）
-        gimbal.send(false, false, gs.yaw / 57.3f, 0.0f, 0.0f, gs.pitch / 57.3f, 0.0f, 0.0f);
+        gimbal.drone_send(false, false, gs.yaw, 0.0f, 0.0f, gs.pitch, 0.0f, 0.0f);
       }
 
       // 控制频率：~200Hz
@@ -124,7 +124,7 @@ int main(int argc, char * argv[])
     camera.read(img, t);
 
     // 获取插值后的四元数并传入 Solver (考虑相机与通信的延迟 3ms)
-    auto q = gimbal.q(t - 3ms);
+    auto q = gimbal.q(t);
     solver.set_R_gimbal2world(q);
 
     // 帧率计算
@@ -156,10 +156,10 @@ int main(int argc, char * argv[])
 
     // 2. 绘制 YOLO 检测到的无人机 2D Bbox 和 关键点
     for (const auto& drone : drones) {
-      cv::rectangle(img, drone.box, cv::Scalar(0, 255, 0), 2);
+      cv::rectangle(img, drone.box, cv::Scalar(200, 255, 0), 2);
       // 将 kpts 改为 points
       for (const auto& pt : drone.points) {
-        cv::circle(img, pt, 4, cv::Scalar(255, 0, 255), -1); 
+        cv::circle(img, pt, 4, cv::Scalar(0, 255, 0), -1); 
       }
       cv::putText(img, fmt::format("{:.2f}", drone.confidence), drone.box.tl(), 
                   cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 0), 2);
@@ -174,9 +174,9 @@ int main(int argc, char * argv[])
       Eigen::Vector3d aim_xyz = aim_xyza.head(3);
 
       // (A) 画出预测瞄准的 3D 边框（利用 Solver 的八点重投影）
-      Eigen::Vector3d zero_ypr = {aim_xyza[3], 0.0, 0.0}; // 假设预测姿态只考虑 Yaw
-      auto reproj_points = solver.reproject_drone(aim_xyz, zero_ypr);
-      tools::draw_points(img, reproj_points, {0, 0, 255}); // 红色表示预测位置框
+      // Eigen::Vector3d zero_ypr = {aim_xyza[3], 0.0, 0.0}; // 假设预测姿态只考虑 Yaw
+      // auto reproj_points = solver.reproject_drone(aim_xyz, zero_ypr);
+      // tools::draw_points(img, reproj_points, {0, 0, 255}); // 红色表示预测位置框
 
       // (B) 算出瞄准的中心点并画一条连接真实中心和预测中心的射击引导线
       auto pred_center_img = solver.world2pixel({cv::Point3f(aim_xyz.x(), aim_xyz.y(), aim_xyz.z())});
@@ -214,7 +214,7 @@ int main(int argc, char * argv[])
   
   // 发送归中或停止指令，防止下位机继续飞转
   auto current_state = gimbal.state();
-  gimbal.send(
+  gimbal.drone_send(
       false, 
       false, 
       current_state.yaw / 57.3f, 

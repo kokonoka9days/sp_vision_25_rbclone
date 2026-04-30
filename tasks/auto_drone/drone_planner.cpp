@@ -1,9 +1,9 @@
 #include "drone_planner.hpp"
 
 #include <vector>
+#include <cmath> // 需要使用 std::atan2 和 std::hypot
 
 #include "tools/math_tools.hpp"
-#include "tools/trajectory.hpp"
 #include "tools/yaml.hpp"
 
 namespace auto_drone
@@ -14,41 +14,27 @@ Planner::Planner(const std::string & config_path)
   yaw_offset_ = tools::read<double>(yaml, "yaw_offset") / 57.3;
   pitch_offset_ = tools::read<double>(yaml, "pitch_offset") / 57.3;
   fire_thresh_ = tools::read<double>(yaml, "fire_thresh");
-  decision_speed_ = tools::read<double>(yaml, "decision_speed");
-  high_speed_delay_time_ = tools::read<double>(yaml, "high_speed_delay_time");
-  low_speed_delay_time_ = tools::read<double>(yaml, "low_speed_delay_time");
-  gimbal_control_delay = tools::read<double>(yaml, "gimbal_control_delay");
 
-  // 初始化 MPC 求解器矩阵
+  // 初始化 MPC 求解器矩阵[cite: 1]
   setup_yaw_solver(config_path);
   setup_pitch_solver(config_path);
 }
 
 Plan Planner::plan(Target target, double bullet_speed)
 {
-  // 0. Check bullet speed
-  if (bullet_speed < 10 || bullet_speed > 25) {
-    bullet_speed = 22;
-  }
 
-  // 1. Predict fly_time (针对无人机的单点获取)
-  Eigen::Vector3d xyz = target.get_xyz();
-  auto min_dist = xyz.head<2>().norm();
-  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
-  target.predict(bullet_traj.fly_time);
-
-  // 2. Get trajectory
+  // 1. Get trajectory
   double yaw0;
   Trajectory traj;
   try {
     yaw0 = aim(target, bullet_speed)(0);
     traj = get_trajectory(target, yaw0, bullet_speed);
   } catch (const std::exception & e) {
-    tools::logger()->warn("Unsolvable target {:.2f}", bullet_speed);
+    tools::logger()->warn("Unsolvable target");
     return {false};
   }
 
-  // 3. Solve yaw
+  // 2. Solve yaw[cite: 1]
   Eigen::VectorXd x0(2);
   x0 << traj(0, 0), traj(1, 0);
   tiny_set_x0(yaw_solver_, x0);
@@ -56,7 +42,7 @@ Plan Planner::plan(Target target, double bullet_speed)
   yaw_solver_->work->Xref = traj.block(0, 0, 2, HORIZON);
   tiny_solve(yaw_solver_);
 
-  // 4. Solve pitch
+  // 3. Solve pitch[cite: 1]
   x0 << traj(2, 0), traj(3, 0);
   tiny_set_x0(pitch_solver_, x0);
 
@@ -133,19 +119,20 @@ void Planner::setup_pitch_solver(const std::string & config_path)
   pitch_solver_->settings->max_iter = 10;
 }
 
-Eigen::Matrix<double, 2, 1> Planner::aim(const Target & target, double bullet_speed)
+Eigen::Matrix<double, 2, 1> Planner::aim(const Target & target, double /*bullet_speed*/)
 {
   Eigen::Vector3d xyz = target.get_xyz();
   auto min_dist = xyz.head<2>().norm();
 
-  // 无人机无额外 Yaw 朝向，调试用赋值 0.0
+  // 无人机无额外 Yaw 朝向，调试用赋值 0.0[cite: 1]
   debug_xyza = Eigen::Vector4d(xyz.x(), xyz.y(), xyz.z(), 0.0);
 
   auto azim = std::atan2(xyz.y(), xyz.x());
-  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
-  if (bullet_traj.unsolvable) throw std::runtime_error("Unsolvable bullet trajectory!");
+  
+  // 激光直线传播，无需抛物线解算，直接根据空间高度(Z)和水平距离(XY)计算直线几何仰角
+  auto pitch = std::atan2(xyz.z(), min_dist);
 
-  return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + pitch_offset_};
+  return {tools::limit_rad(azim + yaw_offset_), pitch + pitch_offset_};
 }
 
 Trajectory Planner::get_trajectory(Target target, double yaw0, double bullet_speed)
@@ -174,4 +161,4 @@ Trajectory Planner::get_trajectory(Target target, double yaw0, double bullet_spe
   return traj;
 }
 
-}  // namespace auto_drones
+}  // namespace auto_drone

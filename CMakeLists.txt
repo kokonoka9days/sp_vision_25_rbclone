@@ -1,6 +1,13 @@
 cmake_minimum_required(VERSION 3.16.3)
 
-project(sp_vision)
+project(sp_vision LANGUAGES CXX C CUDA)
+
+# 强制 CUDA 使用 C++14 标准 (这是 nvcc 最喜欢的标准)
+set(CMAKE_CUDA_STANDARD 14)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+
+# 确保 CUDA 真的使用 g++-10
+set(CMAKE_CUDA_HOST_COMPILER g++-10)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_BUILD_TYPE Release)
@@ -21,6 +28,9 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${PROJECT_SOURCE_DIR})
 
 include_directories(${PROJECT_SOURCE_DIR}/io/serial/include)
+
+include_directories("/opt/TensorRT-8.6.1.6/include")
+link_directories("/opt/TensorRT-8.6.1.6/lib")
 
 
 add_subdirectory(tools)
@@ -49,7 +59,7 @@ target_link_libraries(rb_binocular_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp au
 target_link_libraries(hero ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(rb_auto_standard_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(rb_auto_standard ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
-target_link_libraries(rb_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_drone tools io)
+target_link_libraries(rb_auto_drone_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_drone tools io nvinfer)
 
 ##################calibration################
 add_executable(capture calibration/capture.cpp)

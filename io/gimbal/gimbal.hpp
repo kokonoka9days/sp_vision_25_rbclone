@@ -24,22 +24,23 @@ enum class WorkMode : uint8_t
 
 struct __attribute__((packed)) GimbalToVision
 {
-  uint8_t head[2] = {0x5a,0x53};
-  uint8_t mode;  // 0: 空闲, 1: 自瞄, 2: 小符, 3: 大符  电控控制右键0，1
-  uint16_t color; // 0: 红色, 1: 蓝色
+  uint8_t head = {0x5a};
+  // uint8_t mode;  // 0: 空闲, 1: 自瞄, 2: 小符, 3: 大符  电控控制右键0，1
+  // uint16_t color; // 0: 红色, 1: 蓝色
   float q[4];    // wxyz顺序
-  float bullet_speed;
-  uint16_t bullet_count;  // 子弹累计发送次数
+  // float bullet_speed;
+  // uint16_t bullet_count;  // 子弹累计发送次数
   // float gimbal_yaw;
   // float gimbal_pitch;
-  uint16_t crc16;
+  // uint16_t crc16;
+  uint8_t end = {0x53};
 };
 
 static_assert(sizeof(GimbalToVision) <= 64);
 
 struct __attribute__((packed)) VisionToGimbal
 {
-  uint8_t head = {0x66};
+  uint8_t head = {0x38};
   uint8_t mode = 0;  // 0: 不控制, 1: 控制云台但不开火，2:控制云台开火                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
   float yaw = 0;
   float yaw_vel = 0;
@@ -47,13 +48,21 @@ struct __attribute__((packed)) VisionToGimbal
   float pitch = 0;
   float pitch_vel = 0;
   float pitch_acc = 0;
-  uint16_t crc16;
-  uint8_t end = {0x11};
+  // uint16_t crc16;
+  uint8_t end = {0x83};
+};
+
+struct __attribute__((packed)) drone_VisionToGimbal
+{
+  uint8_t head = {0x38};                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+  float pitch = 0;
+  float yaw = 0;
+  uint8_t end = {0x83};
 };
 
 struct __attribute__((packed)) sb_VisionToGimbal
 {
-  uint8_t head = {0x66};
+  uint8_t head = {0x38};
   uint8_t mode;  // 0: 不控制, 1: 控制(小)云台但不开火，2:控制(小)云台开火，3.控制大云台
   uint8_t work_mode;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
   float yaw;
@@ -63,7 +72,7 @@ struct __attribute__((packed)) sb_VisionToGimbal
   float pitch_vel;
   float pitch_acc;
   uint16_t crc16;
-  uint8_t end = {0x11};
+  uint8_t end = {0x83};
 };
 
 static_assert(sizeof(VisionToGimbal) <= 64);
@@ -105,6 +114,10 @@ public:
   void send(
     bool control,bool fire, float yaw, float yaw_vel, float yaw_acc, float pitch, float pitch_vel,
     float pitch_acc);
+
+  void drone_send(
+    bool control,bool fire, float yaw, float yaw_vel, float yaw_acc, float pitch, float pitch_vel,
+    float pitch_acc);
   
   // void sb_send(
   //   bool control, WorkMode work_mode,bool fire, float yaw, float yaw_vel, float yaw_acc, float pitch, float pitch_vel,
@@ -128,6 +141,7 @@ private:
   GimbalToVision rx_data_;
   VisionToGimbal tx_data_;
   sb_VisionToGimbal sb_tx_data_;
+  drone_VisionToGimbal drone_tx_date;
 
   GimbalMode mode_ = GimbalMode::IDLE;
   GimbalState state_;

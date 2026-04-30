@@ -31,7 +31,8 @@ add_library(auto_drone OBJECT
     drone_target.cpp
     drone_planner.cpp
     drone_yolo.cpp     # 确保加入了 yolo 源文件
-    cuda_preprocess.cu # 如果是 .cu 文件，确保 CMake 启用了 CUDA 支持：project(YourProject LANGUAGES CXX CUDA)
+    drone_tracker.cpp    # <--- 加上这一行，解决 Tracker 报错
+    cuda_preprocess.cu
 )
 
 # 2. 将 TensorRT 头文件目录包含进来
