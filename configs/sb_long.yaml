@@ -138,6 +138,8 @@ com_port: "/dev/ttyACM0"
 
 
 #####-----planner-----#####
+target_dist_error: -0.23
+target_h_error: 0.28
 fire_thresh: 0.003 # 
 small_armor_tolerance: 0.02
 big_armor_tolerance: 0.22

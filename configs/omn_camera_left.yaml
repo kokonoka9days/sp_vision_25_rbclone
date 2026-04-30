@@ -125,6 +125,8 @@ judge_distance: 3 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
 #####-----planner-----#####
+target_dist_error: -0.23
+target_h_error: 0.28
 fire_thresh: 0.0035
 small_armor_tolerance: 0.12
 big_armor_tolerance: 0.22

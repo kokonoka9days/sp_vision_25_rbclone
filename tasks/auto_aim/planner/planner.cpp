@@ -15,6 +15,8 @@ Planner::Planner(const std::string & config_path)
   auto yaml = tools::load(config_path);
   yaw_offset_ = tools::read<double>(yaml, "yaw_offset") / 57.3;
   pitch_offset_ = tools::read<double>(yaml, "pitch_offset") / 57.3;
+  target_dist_error_ = tools::read<double>(yaml, "target_dist_error");
+  target_h_error_ = tools::read<double>(yaml, "target_h_error");
   fire_thresh_ = tools::read<double>(yaml, "fire_thresh");
   decision_speed_ = tools::read<double>(yaml, "decision_speed");
   high_speed_delay_time_ = tools::read<double>(yaml, "high_speed_delay_time");
@@ -53,8 +55,10 @@ Plan Planner::plan(Target target, double bullet_speed)
       xyz = xyza.head<3>();
     }
   }
-  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
-  target.predict(bullet_traj.fly_time);
+  min_dist+=target_dist_error_;
+  double target_h = xyz.z(); 
+  target_h+= target_h_error_;
+  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, target_h);
 
   // 2. Get trajectory
   double yaw0;
@@ -216,7 +220,10 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
       xyz = xyza.head<3>();
     }
   }
-  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
+  min_dist+=target_dist_error_;
+  double target_h = xyz.z(); 
+  target_h+= target_h_error_;
+  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, target_h);
   
   target.predict(bullet_traj.fly_time);
 
@@ -297,13 +304,12 @@ Plan Planner::rbHeroplan(Target target, double bullet_speed, double gimbal_yaw){
       xyz = xyza.head<3>();
     }
   }
-  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
-  // if(target.ekf_x()(7) < -0.69808){
-  //   bullet_traj.fly_time += 0.10;
-  // }
-  // if(target.ekf_x()(7) > 0.69808){
-  //   target.getEKFXest()
-  // }
+  min_dist+=target_dist_error_;
+  double target_h = xyz.z(); 
+  target_h+= target_h_error_;
+  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, target_h);
+
+  
   target.predict(bullet_traj.fly_time );
 
   // 2. Get trajectory

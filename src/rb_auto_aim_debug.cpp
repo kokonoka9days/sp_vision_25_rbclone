@@ -14,6 +14,7 @@
 #include "tasks/auto_aim/aimer.hpp"
 #include "tasks/auto_aim/shooter.hpp"
 #include "tasks/auto_aim/yolo.hpp"
+#include "tasks/auto_aim/detector.hpp"
 #include "tools/exiter.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
@@ -28,7 +29,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/xiaohuang.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/xiaohei.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -46,11 +47,11 @@ int main(int argc, char * argv[])
   io::Camera camera(config_path);
 
   auto_aim::YOLO yolo(config_path, true);
+  auto_aim::Detector detector(config_path, false);
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, &solver);
   tracker.set_gimbal(&gimbal);
-  auto_aim::Aimer aimer(config_path);
-  auto_aim::Shooter shooter(config_path);
+
   auto_aim::Planner planner(config_path);
   bool stopkey = false;
 
@@ -69,7 +70,7 @@ int main(int argc, char * argv[])
 
 
       //MPC预测以及+自家火控
-      auto plan = planner.plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::Dynamics);
+      auto plan = planner.plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
 
         gimbal.send(
       plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
@@ -89,22 +90,22 @@ int main(int argc, char * argv[])
       data["q2yaw"] = gs.q2yaw;
       data["q2pitch"] = gs.pitch;
 
-      data["target_yaw"] = plan.target_yaw;
-      data["target_pitch"] = plan.target_pitch;
-
-      data["plan_mode"] = plan.control ? (plan.fire ? 2 : 1) : 0;
-      data["plan_yaw"] = plan.yaw / CV_PI * 180. ;
-      data["plan_yaw_vel"] = plan.yaw_vel;
-      data["plan_yaw_acc"] = plan.yaw_acc;
-
-      data["plan_pitch"] = plan.pitch * 57.3;
-      data["plan_pitch_vel"] = plan.pitch_vel;
-      data["plan_pitch_acc"] = plan.pitch_acc;
-
-      data["fire"] = plan.fire ? 1 : 0;
-      data["fired"] = fired ? 1 : 0;
 
       if (target.has_value()) {
+        data["plan_mode"] = plan.control ? (plan.fire ? 2 : 1) : 0;
+        data["plan_yaw"] = plan.yaw / CV_PI * 180. ;
+        data["plan_yaw_vel"] = plan.yaw_vel;
+        data["plan_yaw_acc"] = plan.yaw_acc;
+
+        data["plan_pitch"] = plan.pitch * 57.3;
+        data["plan_pitch_vel"] = plan.pitch_vel;
+        data["plan_pitch_acc"] = plan.pitch_acc;
+
+        data["fire"] = plan.fire ? 1 : 0;
+        data["fired"] = fired ? 1 : 0;
+
+        data["target_yaw"] = plan.target_yaw;
+        data["target_pitch"] = plan.target_pitch;
         data["target_z"] = target->ekf_x()[4];   //z
         data["target_vz"] = target->ekf_x()[5];  //vz
         data["tower_h1"] = target->tower_armor_hs[0];
@@ -121,10 +122,12 @@ int main(int argc, char * argv[])
         data["ekf_vz"] = ekf_satic(5);
         data["ekf_yaw"] = ekf_satic(6) * 57.3;
         data["ekf_vyaw"] = ekf_satic(7) * 57.3;
-        data["ekf_r"] = ekf_satic(8);        
+        data["ekf_r"] = ekf_satic(8);   
+        
+               
       }
 
-      plotter.plot(data);
+      plotter.plot(data);  
 
       std::this_thread::sleep_for(5ms);
     }

@@ -109,6 +109,8 @@ gimbal_r3: -2
 # y_ _ _ 0   z:yaw   x:roll   y:pitch
 
 #####-----planner-----#####
+target_dist_error: -0.23
+target_h_error: 0.28
 fire_thresh: 0.006
 small_armor_tolerance: 0.12
 big_armor_tolerance: 0.22

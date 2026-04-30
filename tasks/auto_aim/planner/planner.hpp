@@ -86,6 +86,7 @@ private:
   double yaw_offset_;
   double pitch_offset_;
   double fire_thresh_;
+  double target_dist_error_, target_h_error_;
   double low_speed_delay_time_, high_speed_delay_time_, decision_speed_;
   double small_armor_tolerance, big_armor_tolerance;
   double gimbal_control_delay;
