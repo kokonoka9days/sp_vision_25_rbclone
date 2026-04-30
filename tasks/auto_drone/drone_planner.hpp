@@ -5,7 +5,7 @@
 #include <optional>
 
 #include "drone_target.hpp"
-#include "../auto_aim/planner/tinympc/tiny_api.hpp" 
+#include "tinympc/tiny_api.hpp" 
 #include "tools/logger.hpp"
 
 namespace auto_drone

@@ -92,8 +92,6 @@ int main(int argc, char * argv[])
         data["target_pitch"] = plan.target_pitch * 57.3;
         data["plan_yaw"] = plan.yaw * 57.3;
         data["plan_pitch"] = plan.pitch * 57.3;
-        data["fire"] = plan.fire ? 1 : 0;
-        data["fired"] = fired ? 1 : 0;
         
         // 记录目标的 EKF 空间位置
         const auto xyz = target->get_xyz();

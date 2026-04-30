@@ -3,7 +3,6 @@
 #include <stdexcept>
 
 #include "hikrobot/hikrobot.hpp"
-#include "mindvision/mindvision.hpp"
 #include "daheng/daheng.hpp"
 #include "tools/yaml.hpp"
 
@@ -20,13 +19,7 @@ Camera::Camera(const std::string & config_path)
   bool flip = tools::read<bool>(yaml, "flip");
   bool mirror = tools::read<bool>(yaml, "mirror");
 
-  if (camera_name == "mindvision") {
-    auto gamma = tools::read<double>(yaml, "gamma");
-    auto vid_pid = tools::read<std::string>(yaml, "vid_pid");
-    camera_ = std::make_unique<MindVision>(exposure_us, gamma, vid_pid);
-  }
-
-  else if (camera_name == "hikrobot") {
+   if (camera_name == "hikrobot") {
     auto gain = tools::read<double>(yaml, "gain");
     auto vid_pid = "2bdf:0001";
     auto sn = tools::read<std::string>(yaml, "camera_sn");

@@ -25,23 +25,27 @@ endif()
 # set(OpenVINO_DIR ...)
 # find_package(OpenVINO REQUIRED ...)
 
+# 1. 引入 tinympc 子目录，使得 cmake 去编译 tinympcstatic 库
+add_subdirectory(tinympc)
+
 add_library(auto_drone OBJECT 
     drone_armor.cpp
     drone_solver.cpp
     drone_target.cpp
     drone_planner.cpp
     drone_yolo.cpp     # 确保加入了 yolo 源文件
-    drone_tracker.cpp    # <--- 加上这一行，解决 Tracker 报错
+    drone_tracker.cpp  # <--- 加上这一行，解决 Tracker 报错
     cuda_preprocess.cu
 )
 
 # 2. 将 TensorRT 头文件目录包含进来
 target_include_directories(auto_drone PUBLIC ${TENSORRT_INCLUDE_DIR})
 
-# 3. 链接 TensorRT 核心库 (nvinfer) 和 CUDA 运行时库 (cudart)
+# 3. 链接 TensorRT 核心库 (nvinfer) 和 CUDA 运行时库 (cudart)，以及刚刚引入的 tinympcstatic
 target_link_libraries(auto_drone 
     io 
     tools
     ${TENSORRT_LIBRARY} 
     cudart
+    tinympcstatic      # <--- 新增这行，链接 MPC 求解器静态库
 )

@@ -5,7 +5,6 @@
 #include <opencv2/opencv.hpp>
 
 #include "io/camera.hpp"
-#include "io/cboard.hpp"
 #include "io/gimbal/gimbal.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
