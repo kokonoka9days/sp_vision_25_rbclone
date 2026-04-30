@@ -255,14 +255,14 @@ int main(int argc, char * argv[])
     }
 
 
-    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    cv::imshow("reprojection", img);
-    auto key = cv::waitKey(1);
-    if (key == 'q') break;
-    if(key == 'r') {//TUDO :右键手动更改
-      io::GimbalState* g_demo = gimbal.set_state_();
-      g_demo->mode = !g_demo->mode;
-    }
+    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    // cv::imshow("reprojection", img);
+    // auto key = cv::waitKey(1);
+    // if (key == 'q') break;
+    // if(key == 'r') {//TUDO :右键手动更改
+    //   io::GimbalState* g_demo = gimbal.set_state_();
+    //   g_demo->mode = !g_demo->mode;
+    // }
     // if(key == 's') {
     //   stopkey = !stopkey;
     // }
