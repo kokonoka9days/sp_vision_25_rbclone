@@ -47,12 +47,15 @@ add_subdirectory(tasks/auto_drone)
 
 #################### src ###################
 add_executable(rb_auto_drone_debug src/rb_auto_drone_debug.cpp)
+add_executable(rb_auto_drone_ros_debug src/rb_auto_drone_ros_debug.cpp)
 
 # 链接常规依赖
 target_link_libraries(rb_auto_drone_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_drone tools io nvinfer)
+target_link_libraries(rb_auto_drone_ros_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_drone tools io nvinfer)
 
 # 链接 ROS 2 依赖给主程序
 ament_target_dependencies(rb_auto_drone_debug rclcpp std_msgs)
+ament_target_dependencies(rb_auto_drone_ros_debug rclcpp std_msgs)
 
 ################## calibration ################
 add_executable(capture calibration/capture.cpp)
