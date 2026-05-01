@@ -13,3 +13,12 @@ add_library(tools OBJECT
     pid.cpp
     crc.cpp
 )
+
+target_link_libraries(tools
+    ${OpenCV_LIBS}
+    fmt::fmt
+    spdlog::spdlog
+    Eigen3::Eigen
+    nlohmann_json::nlohmann_json
+    yaml-cpp::yaml-cpp
+)

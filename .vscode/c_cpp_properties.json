@@ -4,16 +4,37 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/usr/local/include",
-                "/usr/include",
-                "/opt/TensorRT-8.6.1.6/include"
+                /* ------ 系统库(非 ROS自带) ------ */
+                "/usr/include/opencv4",
+                "/usr/local/TensorRT-10.11.0.33/include",
+                "/usr/local/cuda-12.6/include",
+                /* ------ ROS 2 Humble 核心 ------ */
+                "/opt/ros/humble/include/**",
+                /* ------ 常用 ROS 2 消息/包可能分散路径 ------ */
+                "/opt/ros/humble/include/rclcpp",
+                "/opt/ros/humble/include/sensor_msgs",
+                "/opt/ros/humble/include/cv_bridge",
+                "/opt/ros/humble/include/geometry_msgs",
+                "/opt/ros/humble/include/std_msgs",
+                "/opt/ros/humble/include/builtin_interfaces",
+                "/opt/ros/humble/include/rosidl_runtime_cpp",
+                "/opt/ros/humble/include/rcl",
+                "/opt/ros/humble/include/rcutils",
+                "/opt/ros/humble/include/rmw",
+                "/opt/ros/humble/include/ament_index_cpp",
+                "/opt/ros/humble/include/**",
+                "/usr/include/pcl-1.12",       
+                "/usr/include/eigen3",
+                "/opt/ros/humble/include/pcl_conversions",
+                /* ------ qt ------ */
+                "/usr/include/x86_64-linux-gnu/qt5/**"
+
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
             "cStandard": "gnu11",
             "cppStandard": "gnu++17",
-            "intelliSenseMode": "linux-gcc-x64",
-            "compileCommands": "${workspaceFolder}/build/compile_commands.json"
+            "intelliSenseMode": "linux-gcc-x64"
         }
     ],
     "version": 4

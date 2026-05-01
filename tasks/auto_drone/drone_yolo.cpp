@@ -20,7 +20,7 @@ class YOLOLogger : public nvinfer1::ILogger {
 // ==========================================
 // 构造函数
 // ==========================================
-YOLO::YOLO(const std::string& config_path, bool debug) 
+YOLO::YOLO(const std::string& config_path, bool /*debug*/) 
 {
     // 1. 读取配置文件 (若 YAML 中没有，这里给出默认值)
     auto yaml = tools::load(config_path);
@@ -53,9 +53,11 @@ YOLO::YOLO(const std::string& config_path, bool debug)
     this->context_ = this->engine_->createExecutionContext();
     cudaStreamCreate(&this->stream_);
 
-    // 4. 获取输入/输出维度信息
-    nvinfer1::Dims input_dims = this->engine_->getBindingDimensions(0);
-    nvinfer1::Dims output_dims = this->engine_->getBindingDimensions(1);
+    // 4. 获取输入/输出维度信息 (TRT 10.x API)
+    const char* input_name  = this->engine_->getIOTensorName(0);
+    const char* output_name = this->engine_->getIOTensorName(1);
+    nvinfer1::Dims input_dims  = this->engine_->getTensorShape(input_name);
+    nvinfer1::Dims output_dims = this->engine_->getTensorShape(output_name);
 
     // 【修复2】：终极安全锁，防止未来模型通道数不匹配导致静默错位
     int channels = output_dims.d[1];
@@ -102,9 +104,9 @@ YOLO::~YOLO() {
     if(this->pinned_in_host_)  cudaFreeHost(this->pinned_in_host_);
     if(this->pinned_out_host_) cudaFreeHost(this->pinned_out_host_);
 
-    if(this->context_) this->context_->destroy();
-    if(this->engine_)  this->engine_->destroy();
-    if(this->runtime_) this->runtime_->destroy();
+    delete this->context_;
+    delete this->engine_;
+    delete this->runtime_;
 }
 
 // ==========================================
@@ -228,9 +230,10 @@ std::vector<Drone> YOLO::detect(const cv::Mat &frame) {
     // 1. 预处理 (Host -> Device + CUDA Kernel)
     this->preprocess_cuda(frame);
 
-    // 2. TensorRT 异步推理
-    void* bindings[] = {this->buffer_idx_0_, this->buffer_idx_1_};
-    this->context_->enqueueV2(bindings, this->stream_, nullptr);
+    // 2. TensorRT 异步推理 (TRT 10.x API)
+    this->context_->setTensorAddress(this->engine_->getIOTensorName(0), this->buffer_idx_0_);
+    this->context_->setTensorAddress(this->engine_->getIOTensorName(1), this->buffer_idx_1_);
+    this->context_->enqueueV3(this->stream_);
 
     // 3. 推理结果回拷 (Device -> Host Pinned Memory)
     cudaMemcpyAsync(this->pinned_out_host_, this->buffer_idx_1_, 

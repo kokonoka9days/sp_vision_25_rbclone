@@ -7,11 +7,7 @@ add_library(tinympcstatic STATIC
 
 set_property(TARGET tinympcstatic PROPERTY POSITION_INDEPENDENT_CODE ON)
 
-# target_link_libraries(tinympcstatic PUBLIC Eigen)
 target_include_directories(tinympcstatic PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_include_directories(tinympcstatic PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../include/Eigen)
-
-
 
 if(USING_CODEGEN) # Defined in top-level CMakeLists.txt
 
