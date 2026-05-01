@@ -75,11 +75,13 @@ public:
   bool cam_is_short = true;
   bool last_cam_is_short = true;
   std::chrono::steady_clock::time_point cam_is_switch_time_point; //相机切换时间点；
+  
+  int update_count_;
 
 private:
   int armor_num_;
   int switch_count_;
-  int update_count_;
+  
 
   bool is_switch_, is_converged_;
 

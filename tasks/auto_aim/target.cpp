@@ -7,7 +7,7 @@
 #include "tools/math_tools.hpp"
 
 // 物理常量定义
-constexpr double TOWER_ARMOR_DH = 0.108;  // 前哨站两个装甲板之间的标准高低差(m)
+constexpr double TOWER_ARMOR_DH = 0.10;  // 前哨站两个装甲板之间的标准高低差(m)
 constexpr double TOWER_ARMOR_DTB = 0.16;  // 前哨装甲大跳变阈值(m)
 constexpr double TOWER_ARMOR_XTB = 0.05;  // 前哨装甲小跳变阈值(m)
 
@@ -144,11 +144,12 @@ void Target::predict(double dt)
 
   double v1, v2;
   if (name == ArmorName::outpost) {
+    this->ekf_x()(10) = TOWER_ARMOR_DH;
     // 前哨站位置固定，收敛后极大限制平移噪声
     if (this->convergened()) {
         v1 = 0.1;  // 锁死 X, Y, Z 中心
     } else {
-        v1 = 5;   // 允许前期寻找中心
+        v1 = 20;   // 允许前期寻找中心
     }
     v2 = 0.1;      // 允许自转速度存在微小波动
   } 
@@ -196,14 +197,14 @@ void Target::update(const Armor & armor)
 {
   int id = 0;
 
-  // =====================================================================
-  // 匹配逻辑分支：根据兵种采取不同的装甲板数据关联策略
-  // =====================================================================
+
   if (this->name == ArmorName::outpost) {
     // 【策略 A：前哨站专用】
     // 纯几何匹配(距离+复合角度)，绕开因高度阶梯跳变导致 EKF 协方差波动的干扰
     auto min_angle_error = 1e10;
     const std::vector<Eigen::Vector4d> & xyza_list = armor_xyza_list();
+
+    this->ekf_x()(10) = TOWER_ARMOR_DH;
 
     std::vector<std::pair<Eigen::Vector4d, int>> xyza_i_list;
     for (int i = 0; i < armor_num_; i++) {
@@ -303,9 +304,7 @@ void Target::update(const Armor & armor)
     }
   }
 
-  // =====================================================================
-  // 统一的后处理与高度历史数据更新逻辑 (消除了原代码中的冗余复制)
-  // =====================================================================
+
   if (id != 0) jumped = true;
 
   // 检测换板事件
@@ -315,11 +314,11 @@ void Target::update(const Armor & armor)
     
     // 换板时，将上一块装甲板的历史累加数据计算为平均高度锚点
     if (name == ArmorName::outpost) {
-  if (tower_armor_hs_datas_ptr[last_id] > 0) {
-    tower_armor_hs[last_id].first = true; // 标记该装甲板已有有效的历史数据
-    tower_armor_hs[last_id].second = tower_armor_hs_datas[last_id] / tower_armor_hs_datas_ptr[last_id];
-  }
-}
+      if (tower_armor_hs_datas_ptr[last_id] > 0) {
+        tower_armor_hs[last_id].first = true; // 标记该装甲板已有有效的历史数据
+        tower_armor_hs[last_id].second = tower_armor_hs_datas[last_id] / tower_armor_hs_datas_ptr[last_id];
+      }
+    }
   } else {
     is_switch_ = false;
   }
@@ -362,11 +361,11 @@ void Target::update_ypda(const Armor & armor, int id)
     r2_angle *= 3.0;  // 旋转时进一步增加对角度的不信任
 }
 
-  // 前哨站换板瞬间，放宽距离和高度噪声信任度防跳变
-  if (name == ArmorName::outpost && is_switch_) {
-      r2_pitch *= 100.0; 
-      r2_d     *= 100.0; 
-  }
+  // // 前哨站换板瞬间，放宽距离和高度噪声信任度防跳变
+  // if (name == ArmorName::outpost && is_switch_) {
+  //     r2_pitch *= 100.0; 
+  //     r2_d     *= 100.0; 
+  // }
   
   if(last_cam_is_short != cam_is_short){
     cam_is_switch_time_point = std::chrono::steady_clock::now();
@@ -472,6 +471,7 @@ Eigen::Vector3d Target::h_armor_xyz(const Eigen::VectorXd & x, int id) const
       } else {
         dz_mu = 0; // 同一阶梯
       }
+      
       
       // 结合滤波器的高度参数 x[10]
       armor_z = x[4] + x[10] * dz_px * dz_mu; 

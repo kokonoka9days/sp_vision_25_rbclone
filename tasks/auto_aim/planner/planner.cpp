@@ -165,27 +165,9 @@ bool Planner::rbShoot(Target target, double gimbal_yaw, bool tower_fixed_pitch){
   suggest_fire = (control_delta_angle < allow_fire_ang_max &&
                   control_delta_angle > allow_fire_ang_min && suggest_pitch) ;
 
-  // 前哨站开火条件限制
-  if (target.name == ArmorName::outpost) {
-      double current_z = target.ekf_x()(4); // 获取当前前哨站中心Z轴坐标
-      double delta_z = std::abs(current_z - outpost_z_baseline_);
-      auto now = std::chrono::steady_clock::now();
-
-      // 如果Z轴变化幅度大于指定阈值（例如0.05米），重置基准和计时器，并禁止开火
-      if (delta_z > 0.05) { 
-          outpost_z_baseline_ = current_z;
-          outpost_z_stable_start_time_ = now;
-          suggest_fire = false; 
-      } else {
-          // 如果变化幅度在阈值内，判断持续时间是否达到 0.7 秒
-          double stable_duration = std::chrono::duration<double>(now - outpost_z_stable_start_time_).count();
-          if (stable_duration < 0.7) {
-              suggest_fire = false; // 持续时间不足 0.7s，不开火
-          }
-      }
-  }
 
 
+  if(!outpost_is_make) suggest_fire = 0;
   if(suggest_fire){
     // tools::logger()->info("fire! control_delta_angle: {},  allow_fire_ang_max: {}, allow_fire_ang_min: {}",
     //   control_delta_angle, allow_fire_ang_max, allow_fire_ang_min
@@ -273,6 +255,44 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   plan.pitch_acc = pitch_solver_->work->u(0, HALF_HORIZON);
 
   
+
+  // 前哨站迭代限制
+  if (target.name == ArmorName::outpost) {
+      double vz = target.ekf_x()(5); // 获取当前前哨站中心Z轴坐标
+      // double delta_z = std::abs(current_z - outpost_z_baseline_);
+      auto now = std::chrono::steady_clock::now();
+
+      // 如果Z轴变化幅度大于指定阈值（例如0.05米），重置基准和计时器，并禁止开火
+      if (vz > 0.01) { 
+          outpost_z_stable_start_time_ = now;
+          // suggest_fire = false; 
+          outpost_is_make = false;
+      } else {
+        // 如果变化幅度在阈值内，判断持续时间是否达到 0.7 秒
+        double stable_duration = tools::delta_time(now ,outpost_z_stable_start_time_ );
+        if (
+          // stable_duration < 1 || 
+          target.update_count_ < 500) {
+            // suggest_fire = false; // 持续时间不足 0.7s，不开火
+            outpost_is_make = false;
+        }
+        else{
+          outpost_is_make = true;
+        }
+      }
+
+      if(!outpost_is_make){
+        Eigen::Vector2d yaw_pitch_nan = heroaim(target, 100000, gimbal_yaw);
+        plan.yaw = yaw_pitch_nan(0);
+        plan.yaw_vel = 0;
+        plan.yaw_acc = 0;
+
+        plan.pitch = yaw_pitch_nan(1);
+        plan.pitch_vel = 0;
+        plan.pitch_acc = 0;
+      }
+  }
+
   // plan.fire =
   //   std::hypot(
   //     traj(0, HALF_HORIZON + shoot_offset_) - yaw_solver_->work->x(0, HALF_HORIZON + shoot_offset_),
@@ -282,6 +302,8 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   plan.fire = rbShoot(target, (gimbal_yaw )/57.3 - yaw_offset_);
   // tools::logger()->warn("fire:{}", plan.fire);
   plan.target_yaw = (aim_target_yaw + yaw_offset_ )* 57.3;
+
+
 
 
   return plan;
