@@ -30,7 +30,7 @@ void capture_loop(
   const std::string & config_path, const std::string & can, const std::string & output_folder)
 {
   // io::CBoard cboard(config_path);
-  io::Gimbal gimbal(config_path);
+  // io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
   cv::Mat img;
   std::chrono::steady_clock::time_point timestamp;
@@ -48,14 +48,14 @@ void capture_loop(
   int count = 0;
   while (true) {
     camera.read(img, timestamp);
-    Eigen::Quaterniond q = gimbal.q(timestamp);
+    // Eigen::Quaterniond q = gimbal.q(timestamp);
 
     // 在图像上显示欧拉角，用来判断imuabs系的xyz正方向，同时判断imu是否存在零漂
     auto img_with_ypr = img.clone();
-    Eigen::Vector3d zyx = tools::eulers(q, 2, 1, 0) * 57.3;  // degree
-    tools::draw_text(img_with_ypr, fmt::format("Z {:.2f}", zyx[0]), {40, 40}, {0, 0, 255});
-    tools::draw_text(img_with_ypr, fmt::format("Y {:.2f}", zyx[1]), {40, 80}, {0, 0, 255});
-    tools::draw_text(img_with_ypr, fmt::format("X {:.2f}", zyx[2]), {40, 120}, {0, 0, 255});
+    // Eigen::Vector3d zyx = tools::eulers(q, 2, 1, 0) * 57.3;  // degree
+    // tools::draw_text(img_with_ypr, fmt::format("Z {:.2f}", zyx[0]), {40, 40}, {0, 0, 255});
+    // tools::draw_text(img_with_ypr, fmt::format("Y {:.2f}", zyx[1]), {40, 80}, {0, 0, 255});
+    // tools::draw_text(img_with_ypr, fmt::format("X {:.2f}", zyx[2]), {40, 120}, {0, 0, 255});
 
     std::vector<cv::Point2f> corners_2d;
     // 修改：使用棋盘格角点检测
@@ -76,7 +76,7 @@ void capture_loop(
     }
     
 
-    cv::resize(img_with_ypr, img_with_ypr, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    cv::resize(img_with_ypr, img_with_ypr, {}, 0.2, 0.2);  // 显示时缩小图片尺寸
 
     // 按"s"保存图片和对应四元数，按"q"退出程序
     cv::imshow("Press s to save, q to quit", img_with_ypr);
@@ -91,7 +91,7 @@ void capture_loop(
     auto img_path = fmt::format("{}/{}.jpg", output_folder, count);
     auto q_path = fmt::format("{}/{}.txt", output_folder, count);
     cv::imwrite(img_path, img);
-    write_q(q_path, q);
+    // write_q(q_path, q);
     tools::logger()->info("[{}] Saved in {}", count, output_folder);
   }
 

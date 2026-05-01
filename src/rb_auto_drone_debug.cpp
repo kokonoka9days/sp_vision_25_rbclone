@@ -5,6 +5,9 @@
 #include <opencv2/opencv.hpp>
 #include <thread>
 
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/float32_multi_array.hpp>
+
 // 底层 IO 与工具
 #include "io/camera.hpp"
 #include "io/gimbal/gimbal.hpp"
@@ -39,6 +42,19 @@ int main(int argc, char * argv[])
     cli.printMessage();
     return 0;
   }
+
+  // ---------- 新增：ROS 2 节点初始化 ----------
+  rclcpp::init(argc, argv);
+  auto ros_node = rclcpp::Node::make_shared("drone_control_publisher");
+  
+  // 创建一个 Publisher，话题名为 "/drone/gimbal_cmd"，队列长度为 10
+  auto cmd_pub = ros_node->create_publisher<std_msgs::msg::Float32MultiArray>("/drone/gimbal_cmd", 10);
+
+  // 创建一个独立的线程来处理 ROS 2 的回调/事件循环
+  std::thread ros_spin_thread([&ros_node]() {
+      rclcpp::spin(ros_node);
+  });
+  // ------------------------------------------
 
   // 2. 硬件 IO 初始化
   io::Gimbal gimbal(config_path);
@@ -80,6 +96,16 @@ int main(int argc, char * argv[])
           plan.pitch * 57.3, plan.pitch_vel, plan.pitch_acc
         );      
 
+        // ---------- 新增：将包含有效控制指令的数据发布到 ROS 2 ----------
+        std_msgs::msg::Float32MultiArray cmd_msg;
+        // 定义数据格式: [control_flag, fire_flag, yaw, yaw_vel, yaw_acc, pitch, pitch_vel, pitch_acc]
+        cmd_msg.data = {
+            static_cast<float>(plan.yaw * 57.3),
+            static_cast<float>(plan.pitch * 57.3)
+        };
+        cmd_pub->publish(cmd_msg);
+        // -------------------------------------------------------------
+
         auto fired = gs.bullet_count > last_bullet_count;
         last_bullet_count = gs.bullet_count;
 
@@ -104,6 +130,15 @@ int main(int argc, char * argv[])
       else {
         // 丢失目标，向云台发送当前姿态的空闲指令（防暴走）
         gimbal.drone_send(false, false, gs.yaw, 0.0f, 0.0f, gs.pitch, 0.0f, 0.0f);
+
+        // ---------- 新增：将空闲状态的控制指令发布到 ROS 2 ----------
+        std_msgs::msg::Float32MultiArray cmd_msg;
+        cmd_msg.data = {
+            static_cast<float>(gs.yaw), 
+            static_cast<float>(gs.pitch)
+        };
+        cmd_pub->publish(cmd_msg);
+        // -------------------------------------------------------
       }
 
       // 控制频率：~200Hz
@@ -222,6 +257,13 @@ int main(int argc, char * argv[])
       0.0f, 
       0.0f
   );
+
+  // ---------- 新增：安全关闭 ROS 2 及回收独立线程 ----------
+  rclcpp::shutdown();
+  if (ros_spin_thread.joinable()) {
+      ros_spin_thread.join();
+  }
+  // -----------------------------------------------------
 
   return 0;
 }

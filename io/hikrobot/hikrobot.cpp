@@ -95,135 +95,137 @@ void HikRobot::capture_start()
   capture_quit_ = false;
 
   unsigned int ret;
-
-
   MV_CC_DEVICE_INFO_LIST device_list;
 
-  ret = MV_CC_EnumDevices(MV_USB_DEVICE, &device_list);//枚举设备数量
+  // 1. 枚举设备
+  ret = MV_CC_EnumDevices(MV_USB_DEVICE, &device_list);
   if(ret != MV_OK) {
-      tools::logger()->warn("hik EnumDevices failed");
+      tools::logger()->warn("hik EnumDevices failed, ret: {:#x}", ret);
       return;
   }
   if(device_list.nDeviceNum == 0) {
-    tools::logger()->warn("设备数量为0");
+      tools::logger()->warn("设备数量为0");
       return;
   }
   this->nDeviceNum = device_list.nDeviceNum;
-  // std::cout<<"device_list.nDeviceNum "<<nDeviceNum <<std::endl;
+
+  // 2. 匹配目标相机
   size_t cameraIndex = 0;
   bool exist = ChoiceCamrea(device_list.pDeviceInfo, (unsigned char*)camera_sn_.c_str(), cameraIndex);
-  std::cout<<"camrea exist "<<exist<<std::endl;
-  if(false){
-    tools::logger()->warn("不存在hik相机 {}",camera_sn_);
+  if(!exist){
+    tools::logger()->warn("未匹配到指定SN的海康相机: {}", camera_sn_);
     return;
   }
 
-  ret = MV_CC_EnumDevices(MV_USB_DEVICE, &device_list);
-  if (ret != MV_OK) {
-    tools::logger()->warn("MV_CC_EnumDevices failed: {:#x}", ret);
-    return;
-  }
-
-  if (device_list.nDeviceNum == 0) {
-    tools::logger()->warn("Not found camera!");
-    return;
-  }
-
+  // 3. 创建句柄
   ret = MV_CC_CreateHandle(&handle_, device_list.pDeviceInfo[cameraIndex]);
   if (ret != MV_OK) {
     tools::logger()->warn("MV_CC_CreateHandle failed: {:#x}", ret);
     return;
   }
 
+  // 4. 打开设备
   ret = MV_CC_OpenDevice(handle_);
   if (ret != MV_OK) {
     tools::logger()->warn("MV_CC_OpenDevice failed: {:#x}", ret);
     return;
   }
 
+  // 5. 核心参数设置 (极其重要)
+  set_enum_value("AcquisitionMode", MV_ACQ_MODE_CONTINUOUS); // 强制连续采集模式
   set_enum_value("BalanceWhiteAuto", MV_BALANCEWHITE_AUTO_CONTINUOUS);
   set_enum_value("ExposureAuto", MV_EXPOSURE_AUTO_MODE_OFF);
   set_enum_value("GainAuto", MV_GAIN_MODE_OFF);
+  set_enum_value("TriggerMode", MV_TRIGGER_MODE_OFF);
+
+  // 6. 安全地设置曝光
   set_float_value("ExposureTime", exposure_us_);
 
-  MVCC_FLOATVALUE gainRange;
-  MV_CC_GetFloatValue(handle_,"AutoGainUpperLimit", &gainRange);//获取增益值范围
-  set_float_value("Gain", gain_*gainRange.fMax );
-  MV_CC_SetFrameRate(handle_, 100);
+  // 7. 安全地设置增益（修复垃圾值 BUG）
+  MVCC_FLOATVALUE gainRange = {0}; // 【务必初始化为 0】
+  ret = MV_CC_GetFloatValue(handle_, "Gain", &gainRange); // 节点名改为 "Gain"
+  if (ret == MV_OK) {
+      double target_gain = gain_ * gainRange.fMax;
+      // 钳制在合法范围内
+      if (target_gain < gainRange.fMin) target_gain = gainRange.fMin;
+      if (target_gain > gainRange.fMax) target_gain = gainRange.fMax;
+      set_float_value("Gain", target_gain);
+  } else {
+      tools::logger()->warn("获取增益范围失败: {:#x}，跳过增益设置", ret);
+  }
 
+  // 8. 限制帧率（保命设置：防止 USB 带宽被打爆导致全损丢包）
+  MV_CC_SetBoolValue(handle_, "AcquisitionFrameRateEnable",false);
+  // set_float_value("AcquisitionFrameRate", 20.0f); // 强制降频到20帧，跑通后再往上加
+
+  // 9. 开始取流
   ret = MV_CC_StartGrabbing(handle_);
   if (ret != MV_OK) {
     tools::logger()->warn("MV_CC_StartGrabbing failed: {:#x}", ret);
     return;
   }
 
+  // 10. 启动抓图线程
   capture_thread_ = std::thread{[this] {
     tools::logger()->info("HikRobot's capture thread started.");
 
     capturing_ = true;
-
     MV_FRAME_OUT raw;
     MV_CC_PIXEL_CONVERT_PARAM cvt_param;
+    memset(&cvt_param, 0, sizeof(MV_CC_PIXEL_CONVERT_PARAM));
+
+    // 修复点：在 lambda 内部显式声明局部变量 ret
+    unsigned int ret; 
 
     while (!capture_quit_) {
-      std::this_thread::sleep_for(1ms);
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
       if (is_paused_) {
           std::unique_lock<std::mutex> lock(pause_mutex_);
-          // 线程在这里完全停滞，不往下执行，也就完美避开了 GetImageBuffer 报错退出的问题
           pause_cv_.wait(lock, [this]() { return !is_paused_.load(); });
       }
 
-      unsigned int ret;
-      unsigned int nMsec = 100;
-
-      ret = MV_CC_GetImageBuffer(handle_, &raw, nMsec);
+      // 获取图像，超时设为 2000ms
+      ret = MV_CC_GetImageBuffer(handle_, &raw, 2000);
       if (ret != MV_OK) {
-        if (is_paused_) {
-            continue; 
-        }
+        if (is_paused_) continue; 
         tools::logger()->warn("MV_CC_GetImageBuffer failed: {:#x} 海康相机无法读取到图像", ret);
-        break;
+        
+        // 【关键修复】：丢包或超时是正常的，继续等下一帧，不要 break 杀死线程！
+        continue; 
       }
 
       auto timestamp = std::chrono::steady_clock::now();
       cv::Mat img(cv::Size(raw.stFrameInfo.nWidth, raw.stFrameInfo.nHeight), CV_8U, raw.pBufAddr);
 
-      cvt_param.nWidth = raw.stFrameInfo.nWidth;
-      cvt_param.nHeight = raw.stFrameInfo.nHeight;
-
-      cvt_param.pSrcData = raw.pBufAddr;
-      cvt_param.nSrcDataLen = raw.stFrameInfo.nFrameLen;
-      cvt_param.enSrcPixelType = raw.stFrameInfo.enPixelType;
-
-      cvt_param.pDstBuffer = img.data;
-      cvt_param.nDstBufferSize = img.total() * img.elemSize();
-      cvt_param.enDstPixelType = PixelType_Gvsp_BGR8_Packed;
-
-      // ret = MV_CC_ConvertPixelType(handle_, &cvt_param);
       const auto & frame_info = raw.stFrameInfo;
       auto pixel_type = frame_info.enPixelType;
       cv::Mat dst_image;
+      
       const static std::unordered_map<MvGvspPixelType, cv::ColorConversionCodes> type_map = {
         {PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGR2RGB},
         {PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRG2RGB},
         {PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGB2RGB},
         {PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBG2RGB}};
-      cv::cvtColor(img, dst_image, type_map.at(pixel_type));
-      img = dst_image;
+        
+      // 【防崩溃保护】检查像素格式是否在 type_map 中
+      if (type_map.find(pixel_type) != type_map.end()) {
+          cv::cvtColor(img, dst_image, type_map.at(pixel_type));
+          img = dst_image;
+      } else {
+          img = img.clone(); 
+      }
+
       // 翻转和镜像
-      if (flip_) {
-          cv::flip(img, img, 0); // 垂直翻转
-      }
-      if (mirror_) {
-          cv::flip(img, img, 1); // 水平镜像
-      }
+      if (flip_) cv::flip(img, img, 0); 
+      if (mirror_) cv::flip(img, img, 1); 
 
       queue_.push({img, timestamp});
 
       ret = MV_CC_FreeImageBuffer(handle_, &raw);
       if (ret != MV_OK) {
         tools::logger()->warn("MV_CC_FreeImageBuffer failed: {:#x}", ret);
+        // 这里 free 失败通常意味着设备句柄无效了，此时 break 是合理的
         break;
       }
     }

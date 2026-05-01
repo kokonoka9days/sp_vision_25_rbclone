@@ -4,24 +4,16 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/usr/local/include",         
+                "/usr/local/include",
                 "/usr/include",
-                "/usr/include/opencv4",
-                // "/usr/local/include/opencv4",
-                "/usr/lib/x86_64-linux-gnu/**",
-                "/usr/include/x86_64-linux-gnu",
-                // "/opt/intel/openvino_2022.1.0.643/runtime/include",
-                // "/opt/intel/openvino_2022.1.0.643/extras/opencv/include",
-                "/usr/include/eigen3",
-                "/usr/include/eigen3/unsupported/Eigen",
                 "/opt/TensorRT-8.6.1.6/include"
-
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
             "cStandard": "gnu11",
             "cppStandard": "gnu++17",
-            "intelliSenseMode": "linux-gcc-x64"
+            "intelliSenseMode": "linux-gcc-x64",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json"
         }
     ],
     "version": 4
