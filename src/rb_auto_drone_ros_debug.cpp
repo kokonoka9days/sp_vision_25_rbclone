@@ -5,6 +5,9 @@
 #include <opencv2/opencv.hpp>
 #include <thread>
 
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/float32_multi_array.hpp>
+
 // 底层 IO 与工具
 #include "io/camera.hpp"
 #include "io/gimbal/gimbal.hpp"
@@ -40,6 +43,30 @@ int main(int argc, char * argv[])
     return 0;
   }
 
+  // ---------- 修改 1：定义原子变量，用于接收 ROS2 传来的数据 ----------
+  std::atomic<float> target_yaw{0.0f};
+  std::atomic<float> target_pitch{0.0f};
+
+  // ---------- 修改 2：ROS 2 节点初始化与订阅 ----------
+  rclcpp::init(argc, argv);
+  auto ros_node = rclcpp::Node::make_shared("drone_control_subscriber");
+  
+  // 创建 Subscriber 替代原来的 Publisher
+  auto cmd_sub = ros_node->create_subscription<std_msgs::msg::Float32MultiArray>(
+    "/drone/gimbal_cmd", 10,
+    [&target_yaw, &target_pitch](const std_msgs::msg::Float32MultiArray::SharedPtr msg) {
+      if (msg->data.size() >= 2) {
+        target_yaw.store(msg->data[0]);
+        target_pitch.store(msg->data[1]);
+      }
+    });
+
+  // 创建一个独立的线程来处理 ROS 2 的回调/事件循环 (保持不变)
+  std::thread ros_spin_thread([&ros_node]() {
+      rclcpp::spin(ros_node);
+  });
+  // ------------------------------------------
+
   // 2. 硬件 IO 初始化
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
@@ -69,6 +96,10 @@ int main(int argc, char * argv[])
       auto target = target_queue.front(); 
       auto gs = gimbal.state();
 
+      // ---------- 修改 3：读取 ROS2 收到的角度 ----------
+      float current_target_yaw = target_yaw.load();
+      float current_target_pitch = target_pitch.load();
+
       if (target.has_value()) {
         // MPC 弹道预测与控制解算
         auto plan = planner.plan(target, gs.bullet_speed);
@@ -79,6 +110,7 @@ int main(int argc, char * argv[])
           plan.yaw * 57.3, plan.yaw_vel, plan.yaw_acc, 
           plan.pitch * 57.3, plan.pitch_vel, plan.pitch_acc
         );      
+
 
         auto fired = gs.bullet_count > last_bullet_count;
         last_bullet_count = gs.bullet_count;
@@ -103,7 +135,8 @@ int main(int argc, char * argv[])
       } 
       else {
         // 丢失目标，向云台发送当前姿态的空闲指令（防暴走）
-        gimbal.drone_send(false, false, gs.yaw, 0.0f, 0.0f, gs.pitch, 0.0f, 0.0f);
+        gimbal.drone_send(false, false, gs.yaw + current_target_yaw, 0.0f, 0.0f, gs.pitch + current_target_pitch, 0.0f, 0.0f);
+
       }
 
       // 控制频率：~200Hz
@@ -222,6 +255,13 @@ int main(int argc, char * argv[])
       0.0f, 
       0.0f
   );
+
+  // ---------- 新增：安全关闭 ROS 2 及回收独立线程 ----------
+  rclcpp::shutdown();
+  if (ros_spin_thread.joinable()) {
+      ros_spin_thread.join();
+  }
+  // -----------------------------------------------------
 
   return 0;
 }

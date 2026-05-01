@@ -75,6 +75,7 @@ add_subdirectory(tasks/auto_drone)
 
 #################### src ###################
 add_executable(rb_auto_drone_debug src/rb_auto_drone_debug.cpp)
+add_executable(rb_auto_drone_ros_debug src/rb_auto_drone_ros_debug.cpp)
 
 # 链接常规依赖 (使用安全找到的 10.11 版 ${TRT_LIB})
 target_link_libraries(rb_auto_drone_debug 
@@ -89,6 +90,7 @@ target_link_libraries(rb_auto_drone_debug
 
 # 链接 ROS 2 依赖给主程序 (标准做法)
 ament_target_dependencies(rb_auto_drone_debug rclcpp std_msgs)
+ament_target_dependencies(rb_auto_drone_ros_debug rclcpp std_msgs)
 
 ################## calibration ################
 add_executable(capture calibration/capture.cpp)
