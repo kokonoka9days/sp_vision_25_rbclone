@@ -83,7 +83,7 @@ int main(int argc, char * argv[])
         tx = target->ekf_x()[0]; 
         ty = target->ekf_x()[2]; 
 
-        tools::logger()->info("{},{},{}", name,tx,ty);
+        // tools::logger()->info("{},{},{}", name,tx,ty);
 
       }
 
