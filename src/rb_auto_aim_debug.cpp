@@ -29,7 +29,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/xiaohei.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/sb_long.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -72,9 +72,27 @@ int main(int argc, char * argv[])
       //MPC预测以及+自家火控
       auto plan = planner.plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
 
-        gimbal.send(
-      plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
-      plan.pitch_acc);      
+     // 1. 设置默认值
+      uint8_t name = 0;
+      float tx = 0.0f;
+      float ty = 0.0f;
+
+      // 2. 只有在 target 有值时才去提取数据
+      if (target.has_value()) {
+        name = static_cast<uint8_t>(target->name) + 1;
+        tx = target->ekf_x()[0]; 
+        ty = target->ekf_x()[2]; 
+
+        tools::logger()->info("{},{},{}", name,tx,ty);
+
+      }
+
+      gimbal.sb_send(
+      plan.control, plan.fire,
+      plan.yaw, plan.yaw_vel, plan.yaw_acc,
+      plan.pitch, plan.pitch_vel, plan.pitch_acc,
+      tx,ty,name
+    );    
      
 
       auto fired = gs.bullet_count > last_bullet_count;
@@ -145,7 +163,7 @@ int main(int argc, char * argv[])
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
     // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
     last_t = t;
-    tools::logger()->info("fps:: {:.2f}", fps);
+    // tools::logger()->info("fps:: {:.2f}", fps);
 
     auto ypr = tools::eulers(q, 2, 1, 0);
 
@@ -275,7 +293,7 @@ int main(int argc, char * argv[])
   
   // 发送当前数据（注意：由于 gimbal.cpp 中接收时乘了 57.3 转成了角度，发回下位机时需要除以 57.3 转回弧度）
   // 因为下位机没有发来速度和加速度数据，所以 vel 和 acc 继续填 0 即可
-  gimbal.send(
+  gimbal.sb_send(
       false, 
       false, 
       current_state.yaw / 57.3f, 
@@ -283,7 +301,10 @@ int main(int argc, char * argv[])
       0.0f, 
       current_state.pitch / 57.3f, 
       0.0f, 
-      0.0f
+      0.0f,
+      0,
+      0,
+      0
   );
 
   return 0;

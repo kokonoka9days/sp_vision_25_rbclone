@@ -53,8 +53,8 @@ outpost_max_temp_lost_count: 75
 # low_speed_delay_time: 0.093 # s
 
 #####-----aimer参数-----##### 12mm
-yaw_offset: 2.1 # degree 
-pitch_offset: -2.0 # degree 2
+yaw_offset: 1.3 # degree 
+pitch_offset: -1.8 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
@@ -134,12 +134,12 @@ send_canid: 0xff
 can_interface: "can0"
 
 #####-----gimbal参数-----#####
-com_port: "/dev/ttyACM0"
+com_port: "/dev/ttyACM1"
 
 
 #####-----planner-----#####
-target_dist_error: -0.23
-target_h_error: 0.28
+target_dist_error: 0
+target_h_error: 0
 fire_thresh: 0.003 # 
 small_armor_tolerance: 0.02
 big_armor_tolerance: 0.22

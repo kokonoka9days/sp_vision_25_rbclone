@@ -109,19 +109,19 @@ Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t)
 void Gimbal::sb_send(io::sb_VisionToGimbal VisionToGimbal)
 {
   sb_tx_data_.mode = VisionToGimbal.mode;
-  sb_tx_data_.work_mode = VisionToGimbal.work_mode;
   sb_tx_data_.yaw = VisionToGimbal.yaw;
   sb_tx_data_.yaw_vel = VisionToGimbal.yaw_vel;
   sb_tx_data_.yaw_acc = VisionToGimbal.yaw_acc;
   sb_tx_data_.pitch = VisionToGimbal.pitch;
   sb_tx_data_.pitch_vel = VisionToGimbal.pitch_vel;
   sb_tx_data_.pitch_acc = VisionToGimbal.pitch_acc;
-      reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
-  sb_tx_data_.crc16 = tools::get_crc16(
-    reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
+  sb_tx_data_.target_x = VisionToGimbal.target_x;
+  sb_tx_data_.target_y = VisionToGimbal.target_y;
+  sb_tx_data_.target_name = VisionToGimbal.target_name;
 
   try {
-    serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
+    // 2. 这里的底层缓冲必须是 sb_tx_data_，不能是 tx_data_ ！
+    serial_.write(reinterpret_cast<uint8_t *>(&sb_tx_data_), sizeof(sb_tx_data_));
   } catch (const std::exception & e) {
     tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
   }
@@ -137,8 +137,6 @@ void Gimbal::send(io::VisionToGimbal VisionToGimbal)
   tx_data_.pitch_vel = VisionToGimbal.pitch_vel;
   tx_data_.pitch_acc = VisionToGimbal.pitch_acc;
       reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
-  tx_data_.crc16 = tools::get_crc16(
-    reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
 
   try {
     serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
@@ -159,11 +157,31 @@ void Gimbal::send(
   tx_data_.pitch_vel = pitch_vel;
   tx_data_.pitch_acc = pitch_acc;
       reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
-  tx_data_.crc16 = tools::get_crc16(
-    reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
 
   try {
     serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
+  } catch (const std::exception & e) {
+    tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
+  }
+}
+
+void Gimbal::sb_send(
+  bool control, bool fire, float yaw, float yaw_vel, float yaw_acc,
+  float pitch, float pitch_vel, float pitch_acc, float target_x, float target_y, uint8_t target_name)
+{
+  sb_tx_data_.mode = control ? (fire ? 2 : 1) : 0;
+  sb_tx_data_.yaw = yaw;
+  sb_tx_data_.yaw_vel = yaw_vel;
+  sb_tx_data_.yaw_acc = yaw_acc;
+  sb_tx_data_.pitch = pitch;
+  sb_tx_data_.pitch_vel = pitch_vel;
+  sb_tx_data_.pitch_acc = pitch_acc;
+  sb_tx_data_.target_x = target_x;
+  sb_tx_data_.target_y = target_y;
+  sb_tx_data_.target_name = target_name;
+
+  try {
+    serial_.write(reinterpret_cast<const uint8_t *>(&sb_tx_data_), sizeof(sb_tx_data_)); 
   } catch (const std::exception & e) {
     tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
   }

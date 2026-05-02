@@ -46,25 +46,25 @@ int main(int argc, char * argv[])
 
   // 主相机（工业相机）
   io::Camera short_camera(short_camera_config_path);
-  io::Camera long_camera(long_camera_config_path);
+  // io::Camera long_camera(long_camera_config_path);
   
   
   // 全向感知相机（工业相机）
   std::string omnl_yaml_name = cli.get<std::string>("l_cam");
   std::string omnr_yaml_name = cli.get<std::string>("r_cam");
-  io::Camera omn_cam1(omnl_yaml_name);
-  io::Camera omn_cam2(omnr_yaml_name);
+  // io::Camera omn_cam1(omnl_yaml_name);
+  // io::Camera omn_cam2(omnr_yaml_name);
   auto omn_l_yaml = tools::load(omnl_yaml_name);
   auto omn_r_yaml = tools::load(omnr_yaml_name);
-  omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
-  omn_cam2.main_and_secondary = tools::read<std::string>(omn_r_yaml, "main_and_secondary");
+  // omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
+  // omn_cam2.main_and_secondary = tools::read<std::string>(omn_r_yaml, "main_and_secondary");
   // io::Camera back_camera("configs/camera.yaml");
   tools::logger()->info("初始化");
   // 改为使用Gimbal串口通信（替代CBoard）
   // io::Gimbal gimbal(short_camera_config_path);
   
   // 视觉模块
-  auto_aim::YOLO yolo(short_camera_config_path, false);  // 主相机YOLO
+  auto_aim::YOLO yolo(short_camera_config_path, true);  // 主相机YOLO
 
   auto_aim::Solver short_camera_solver(short_camera_config_path);
   auto_aim::Solver long_camera_solver(long_camera_config_path);
@@ -80,80 +80,34 @@ int main(int argc, char * argv[])
   std::chrono::steady_clock::time_point last_t;
   std::chrono::steady_clock::time_point last_t1;
   
-  // 获取云台模式
-  auto last_mode = io::GimbalMode::IDLE;
+
 
   // 新增一个变量用于记录全向相机是否处于暂停状态
   bool is_omn_paused = false; 
 
   // 主循环
   while (!exiter.exit()) {
-    // 读取云台模式
-    // auto mode = gimbal.mode();
+    std::list<auto_aim::Armor> armors;
     
-    // 如果没有暂停，才去读取全向相机图像
-    if (!is_omn_paused) {
-        omn_cam1.read(img1, timestamp);
-        omn_cam2.read(img2, timestamp);
-        long_camera.read(img4, timestamp);
-    }
     
     short_camera.read(img3, timestamp);
     // long_camera.read(img4, timestamp);
+    // omn_cam1.read(img4, timestamp);
+    // omn_cam1.read(img4, timestamp);
 
-    // auto now = std::chrono::steady_clock::now();
-    // auto dt = tools::delta_time(now, last_t);
-    // tools::logger()->info("{:.2f} fps", 1 / dt);
-    // last_t = now;
+    auto now = std::chrono::steady_clock::now();
+    auto dt = tools::delta_time(now, last_t);
+    tools::logger()->info("{:.2f} fps", 1 / dt);
+    last_t = now;
 
-    // nlohmann::json data;
-    //   data["t"] = 1 / dt;
+    armors = yolo.detect(img3);
 
-    //   plotter.plot(data);
-
-    i++;
-    if(i == 100)
-    {
-      i = 0;
-      auto now1 = std::chrono::steady_clock::now();
-      auto dt1 = tools::delta_time(now1, last_t1);
-      last_t1 = now1;
-      tools::logger()->info("100fps_time:{:.2f} s", dt1);
-    }
-
-
-    // 同样，如果没有暂停才更新显示（避免显示空矩阵）
-    if (!is_omn_paused && !img1.empty() && !img2.empty()) {
-        // cv::resize(img1, img1, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-        cv::imshow("omn_cam1", img1);
-        cv::imshow("omn_cam2", img2);
-        cv::imshow("long_camera", img4);
-    }
     
     cv::imshow("short_camera", img3);
-    // cv::imshow("long_camera", img4);
     
     auto key = cv::waitKey(1);
     if (key == 'q') break;
     
-    // if( key == 'p') {
-    //   // 暂停全向相机
-    //   tools::logger()->info("omn_cam stop");
-    //   omn_cam1.pause();
-    //   omn_cam2.pause();
-    //   long_camera.pause();
-    //   is_omn_paused = true; // 更新状态标志
-    // }
-    // if( key == 'r') {
-    //   // 恢复全向相机
-    //   last_t = std::chrono::steady_clock::now();
-    //   long_camera.resume();
-    //   omn_cam1.resume();
-    //   omn_cam2.resume();
-    //   is_omn_paused = false; // 更新状态标志
-    //   auto now = std::chrono::steady_clock::now();
-    //   auto dt = tools::delta_time(now, last_t);
-    //   tools::logger()->info("{:.2f} s",dt);
-    // }
+
 }
 }
