@@ -1,5 +1,5 @@
-enemy_color: "red"
-# enemy_color: "auto"
+# enemy_color: "red"
+enemy_color: "auto"
 
 #####-----神经网络参数-----#####
 yolo_name: yolov8
