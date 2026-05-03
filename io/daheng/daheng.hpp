@@ -68,7 +68,7 @@ private:
                         int nPixelFormat, int nPixelColorFilter, bool flip , bool mirror ) ;
 private:
     // 相机参数
-    std::string camera_sn_;
+    // std::string camera_sn_;
     double exposure_us_;
     double gain_;
     double gamma_;

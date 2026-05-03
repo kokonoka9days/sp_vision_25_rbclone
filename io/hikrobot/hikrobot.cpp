@@ -9,7 +9,7 @@ using namespace std::chrono_literals;
 namespace io
 {
 HikRobot::HikRobot(std::string sn, double exposure_us, double gain, const std::string & vid_pid, bool flip, bool mirror)
-: camera_sn_(sn), exposure_us_(exposure_us), gain_(gain), queue_(1), daemon_quit_(false), vid_(-1), pid_(-1), flip_(flip), mirror_(mirror)
+: CameraBase(sn), exposure_us_(exposure_us), gain_(gain), queue_(1), daemon_quit_(false), vid_(-1), pid_(-1), flip_(flip), mirror_(mirror)
 {
   set_vid_pid(vid_pid);
   if (libusb_init(NULL)) tools::logger()->warn("Unable to init libusb!");

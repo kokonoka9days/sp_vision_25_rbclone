@@ -53,7 +53,7 @@ DahengCamera::DahengCamera(std::string camera_sn,
                             bool flip,
                             bool mirror
                         )
-    : camera_sn_(camera_sn),
+    : CameraBase(camera_sn),
       exposure_us_(exposure_us), 
       gain_(gain), 
       gamma_(gamma),

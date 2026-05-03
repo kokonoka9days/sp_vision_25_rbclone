@@ -77,9 +77,7 @@ int main(int argc, char * argv[])
   
   cv::Mat img1, img2, img3, img4;
   std::chrono::steady_clock::time_point timestamp;
-  std::chrono::steady_clock::time_point last_t;
-  std::chrono::steady_clock::time_point last_t1;
-  
+  std::chrono::steady_clock::time_point last_t;  
 
 
   // 新增一个变量用于记录全向相机是否处于暂停状态
