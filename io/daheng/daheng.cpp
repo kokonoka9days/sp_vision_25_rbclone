@@ -327,13 +327,20 @@ bool DahengCamera::initialize_camera()
         tools::logger()->info("Capture thread started.");
         while (!capture_quit_) {
             
-            if (is_paused_) {
-                std::unique_lock<std::mutex> lock(pause_mutex_);
-                // 线程在这里完全停滞，CPU占用绝对 0%，直到 resume() 中调用 notify_all 唤醒它
-                pause_cv_.wait(lock, [this]() { return !is_paused_.load(); });
-            }
+            // if (is_paused_) {
+            //     std::unique_lock<std::mutex> lock(pause_mutex_);
+            //     // 线程在这里完全停滞，CPU占用绝对 0%，直到 resume() 中调用 notify_all 唤醒它
+            //     pause_cv_.wait(lock, [this]() { return !is_paused_.load(); });
+            // }
 
             cv::Mat frame = getFrame();
+
+            if (is_paused_.load()) {
+            stop_collecting_num = 0; // 假装还在正常工作，防止触发重连
+            std::this_thread::sleep_for(std::chrono::milliseconds(5)); // 稍微休眠，防止死循环吃满单核 CPU
+            continue;
+        }
+        
             if (!frame.empty()) {
                 CameraData data;
                 data.img = frame;
@@ -377,6 +384,11 @@ cv::Mat DahengCamera::getFrame() {
     if (GXGetImage(hDevice, &frameData, 100) == GX_STATUS_SUCCESS) {//在开始采集之后，通过此接口可以直接获取图像，注意此接口不能与回调采集方式混用。
 
         if (frameData.nStatus == 0) {
+
+            if (is_paused_.load()) {
+                return {}; 
+            }
+
             ProcessData(frameData.pImgBuf, pRaw8Buffer, pRGBframeData, frameData.nWidth, frameData.nHeight,
                         (int) PixelFormat, mirror_ ? 2 : 4, flip_, mirror_);
             cv::Mat src(cv::Size(frameData.nWidth, frameData.nHeight), CV_8UC3, pRGBframeData);
@@ -474,16 +486,16 @@ void DahengCamera::ProcessData(void *pImageBuf, void *pImageRaw8Buf, void *pImag
 void DahengCamera::pause() {
     is_paused_ = true; // 设置暂停标志位
     if (hDevice != nullptr) {
-        GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_STOP);
+        // GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_STOP);
     }
 }
 
 void DahengCamera::resume() {
     is_paused_ = false; // 清除暂停标志位
     if (hDevice != nullptr) {
-        GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_START);
+        // GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_START);
     }
-    pause_cv_.notify_all(); // 唤醒正在沉睡的线程
+    // pause_cv_.notify_all(); // 唤醒正在沉睡的线程
 }
 
 
