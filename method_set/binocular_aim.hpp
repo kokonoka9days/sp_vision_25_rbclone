@@ -68,8 +68,20 @@ struct BinocularAim{
       this->planners.Switch();
       is_short = !is_short;
       switch_time_point = std::chrono::steady_clock::now();
-      tracker.setSolver(this->solvers.aim_ptr);   
+      tracker.setSolver(this->solvers.aim_ptr); 
+      
+      // if(is_short)
+      // {
+      //   if(!this->cameras.long_aim.is_paused()) this->cameras.long_aim.pause();
+      //   if(!this->cameras.short_aim.is_paused()) this->cameras.short_aim.resume();
+      // }
+      // else
+      // {
+      //   if(!this->cameras.long_aim.is_paused()) this->cameras.long_aim.resume();
+      //   if(!this->cameras.short_aim.is_paused()) this->cameras.short_aim.pause();
+      // }
     };
+    // if(cameras.short_aim)
     if(camera_state == CameraState::whack || camera_state == CameraState::off_line){
       is_switch();
     }else {
@@ -92,7 +104,8 @@ struct BinocularAim{
     {
       std::this_thread::sleep_for(2ms);
       is_full = this->cameras.aim_ptr->try_read(img, timestamp);
-      if(!is_full) {
+      if(tools::delta_time(std::chrono::steady_clock::now(), 
+            this->cameras.aim_ptr->get_last_read_t()) > 1) {
         Switch(tracker);//切换至另一个相机
         // tools::logger()->debug("切换相机");
       }

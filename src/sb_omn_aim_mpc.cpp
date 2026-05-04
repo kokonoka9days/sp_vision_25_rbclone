@@ -120,9 +120,27 @@ int main(int argc, char * argv[])
         // auto_aim::Planner * plan_short_or_long = target->cam_is_short ? &bincameras.planners.short_aim : &bincameras.planners.long_aim;
         auto_aim::Planner * plan_short_or_long = &short_camera_planner;
         auto plan =  plan_short_or_long->plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
-        gimbal.send(
-          plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
-          plan.pitch_acc);
+        // 1. 设置默认值
+        uint8_t name = 0;
+        float tx = 0.0f;
+        float ty = 0.0f;
+
+        // 2. 只有在 target 有值时才去提取数据
+        if (target.has_value()) {
+          name = static_cast<uint8_t>(target->name) + 1;
+          tx = target->ekf_x()[0]; 
+          ty = target->ekf_x()[2]; 
+
+          // tools::logger()->info("{},{},{}", name,tx,ty);
+
+        }
+
+        gimbal.sb_send(
+        plan.control, plan.fire,
+        plan.yaw, plan.yaw_vel, plan.yaw_acc,
+        plan.pitch, plan.pitch_vel, plan.pitch_acc,
+        tx,ty,name);
+
 
         auto fired = gs.bullet_count > last_bullet_count;
         last_bullet_count = gs.bullet_count;
@@ -245,8 +263,21 @@ int main(int argc, char * argv[])
         if (tracker.state() == "lost" 
           // && omn_detect_num == 3
         ) {
-          omn_detect_num = 0;
-          gimbal.send(vision_cmd);
+          io::sb_VisionToGimbal sb_cmd;
+          sb_cmd.mode = vision_cmd.mode;         
+          sb_cmd.yaw = vision_cmd.yaw;
+          sb_cmd.yaw_vel = vision_cmd.yaw_vel;
+          sb_cmd.yaw_acc = vision_cmd.yaw_acc;
+          sb_cmd.pitch = vision_cmd.pitch;
+          sb_cmd.pitch_vel = vision_cmd.pitch_vel;
+          sb_cmd.pitch_acc = vision_cmd.pitch_acc;
+
+          // 全向感知暂时不输出特定目标的坐标和名称，赋 0 即可
+          sb_cmd.target_x = 0.0f;
+          sb_cmd.target_y = 0.0f;
+          sb_cmd.target_name = 0;
+
+          gimbal.sb_send(sb_cmd);
         }
     } 
 

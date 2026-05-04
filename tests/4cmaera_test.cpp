@@ -12,6 +12,7 @@
 #include "tasks/auto_aim/planner/planner.hpp"  // MPC 规划器
 #include "tasks/auto_aim/yolo.hpp"
 #include "tasks/omniperception/decider.hpp"
+#include "tasks/auto_aim/detector.hpp"
 #include "tools/exiter.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
@@ -52,11 +53,11 @@ int main(int argc, char * argv[])
   // 全向感知相机（工业相机）
   std::string omnl_yaml_name = cli.get<std::string>("l_cam");
   std::string omnr_yaml_name = cli.get<std::string>("r_cam");
-  io::Camera omn_cam1(omnl_yaml_name);
+  // io::Camera omn_cam1(omnl_yaml_name);
   io::Camera omn_cam2(omnr_yaml_name);
   auto omn_l_yaml = tools::load(omnl_yaml_name);
   auto omn_r_yaml = tools::load(omnr_yaml_name);
-  omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
+  // omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
   omn_cam2.main_and_secondary = tools::read<std::string>(omn_r_yaml, "main_and_secondary");
   // io::Camera back_camera("configs/camera.yaml");
   tools::logger()->info("初始化");
@@ -65,6 +66,8 @@ int main(int argc, char * argv[])
   
   // 视觉模块
   auto_aim::YOLO yolo(short_camera_config_path, false);  // 主相机YOLO
+  auto_aim::Detector detector(short_camera_config_path, true);
+
 
   auto_aim::Solver short_camera_solver(short_camera_config_path);
   auto_aim::Solver long_camera_solver(long_camera_config_path);
@@ -91,25 +94,22 @@ int main(int argc, char * argv[])
     // 读取云台模式
     // auto mode = gimbal.mode();
     
-    // 如果没有暂停，才去读取全向相机图像
-    if (!is_omn_paused) {
-        omn_cam1.read(img1, timestamp);
-        omn_cam2.read(img2, timestamp);
-        long_camera.read(img4, timestamp);
-    }
     
     short_camera.read(img3, timestamp);
-    // long_camera.read(img4, timestamp);
 
-    // auto now = std::chrono::steady_clock::now();
-    // auto dt = tools::delta_time(now, last_t);
-    // tools::logger()->info("{:.2f} fps", 1 / dt);
-    // last_t = now;
+    auto now = std::chrono::steady_clock::now();
+    auto dt = tools::delta_time(now, last_t);
+    tools::logger()->info("{:.2f} fps", 1 / dt);
+    last_t = now;
 
     // nlohmann::json data;
     //   data["t"] = 1 / dt;
 
     //   plotter.plot(data);
+
+    std::list<auto_aim::Armor> armors;
+
+     armors = detector.detect(img3);
 
     i++;
     if(i == 100)
@@ -119,15 +119,6 @@ int main(int argc, char * argv[])
       auto dt1 = tools::delta_time(now1, last_t1);
       last_t1 = now1;
       tools::logger()->info("100fps_time:{:.2f} s", dt1);
-    }
-
-
-    // 同样，如果没有暂停才更新显示（避免显示空矩阵）
-    if (!is_omn_paused && !img1.empty() && !img2.empty()) {
-        // cv::resize(img1, img1, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-        cv::imshow("omn_cam1", img1);
-        cv::imshow("omn_cam2", img2);
-        cv::imshow("long_camera", img4);
     }
     
     cv::imshow("short_camera", img3);

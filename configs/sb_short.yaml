@@ -2,8 +2,9 @@ pattern_cols: 11      # 棋盘格每行的内角点数（格子数-1）
 pattern_rows: 8      # 棋盘格每列的内角点数（格子数-1）
 square_size_mm: 30   # 棋盘格方块大小（毫米）
 
-# enemy_color: "red"
-enemy_color: "auto"
+# enemy_color: "blue"
+enemy_color: "red"
+# enemy_color: "auto"
 
 #####-----神经网络参数-----#####
 yolo_name: yolov8

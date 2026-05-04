@@ -122,26 +122,26 @@ int main(int argc, char * argv[])
         auto plan =  plan_short_or_long->plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
         
         // 1. 设置默认值
-      uint8_t name = 0;
-      float tx = 0.0f;
-      float ty = 0.0f;
+        uint8_t name = 0;
+        float tx = 0.0f;
+        float ty = 0.0f;
 
-      // 2. 只有在 target 有值时才去提取数据
-      if (target.has_value()) {
-        name = static_cast<uint8_t>(target->name) + 1;
-        tx = target->ekf_x()[0]; 
-        ty = target->ekf_x()[2]; 
+        // 2. 只有在 target 有值时才去提取数据
+        if (target.has_value()) {
+          name = static_cast<uint8_t>(target->name) + 1;
+          tx = target->ekf_x()[0]; 
+          ty = target->ekf_x()[2]; 
 
-        // tools::logger()->info("{},{},{}", name,tx,ty);
+          // tools::logger()->info("{},{},{}", name,tx,ty);
 
-      }
+        }
 
-      gimbal.sb_send(
-      plan.control, plan.fire,
-      plan.yaw, plan.yaw_vel, plan.yaw_acc,
-      plan.pitch, plan.pitch_vel, plan.pitch_acc,
-      tx,ty,name
-    );    
+        gimbal.sb_send(
+        plan.control, plan.fire,
+        plan.yaw, plan.yaw_vel, plan.yaw_acc,
+        plan.pitch, plan.pitch_vel, plan.pitch_acc,
+        tx,ty,name
+      );    
 
         auto fired = gs.bullet_count > last_bullet_count;
         last_bullet_count = gs.bullet_count;
@@ -206,7 +206,7 @@ int main(int argc, char * argv[])
     auto mode = gimbal.mode();
     auto now = std::chrono::steady_clock::now();
     auto dt = tools::delta_time(now, last);
-    // tools::logger()->info("{:.2f} fps", 1 / dt);
+    tools::logger()->info("{:.2f} fps", 1 / dt);
     last = now;
     
     // 读取主相机图像
@@ -289,6 +289,17 @@ int main(int argc, char * argv[])
       last_track_point = std::chrono::steady_clock::now();
       
     }
+
+    if(tracker.state() != "lost"){
+      if(!omn_cam1.is_paused()) omn_cam1.pause();
+      if(!omn_cam1.is_paused()) omn_cam1.pause();
+    }
+    else
+    {
+      if(!omn_cam1.is_paused()) omn_cam1.resume();
+      if(!omn_cam1.is_paused()) omn_cam1.resume();
+    }
+
     // 放在主循环的 while (!exiter.exit()) 内部，原“丢跟踪强制切回短焦”的位置
     static auto last_force_switch_tp = std::chrono::steady_clock::now();
     if (tracker.state() == "lost" && !bincameras.is_short) {
@@ -402,8 +413,8 @@ int main(int argc, char * argv[])
 
     
     // ROS2通信 - 发布目标信息
-    Eigen::Vector4d target_info = decider.get_target_info(armors, targets);
-    ros2.publish(target_info);
+    // Eigen::Vector4d target_info = decider.get_target_info(armors, targets);
+    // ros2.publish(target_info);
   }
   
   // 清理

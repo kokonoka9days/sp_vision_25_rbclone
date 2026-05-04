@@ -29,7 +29,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/sb_long.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/sb_short.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -47,7 +47,7 @@ int main(int argc, char * argv[])
   io::Camera camera(config_path);
 
   auto_aim::YOLO yolo(config_path, true);
-  auto_aim::Detector detector(config_path, false);
+  auto_aim::Detector detector(config_path, true);
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, &solver);
   tracker.set_gimbal(&gimbal);
@@ -159,11 +159,11 @@ int main(int argc, char * argv[])
     camera.read(img, t);
     auto q = gimbal.q(t - 3ms);
 
-
-    double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
+    auto now = std::chrono::steady_clock::now();
+    double fps = 1./tools::delta_time(now, last_t);
     // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
-    last_t = t;
-    // tools::logger()->info("fps:: {:.2f}", fps);
+    last_t = now;
+    tools::logger()->info("fps:: {:.2f}", fps);
 
     auto ypr = tools::eulers(q, 2, 1, 0);
 
