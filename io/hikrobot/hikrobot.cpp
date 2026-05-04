@@ -126,7 +126,7 @@ void HikRobot::capture_start()
     tools::logger()->warn("MV_CC_CreateHandle failed: {:#x}", ret);
     return;
   }
-
+  // MV_CC_SetGrabStrategy(handle_,MV_GrabStrategy_LatestImagesOnly);
   ret = MV_CC_OpenDevice(handle_);
   if (ret != MV_OK) {
     tools::logger()->warn("MV_CC_OpenDevice failed: {:#x}", ret);
@@ -141,7 +141,7 @@ void HikRobot::capture_start()
   MVCC_FLOATVALUE gainRange;
   MV_CC_GetFloatValue(handle_,"AutoGainUpperLimit", &gainRange);//获取增益值范围
   set_float_value("Gain", gain_*gainRange.fMax );
-  MV_CC_SetFrameRate(handle_, 100);
+  MV_CC_SetFrameRate(handle_, 250);
 
   ret = MV_CC_StartGrabbing(handle_);
   if (ret != MV_OK) {
@@ -160,6 +160,15 @@ void HikRobot::capture_start()
     while (!capture_quit_) {
       // 删除了原有的 is_paused_ 锁死机制 (pause_cv_.wait)
 
+      if (is_paused_) {
+          std::unique_lock<std::mutex> lock(pause_mutex_);
+          // 线程在这里完全停滞，CPU占用绝对 0%，直到 resume() 中调用 notify_all 唤醒它
+          this->queue_.clear();
+          pause_cv_.wait(lock, [this]() { return !is_paused_.load(); });
+      }
+
+      // tools::logger()->info("q.size=={}", this->queue_.size());
+
       unsigned int ret;
       unsigned int nMsec = 100;
 
@@ -171,12 +180,6 @@ void HikRobot::capture_start()
         break; // 真实的获取失败，跳出循环，让 daemon_thread_ 触发重连
       }
 
-      // 2. 【软休眠核心特判】
-      // 若处于休眠状态，拿到底层数据后立刻释放归还，不进行任何耗CPU的转码
-      if (is_paused_.load()) {
-        MV_CC_FreeImageBuffer(handle_, &raw);
-        continue;
-      }
 
       // 3. 正常处理逻辑（非休眠状态下执行）
       auto timestamp = std::chrono::steady_clock::now();
@@ -315,12 +318,16 @@ void HikRobot::reset_usb() const
 
 void HikRobot::pause() {
     this->is_paused_ = true; 
+    this->queue_.clear();
     // 不再向硬件发送 MV_CC_StopGrabbing
 }
 
 void HikRobot::resume() {
     this->is_paused_ = false; 
     // 不再发送硬件指令或通知条件变量
+    // MV_CC_ClearImageBuffer(handle_);
+    // MV_CC_FreeImageBuffer(handle_, );
+    if(!is_paused_) pause_cv_.notify_all(); // 唤醒正在沉睡的线程
 }
 
 }  // namespace io

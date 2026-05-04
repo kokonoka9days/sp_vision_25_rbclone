@@ -26,6 +26,8 @@ public:
 
   virtual void pause() {} //停止
   virtual void resume() {} //开启
+
+  virtual void clear_camera_frame_buffer() = 0;
 };
 
 class Camera
@@ -55,6 +57,7 @@ public:
   std::string get_camera_sn(){
     return camera_->camera_sn_;
   }
+  void clear_camera_frame_buffer() {camera_->clear_camera_frame_buffer();};
   
 
 private:

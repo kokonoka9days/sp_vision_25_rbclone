@@ -53,7 +53,7 @@ int main(int argc, char * argv[])
   // 全向感知相机（工业相机）
   std::string omnl_yaml_name = cli.get<std::string>("l_cam");
   std::string omnr_yaml_name = cli.get<std::string>("r_cam");
-  // io::Camera omn_cam1(omnl_yaml_name);
+  io::Camera omn_cam1(omnl_yaml_name);
   io::Camera omn_cam2(omnr_yaml_name);
   auto omn_l_yaml = tools::load(omnl_yaml_name);
   auto omn_r_yaml = tools::load(omnr_yaml_name);
@@ -95,7 +95,7 @@ int main(int argc, char * argv[])
     // auto mode = gimbal.mode();
     
     
-    short_camera.read(img3, timestamp);
+    short_camera.try_read(img3, timestamp);
 
     auto now = std::chrono::steady_clock::now();
     auto dt = tools::delta_time(now, last_t);
@@ -111,15 +111,15 @@ int main(int argc, char * argv[])
 
      armors = detector.detect(img3);
 
-    i++;
-    if(i == 100)
-    {
-      i = 0;
-      auto now1 = std::chrono::steady_clock::now();
-      auto dt1 = tools::delta_time(now1, last_t1);
-      last_t1 = now1;
-      tools::logger()->info("100fps_time:{:.2f} s", dt1);
-    }
+    // i++;
+    // if(i == 100)
+    // {
+    //   i = 0;
+    //   auto now1 = std::chrono::steady_clock::now();
+    //   auto dt1 = tools::delta_time(now1, last_t1);
+    //   last_t1 = now1;
+    //   tools::logger()->info("100fps_time:{:.2f} s", dt1);
+    // }
     
     cv::imshow("short_camera", img3);
     // cv::imshow("long_camera", img4);
@@ -127,24 +127,29 @@ int main(int argc, char * argv[])
     auto key = cv::waitKey(1);
     if (key == 'q') break;
     
-    // if( key == 'p') {
-    //   // 暂停全向相机
-    //   tools::logger()->info("omn_cam stop");
-    //   omn_cam1.pause();
-    //   omn_cam2.pause();
-    //   long_camera.pause();
-    //   is_omn_paused = true; // 更新状态标志
-    // }
-    // if( key == 'r') {
-    //   // 恢复全向相机
-    //   last_t = std::chrono::steady_clock::now();
-    //   long_camera.resume();
-    //   omn_cam1.resume();
-    //   omn_cam2.resume();
-    //   is_omn_paused = false; // 更新状态标志
-    //   auto now = std::chrono::steady_clock::now();
-    //   auto dt = tools::delta_time(now, last_t);
-    //   tools::logger()->info("{:.2f} s",dt);
-    // }
+    if( key == 'p') {
+      // 暂停全向相机
+      auto t1 = std::chrono::steady_clock::now();
+      omn_cam1.pause();
+      omn_cam2.pause();
+      long_camera.pause();
+      // short_camera.pause();
+      is_omn_paused = true; // 更新状态标志
+      auto t2 = std::chrono::steady_clock::now();
+      auto dt = tools::delta_time(t2, t1);
+      tools::logger()->info("挂起相机线程 {:.2f} s",dt);
+    }
+    if( key == 'r') {
+      // 恢复全向相机
+      auto t1 = std::chrono::steady_clock::now();
+      long_camera.resume();
+      omn_cam1.resume();
+      omn_cam2.resume();
+      // short_camera.resume();
+      is_omn_paused = false; // 更新状态标志
+      auto t2 = std::chrono::steady_clock::now();
+      auto dt = tools::delta_time(t2, t1);
+      tools::logger()->info("恢复相机线程 {:.2f} s",dt);
+    }
 }
 }

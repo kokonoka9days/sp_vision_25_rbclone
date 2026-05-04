@@ -167,14 +167,14 @@ int main(int argc, char * argv[])
     // short_camera.read(img, timestamp);
 
     // auto q = gimbal.q(timestamp - bincameras.cameras.aim_ptr->timestamp_offset);
-    auto q = gimbal.q(timestamp - short_camera.timestamp_offset);
+    auto q = gimbal.q(timestamp - 3ms);
 
 
     // tools::logger()->info("当前使用 {} 焦镜头", bincameras.is_short ? "短" : "长");
     
     
     // 获取云台欧拉角
-    gimbal_euler = tools::eulers(short_camera_solver.R_gimbal2world(), 2, 1, 0);
+    gimbal_euler = tools::eulers(q, 2, 1, 0);
 
     float yaw_deg = gimbal_euler[0] * 180.0 / M_PI;
     float pitch_deg = gimbal_euler[1] * 180.0 / M_PI;
@@ -264,7 +264,7 @@ int main(int argc, char * argv[])
             }
         }
         // 自动长短焦切换
-        // bincameras.ChangeTheScope(targets.front(), tracker);
+        bincameras.ChangeTheScope(targets.front(), tracker);
     } else {
         target_queue.push(std::nullopt);
     }
@@ -292,9 +292,9 @@ int main(int argc, char * argv[])
     cv::imshow("reprojection", img);
     auto key = cv::waitKey(1);
     if (key == 'q') break;
-    // if (key == 'c'){// 强制切换长短焦
-    //     bincameras.Switch(tracker);
-    // }
+    if (key == 'c'){// 强制切换长短焦
+        bincameras.Switch(tracker);
+    }
   }
   
   // 清理

@@ -210,12 +210,13 @@ int main(int argc, char * argv[])
     last = now;
     
     // 读取主相机图像
-    bool is_full = bincameras.read(img, timestamp, tracker);
+    // bool is_full = bincameras.read(img, timestamp, tracker);
+    bincameras.cameras.aim_ptr->read(img, timestamp);
 
-    if(!is_full) {
-      tools::logger()->debug("[BinocularAim] 双目相机无法读到数据");
-      continue;
-    }
+    // if(!is_full) {
+    //   tools::logger()->debug("[BinocularAim] 双目相机无法读到数据");
+    //   continue;
+    // }
     
     // 获取云台姿态（四元数）
     Eigen::Quaterniond q = gimbal.q(timestamp - 3ms);
@@ -226,7 +227,7 @@ int main(int argc, char * argv[])
     bincameras.solvers.aim_ptr-> set_R_gimbal2world(q);
     
     // 获取云台欧拉角
-    gimbal_euler = tools::eulers(bincameras.solvers.aim_ptr->R_gimbal2world(), 2, 1, 0);
+    gimbal_euler = tools::eulers(q, 2, 1, 0);
 
     float yaw_deg = gimbal_euler[0] * 180.0 / M_PI;
     float pitch_deg = gimbal_euler[1] * 180.0 / M_PI;
@@ -284,31 +285,22 @@ int main(int argc, char * argv[])
 
       gimbal.sb_send(sb_cmd);
     }
-
     if(tracker.state() != "lost"){
       last_track_point = std::chrono::steady_clock::now();
-      
-    }
-
-    if(tracker.state() != "lost"){
-      if(!omn_cam1.is_paused()) omn_cam1.pause();
-      if(!omn_cam1.is_paused()) omn_cam1.pause();
+      omn_cam1.pause();
+      omn_cam2.pause();      
     }
     else
     {
-      if(!omn_cam1.is_paused()) omn_cam1.resume();
-      if(!omn_cam1.is_paused()) omn_cam1.resume();
+      omn_cam1.resume();
+      omn_cam2.resume();
     }
 
     // 放在主循环的 while (!exiter.exit()) 内部，原“丢跟踪强制切回短焦”的位置
-    static auto last_force_switch_tp = std::chrono::steady_clock::now();
     if (tracker.state() == "lost" && !bincameras.is_short) {
-        auto now = std::chrono::steady_clock::now();
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_force_switch_tp).count() > 500) {
-            last_force_switch_tp = now;
             bincameras.Switch(tracker);
-        }
-}
+        
+    }
 
 
     {
@@ -401,13 +393,13 @@ int main(int argc, char * argv[])
     }
 
     
-    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    cv::imshow("reprojection", img);
-    auto key = cv::waitKey(1);
-    if (key == 'q') break;
-    if (key == 'c'){// 强制切换长短焦
-        bincameras.Switch(tracker);
-    }
+    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    // cv::imshow("reprojection", img);
+    // auto key = cv::waitKey(1);
+    // if (key == 'q') break;
+    // if (key == 'c'){// 强制切换长短焦
+    //     bincameras.Switch(tracker);
+    // }
 
 
 

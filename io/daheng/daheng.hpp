@@ -50,7 +50,7 @@ public:
      */
     void read(cv::Mat& img, std::chrono::steady_clock::time_point& timestamp) override;
     bool try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) override;
-
+    void clear_camera_frame_buffer() { }
 private:
 
     struct CameraData {

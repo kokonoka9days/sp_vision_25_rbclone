@@ -21,7 +21,7 @@ public:
   BinocularType(T& short_aim_, T&long_aim_): short_aim(short_aim_), long_aim(long_aim_), aim_ptr(&short_aim_){}
 
   void Switch(){
-    aim_ptr = aim_ptr == &short_aim ? & long_aim: &short_aim;
+    aim_ptr = aim_ptr == &short_aim ? &long_aim: &short_aim;
   }
 };
 
@@ -56,13 +56,16 @@ struct BinocularAim{
   // double long_min_near = 1.5, long_max_far = 5.5;
 
   // 缓冲区 far2near and near2far
-  double short2long_point =  3.4;//(short_max_far + long_min_near)/2.;
+  double short2long_point =  4.4;//(short_max_far + long_min_near)/2.;
   double long2short_point = 2.5;
 
   /// @brief 长短焦强制切换
   void Switch(auto_aim::Tracker& tracker){
 
+    if(tools::delta_time(std::chrono::steady_clock::now(), switch_time_point) < 1.5) return ;
+    if(is_short && tracker.get_update_count() < 130 ) return;
     auto is_switch = [&](){
+      this->cameras.aim_ptr->clear_camera_frame_buffer();
       this->cameras.Switch();
       this->solvers.Switch();
       this->planners.Switch();
@@ -161,10 +164,10 @@ struct BinocularAim{
     // tools::logger()->info("dis = {}", dis);
     
     if(is_short && dis > short2long_point ){
-      tools::logger()->info("切换至长焦镜头, dis = {}", dis);
+      // tools::logger()->info("切换至长焦镜头, dis = {}", dis);
       Switch(tracker);
     }else if(!is_short && dis < long2short_point){
-      tools::logger()->info("切换至短焦镜头 dis = {}", dis);
+      // tools::logger()->info("切换至短焦镜头 dis = {}", dis);
       Switch(tracker);
     }
   }

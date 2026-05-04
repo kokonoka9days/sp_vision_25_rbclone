@@ -9,7 +9,7 @@ namespace io
 
 #define DAHENG_CHECK(status, msg) \
     if (status != GX_STATUS_SUCCESS) { \
-        tools::logger()->error("Daheng Camera Error [{}] at {}: {}", status, msg, #status); \
+        tools::logger()->error("[Daheng] 相机错误信息 [{}] at {}: {}", status, msg, #status); \
         return false; \
     }
 
@@ -19,7 +19,7 @@ bool DahengCamera::enum_and_check_camera()
     uint32_t device_num = 0;
     GX_STATUS status = GXUpdateDeviceList(&device_num, 1000); // 1秒超时
     if (status != GX_STATUS_SUCCESS || device_num == 0) {
-        tools::logger()->warn("C: 大恒相机设备数量为0或者sdk错误  E: No Daheng camera found or SDK error: {:#x}", status);
+        tools::logger()->warn("[Daheng] 大恒相机设备数量为0或者sdk错误  error: {:#x}", status);
         return false;
     }
 
@@ -31,14 +31,14 @@ bool DahengCamera::enum_and_check_camera()
     if (status == GX_STATUS_SUCCESS) {
         for (uint32_t i = 0; i < device_num; ++i) {
             if (camera_sn_ == pDeviceList[i].szSN) {
-                tools::logger()->info(" E: Found target camera: SN={}", pDeviceList[i].szSN);
+                tools::logger()->info("[Daheng] 找到目标相机 SN={}", pDeviceList[i].szSN);
                 delete[] pDeviceList;
                 return true;
             }
         }
-        tools::logger()->warn("C: 在 {} 个设备中未找到目标相机 SN {} ", camera_sn_, device_num);
+        tools::logger()->warn("[Daheng] 在 {} 个设备中未找到目标相机 SN {} ", device_num, camera_sn_ );
     } else {
-        tools::logger()->error("Failed to enumerate camera devices: {:#x}", status);
+        tools::logger()->error("[Daheng] 枚举摄像头设备失败: {:#x}", status);
     }
     
     delete[] pDeviceList;
@@ -60,19 +60,19 @@ DahengCamera::DahengCamera(std::string camera_sn,
       queue_(1),
       flip_(flip), mirror_(mirror)
 {
-    tools::logger()->info("Initializing Daheng Camera SDK...");
+    tools::logger()->info("[Daheng] 初始化大恒相机SDk...");
     
     // 初始化SDK
     GX_STATUS status = GXInitLib();
     if (status != GX_STATUS_SUCCESS) {
-        tools::logger()->error("Failed to initialize Daheng SDK: {:#x}", status);
+        tools::logger()->error("[Daheng] 大恒相机初始化失败，错误码: {:#x}", status);
         return;
     }
     sdk_initialized_ = true;
     
     // 关键修复：先枚举确认相机存在，等待1秒让设备准备好
     if (!enum_and_check_camera()) {
-        tools::logger()->warn("Initial camera check failed, will retry in daemon thread...");
+        tools::logger()->warn("[Daheng] 初始相机检查失败，将在守护线程中重试...");
     }
     
     std::this_thread::sleep_for(std::chrono::milliseconds(200)); // 给设备准备时间
@@ -84,14 +84,14 @@ DahengCamera::DahengCamera(std::string camera_sn,
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
             if ((!capture_quit_ && hDevice == nullptr) || !capturing_) {
-                tools::logger()->warn("Attempting reconnection...");
+                tools::logger()->warn("[Daheng] SN={} 正在尝试从重新连接...", this->camera_sn_);
                 capture_stop();                  // 安全停止采集线程
                 close_camera();                  // 关闭旧设备
                 stop_collecting_num = 0;
                 capture_quit_ = false;
 
                 if (open_camera()) {
-                    tools::logger()->info("Reconnected successfully.");
+                    tools::logger()->info("[Daheng] 相机连接成功。");
                     capturing_ = true;
                 } else {
                     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -102,7 +102,7 @@ DahengCamera::DahengCamera(std::string camera_sn,
         close_camera();
     });
     
-    tools::logger()->info("Daheng Camera wrapper initialized.");
+    tools::logger()->info("[Daheng] 大恒相机封装已初始化。");
 }
 
 
@@ -110,7 +110,7 @@ DahengCamera::DahengCamera(std::string camera_sn,
 
 DahengCamera::~DahengCamera()
 {
-    tools::logger()->info("Daheng Camera destructor called.");
+    tools::logger()->info("[Daheng] 大恒相机析构函数已调用。");
     
     daemon_quit_ = true;
     if (daemon_thread_.joinable()) {
@@ -135,13 +135,13 @@ bool DahengCamera::capture_stop()
     
     if (capture_thread_.joinable()) {
         capture_thread_.join();
-        tools::logger()->debug("Capture thread joined.");
+        tools::logger()->debug("[Daheng] 采集线程joined.");
     }
     
     if (hDevice != nullptr) {
         GX_STATUS status = GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_STOP);
         if (status != GX_STATUS_SUCCESS) {
-            tools::logger()->warn("Failed to stop acquisition: {:#x}", status);
+            tools::logger()->warn("[Daheng] 未能停止采集: {:#x}", status);
         }
     }
     
@@ -168,7 +168,7 @@ bool DahengCamera::capture_stop()
     }
     
     capturing_ = false;
-    tools::logger()->info("Camera capture stopped.");
+    tools::logger()->info("[Daheng]");
     return true;
 }
 
@@ -327,19 +327,20 @@ bool DahengCamera::initialize_camera()
         tools::logger()->info("Capture thread started.");
         while (!capture_quit_) {
             
-            // if (is_paused_) {
-            //     std::unique_lock<std::mutex> lock(pause_mutex_);
-            //     // 线程在这里完全停滞，CPU占用绝对 0%，直到 resume() 中调用 notify_all 唤醒它
-            //     pause_cv_.wait(lock, [this]() { return !is_paused_.load(); });
-            // }
+            if (is_paused_) {
+                std::unique_lock<std::mutex> lock(pause_mutex_);
+                // 线程在这里完全停滞，CPU占用绝对 0%，直到 resume() 中调用 notify_all 唤醒它
+                this->queue_.clear();
+                pause_cv_.wait(lock, [this]() { return !is_paused_.load(); });
+            }
 
             cv::Mat frame = getFrame();
 
-            if (is_paused_.load()) {
-            stop_collecting_num = 0; // 假装还在正常工作，防止触发重连
-            std::this_thread::sleep_for(std::chrono::milliseconds(5)); // 稍微休眠，防止死循环吃满单核 CPU
-            continue;
-        }
+            // if (is_paused_.load()) {
+            // stop_collecting_num = 0; // 假装还在正常工作，防止触发重连
+            // std::this_thread::sleep_for(std::chrono::milliseconds(5)); // 稍微休眠，防止死循环吃满单核 CPU
+            // continue;
+            // }
         
             if (!frame.empty()) {
                 CameraData data;
@@ -356,13 +357,13 @@ bool DahengCamera::initialize_camera()
                 {
                     stop_collecting_num = 11;
                     capturing_ = false;
-                    tools::logger()->debug("[daheng] 相机{}读取不到数据", this->camera_sn_);
+                    tools::logger()->debug("[daheng] 相机sn = {}读取不到数据", this->camera_sn_);
                 }
                 // tools::logger()->debug("[daheng] 相机读取不到数据");
 
             }
         }
-        tools::logger()->info("Capture thread stopped.");
+        tools::logger()->info("[Daheng] sn = {}采集线程已停止", this->camera_sn_);
     });
     
     return true;
@@ -374,7 +375,7 @@ bool DahengCamera::initialize_camera()
 bool DahengCamera::open_camera()
 {
     if (hDevice != nullptr) {
-        tools::logger()->warn("Camera already opened!");
+        tools::logger()->warn("[Daheng] 相机sn = {}已打开", this->camera_sn_);
         return true;
     }
     return initialize_camera();
@@ -385,9 +386,6 @@ cv::Mat DahengCamera::getFrame() {
 
         if (frameData.nStatus == 0) {
 
-            if (is_paused_.load()) {
-                return {}; 
-            }
 
             ProcessData(frameData.pImgBuf, pRaw8Buffer, pRGBframeData, frameData.nWidth, frameData.nHeight,
                         (int) PixelFormat, mirror_ ? 2 : 4, flip_, mirror_);
@@ -485,6 +483,7 @@ void DahengCamera::ProcessData(void *pImageBuf, void *pImageRaw8Buf, void *pImag
 
 void DahengCamera::pause() {
     is_paused_ = true; // 设置暂停标志位
+    this->queue_.clear();
     if (hDevice != nullptr) {
         // GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_STOP);
     }
@@ -495,7 +494,7 @@ void DahengCamera::resume() {
     if (hDevice != nullptr) {
         // GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_START);
     }
-    // pause_cv_.notify_all(); // 唤醒正在沉睡的线程
+    if(!is_paused_) pause_cv_.notify_all(); // 唤醒正在沉睡的线程
 }
 
 
