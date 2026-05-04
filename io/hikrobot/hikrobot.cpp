@@ -149,7 +149,7 @@ void HikRobot::capture_start()
   MVCC_FLOATVALUE gainRange;
   MV_CC_GetFloatValue(handle_,"AutoGainUpperLimit", &gainRange);//获取增益值范围
   set_float_value("Gain", gain_*gainRange.fMax );
-  MV_CC_SetFrameRate(handle_, 100);
+  MV_CC_SetFrameRate(handle_, 2250);
 
   ret = MV_CC_StartGrabbing(handle_);
   if (ret != MV_OK) {
@@ -323,16 +323,16 @@ void HikRobot::reset_usb() const
 
 void HikRobot::pause() {
     this->is_paused_ = true; // 设置暂停标志位
-    if (handle_ != nullptr) {
-        MV_CC_StopGrabbing(handle_);
-    }
+    // if (handle_ != nullptr) {
+    //     MV_CC_StopGrabbing(handle_);
+    // }
 }
 
 void HikRobot::resume() {
     this->is_paused_ = false; // 清除暂停标志位
-    if (handle_ != nullptr) {
-        MV_CC_StartGrabbing(handle_);
-    }
+    // if (handle_ != nullptr) {
+    //     MV_CC_StartGrabbing(handle_);
+    // }
     pause_cv_.notify_all(); // 唤醒正在沉睡的线程
 }
 

@@ -473,16 +473,16 @@ void DahengCamera::ProcessData(void *pImageBuf, void *pImageRaw8Buf, void *pImag
 
 void DahengCamera::pause() {
     is_paused_ = true; // 设置暂停标志位
-    if (hDevice != nullptr) {
-        GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_STOP);
-    }
+    // if (hDevice != nullptr) {
+    //     GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_STOP);
+    // }
 }
 
 void DahengCamera::resume() {
     is_paused_ = false; // 清除暂停标志位
-    if (hDevice != nullptr) {
-        GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_START);
-    }
+    // if (hDevice != nullptr) {
+    //     GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_START);
+    // }
     pause_cv_.notify_all(); // 唤醒正在沉睡的线程
 }
 

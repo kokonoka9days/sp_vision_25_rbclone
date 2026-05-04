@@ -11,6 +11,7 @@
 #include "tasks/auto_aim/tracker.hpp"
 #include "tasks/auto_aim/planner/planner.hpp"  // MPC 规划器
 #include "tasks/auto_aim/yolo.hpp"
+#include "tasks/auto_aim/detector.hpp"
 #include "tasks/omniperception/decider.hpp"
 #include "tools/exiter.hpp"
 #include "tools/logger.hpp"
@@ -21,8 +22,8 @@
 
 const std::string keys =
   "{help h usage ? |                                             | 输出命令行参数说明}"
-  "{short_camera   | ../configs/sb_short.yaml                          | 短焦相机配置文件路径 }"
-  "{long_camera    | ../configs/sb_long.yaml                     | 长焦相机配置文件路径 }"
+  "{short_camera   | ../configs/test/xiaohei.yaml                          | 短焦相机配置文件路径 }"
+  "{long_camera    | ../configs/test/cap_thread_test.yaml                     | 长焦相机配置文件路径 }"
   "{l_cam          | ../configs/omn_camera_left.yaml | 左感知相机 }"
   "{r_cam          | ../configs/omn_camera_right.yaml  | 右感知相机 }";
 
@@ -46,7 +47,7 @@ int main(int argc, char * argv[])
 
   // 主相机（工业相机）
   io::Camera short_camera(short_camera_config_path);
-  // io::Camera long_camera(long_camera_config_path);
+  io::Camera long_camera(long_camera_config_path);
   
   
   // 全向感知相机（工业相机）
@@ -65,6 +66,7 @@ int main(int argc, char * argv[])
   
   // 视觉模块
   auto_aim::YOLO yolo(short_camera_config_path, true);  // 主相机YOLO
+  auto_aim::Detector detector(short_camera_config_path, true);
 
   auto_aim::Solver short_camera_solver(short_camera_config_path);
   auto_aim::Solver long_camera_solver(long_camera_config_path);
@@ -77,9 +79,7 @@ int main(int argc, char * argv[])
   
   cv::Mat img1, img2, img3, img4;
   std::chrono::steady_clock::time_point timestamp;
-  std::chrono::steady_clock::time_point last_t;
-  std::chrono::steady_clock::time_point last_t1;
-  
+  std::chrono::steady_clock::time_point last_t;  
 
 
   // 新增一个变量用于记录全向相机是否处于暂停状态
@@ -97,17 +97,40 @@ int main(int argc, char * argv[])
 
     auto now = std::chrono::steady_clock::now();
     auto dt = tools::delta_time(now, last_t);
-    tools::logger()->info("{:.2f} fps", 1 / dt);
+    // tools::logger()->info("{:.2f} fps", 1 / dt);
     last_t = now;
 
     armors = yolo.detect(img3);
-
+    // armors = detector.detect(img3);
     
     cv::imshow("short_camera", img3);
     
     auto key = cv::waitKey(1);
     if (key == 'q') break;
-    
+
+    if( key == 'p') {
+    // 暂停相机
+    auto last_t__1 = std::chrono::steady_clock::now();
+    // omn_cam1.pause();
+    // omn_cam2.pause();
+    long_camera.pause();
+    is_omn_paused = true; // 更新状态标志
+    auto now__1 = std::chrono::steady_clock::now();
+    auto dt = tools::delta_time(now__1, last_t__1);
+    tools::logger()->info("暂停相机线程 耗时：{:.5f} s",dt);
+  }
+  if( key == 'r') {
+    // 恢复相机
+    auto last_t__1 = std::chrono::steady_clock::now();
+    long_camera.resume();
+    // omn_cam1.resume();
+    // omn_cam2.resume();
+    is_omn_paused = false; // 更新状态标志
+    auto now__1 = std::chrono::steady_clock::now();
+    auto dt = tools::delta_time(now__1, last_t__1);
+    tools::logger()->info("恢复相机线程 耗时：{:.5f} s",dt);
+  }
+  
 
 }
 }
