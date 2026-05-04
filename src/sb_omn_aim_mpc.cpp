@@ -281,6 +281,17 @@ int main(int argc, char * argv[])
         }
     } 
 
+    if(tracker.state() != "lost"){
+      omn_cam1.pause();
+      omn_cam2.pause();      
+    }
+    else
+    {
+      omn_cam1.resume();
+      omn_cam2.resume();
+    }
+
+
     
 
     {
