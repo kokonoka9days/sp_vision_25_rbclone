@@ -57,7 +57,7 @@ pitch_offset: -1.9 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
-high_speed_delay_time: 0.025 # s   远 0.25
+high_speed_delay_time: 0.017 # s   远 0.25
 low_speed_delay_time: 0.017 # s    远 0.25
 
 #####-----shooter参数-----#####
@@ -153,7 +153,7 @@ target_h_error: 0
 fire_thresh: 0.003 # 
 small_armor_tolerance: 0.12
 big_armor_tolerance: 0.22
-gimbal_control_delay: 0
+gimbal_control_delay: 0.014
 tower_pitch_prediction_time: 0.05
 
 max_yaw_acc: 50

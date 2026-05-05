@@ -29,7 +29,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/sb_short.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/sb_long.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -172,7 +172,7 @@ int main(int argc, char * argv[])
     float roll_deg = ypr[2] * 180.0 / M_PI;
         
     solver.set_R_gimbal2world(q);
-    auto armors = yolo.detect(img);
+    auto armors = detector.detect(img);
     auto targets = tracker.track(armors, t);
     // recor.record(img, q, t);
 

@@ -76,7 +76,7 @@ std::list<Armor> Detector::detect(const cv::Mat & bgr_img, int frame_count)
       if (!check_name(armor)) continue;
 
       armor.type = get_type(armor);
-      if (!check_type(armor)) continue;
+      // if (!check_type(armor)) continue;
 
       armor.center_norm = get_center_norm(bgr_img, armor.center);
       armors.emplace_back(armor);
@@ -263,8 +263,8 @@ bool Detector::check_name(const Armor & armor) const
 bool Detector::check_type(const Armor & armor) const
 {
   auto name_ok = armor.type == ArmorType::small
-                   ? (armor.name != ArmorName::one && armor.name != ArmorName::base)
-                   : (armor.name == ArmorName::one || armor.name == ArmorName::base);
+                   ? (armor.name != ArmorName::one || armor.name == ArmorName::base)
+                   : (armor.name == ArmorName::one && armor.name != ArmorName::base);
 
   // 保存异常的图案，用于分类器的迭代
   if (!name_ok) {
@@ -327,9 +327,13 @@ ArmorType Detector::get_type(const Armor & armor)
 
   // tools::logger()->debug("[Detector] get armor type by name: {}", ARMOR_NAMES[armor.name]);
 
-  // 英雄、基地只能是大装甲板
-  if (armor.name == ArmorName::one || armor.name == ArmorName::base) {
+  // 英雄、
+  if (armor.name == ArmorName::one ) {
     return ArmorType::big;
+  }
+  // 基地只能是小装甲板
+  if(armor.name == ArmorName::base){
+    return ArmorType::small;
   }
 
   // 其他所有（工程、哨兵、前哨站、步兵）都是小装甲板
