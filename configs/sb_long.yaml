@@ -38,6 +38,13 @@ max_side_ratio: 1.5
 max_rectangular_error: 25 # degree
 # min_confidence: 0.8
 
+number_classifier:
+  model_path: "../assets/rv_model/mlp.onnx"   # 模型路径 (确保文件存在)
+  label_path: "../assets/rv_model/label.txt"  # 标签文件路径
+  threshold: 0.5                 # 数字分类阈值
+  ignore_classes: ["negative"]   # 忽略的类别
+
+
 #####-----tracker参数-----#####
 min_detect_count: 5
 max_temp_lost_count: 11
@@ -60,6 +67,7 @@ leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
 high_speed_delay_time: 0.025 # s   远 0.25
 low_speed_delay_time: 0.017 # s    远 0.25
+far_pitch_offset: 0.0
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree

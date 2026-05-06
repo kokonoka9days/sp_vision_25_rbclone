@@ -176,11 +176,11 @@ void NumberClassifier::classify(std::vector<Armor> & armors)
         // 适配 ArmorType::big (原 ArmorType::LARGE)
         if (armor.type == ArmorType::big) {
           mismatch_armor_type =
-            current_label == "outpost" || current_label == "2" || current_label == "guard" || current_label == "sentry";
+            current_label == "outpost" || current_label == "2" || current_label == "guard" || current_label == "sentry" || current_label == "base";
         } 
         // 适配 ArmorType::small (原 ArmorType::SMALL)
         else if (armor.type == ArmorType::small) {
-          mismatch_armor_type = current_label == "1" || current_label == "base";
+          mismatch_armor_type = current_label == "1";
         }
         return mismatch_armor_type;
       }),
