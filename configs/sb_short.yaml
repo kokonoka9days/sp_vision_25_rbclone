@@ -2,17 +2,20 @@ pattern_cols: 11      # 棋盘格每行的内角点数（格子数-1）
 pattern_rows: 8      # 棋盘格每列的内角点数（格子数-1）
 square_size_mm: 30   # 棋盘格方块大小（毫米）
 
-# enemy_color: "red"
-enemy_color: "auto"
+# enemy_color: "blue"
+enemy_color: "red"
+# enemy_color: "auto"
 
 #####-----神经网络参数-----#####
-yolo_name: yolov8
+yolo_name: trt_0708
 classify_model: ../assets/tiny_resnet.onnx
 yolo11_model_path: ../assets/yolo11.xml
 yolov8_model_path: ../assets/yolov8.xml
 yolov5_model_path: ../assets/yolov5.xml
+tensorrt_engine_path: ../assets/0708_int8_calib.engine
+# tensorrt_engine_path: ../assets/0708_fp16_super.engine
 device: CPU
-min_confidence: 0.8
+min_confidence: 0.6
 use_traditional: true
 
 #####-----ROI-----#####
@@ -51,12 +54,12 @@ outpost_max_temp_lost_count: 75
 # low_speed_delay_time: 0.093 # s
 
 #####-----aimer参数-----##### 12mm
-yaw_offset: 1.7 # degree -2.5
-pitch_offset: -2.4 # degree 2
+yaw_offset: 0.5 # degree -2.5
+pitch_offset: -1.9 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
-high_speed_delay_time: 0.025 # s   远 0.25
+high_speed_delay_time: 0.017 # s   远 0.25
 low_speed_delay_time: 0.017 # s    远 0.25
 
 #####-----shooter参数-----#####
@@ -77,7 +80,7 @@ auto_fire: true # 是否由自瞄控制射击
 
 # 6mm camera
 camera_name: "daheng"
-camera_sn: "FDN21050087"
+camera_sn: "KE0210030295"
 exposure_us: 5000
 gain: 0.6
 gamma: 0.3
@@ -133,7 +136,7 @@ send_canid: 0xff
 can_interface: "can0"
 
 #####-----gimbal参数-----#####
-com_port: "/dev/ttyACM0"
+com_port: "/dev/ttyACM1"
 # 陀螺仪是否装错, 编号012分别代表电控坐标系ypr，想换旋转轴只需要对编号进行互换即可，负号就是对当前值取负，交换完再取负
 # 上车前记得对齐电控坐标系和济瞄惯性系
 gimbal_y1: 1
@@ -147,12 +150,12 @@ gimbal_r3: 3
 
 
 #####-----planner-----#####
-target_dist_error: -0.23
-target_h_error: 0.28
+target_dist_error: 0
+target_h_error: 0
 fire_thresh: 0.003 # 
 small_armor_tolerance: 0.12
 big_armor_tolerance: 0.22
-gimbal_control_delay: 0
+gimbal_control_delay: 0.014
 tower_pitch_prediction_time: 0.05
 
 max_yaw_acc: 50

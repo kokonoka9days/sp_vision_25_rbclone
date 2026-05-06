@@ -50,7 +50,7 @@ public:
      */
     void read(cv::Mat& img, std::chrono::steady_clock::time_point& timestamp) override;
     bool try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) override;
-
+    void clear_camera_frame_buffer() { }
 private:
 
     struct CameraData {
@@ -68,7 +68,7 @@ private:
                         int nPixelFormat, int nPixelColorFilter, bool flip , bool mirror ) ;
 private:
     // 相机参数
-    std::string camera_sn_;
+    // std::string camera_sn_;
     double exposure_us_;
     double gain_;
     double gamma_;

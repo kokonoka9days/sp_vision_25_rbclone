@@ -115,6 +115,10 @@ public:
     not_empty_condition_.notify_all();  // 如果其他线程正在等待队列不为空，这样可以唤醒它们
   }
 
+  size_t size(){
+    return this->queue_.size();
+  }
+
 private:
   std::queue<T> queue_;
   size_t max_size_;

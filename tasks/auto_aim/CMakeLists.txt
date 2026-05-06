@@ -1,28 +1,92 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(OpenVINO_DIR "/opt/intel/openvino_2024.6.0/runtime/cmake")
+if(OPENVINO_MAKE)
+    set(OpenVINO_DIR "/opt/intel/openvino_2024.6.0/runtime/cmake")
+    find_package(OpenVINO REQUIRED COMPONENTS Runtime)
+    add_definitions(-DOPENVINO_MAKE)
+    add_library(auto_aim OBJECT 
+        armor.cpp
+        classifier.cpp 
+        detector.cpp
+        solver.cpp
+        aimer.cpp
+        target.cpp
+        tracker.cpp
+        voter.cpp
+        shooter.cpp
+        rv_detector.cpp
+        rv_number.cpp
+        yolo.cpp
+        yolos/yolov5.cpp
+        yolos/yolov8.cpp
+        yolos/yolo11.cpp
+        multithread/commandgener.cpp
+        multithread/mt_detector.cpp
+        planner/planner.cpp
+    )
+    add_subdirectory(planner/tinympc)
+    target_link_libraries(auto_aim io openvino::runtime tinympcstatic)
 
-find_package(OpenVINO REQUIRED COMPONENTS Runtime)
+    message(STATUS "--------------------OpenVINO_MAKE is ON--------------------")
+endif()
 
-add_subdirectory(planner/tinympc)
 
-add_library(auto_aim OBJECT 
-    armor.cpp
-    classifier.cpp 
-    detector.cpp
-    solver.cpp
-    aimer.cpp
-    target.cpp
-    tracker.cpp
-    voter.cpp
-    shooter.cpp
-    yolo.cpp
-    yolos/yolov5.cpp
-    yolos/yolov8.cpp
-    yolos/yolo11.cpp
-    multithread/commandgener.cpp
-    multithread/mt_detector.cpp
-    planner/planner.cpp
-)
+if(TENSOR_RT_MAKE)
+    add_definitions(-DTENSOR_RT_MAKE)
+    
+    find_package(CUDAToolkit REQUIRED)
 
-target_link_libraries(auto_aim io openvino::runtime tinympcstatic)
+    # OpenCV
+    find_package(OpenCV 4.5.4 REQUIRED)
+    include_directories(${OpenCV_INCLUDE_DIRS})
+
+    # TensorRT
+    find_library(TRT_INFER nvinfer)
+
+
+    enable_language(CUDA)
+
+    add_library(auto_aim OBJECT 
+        armor.cpp
+        solver.cpp
+        aimer.cpp
+        target.cpp
+        tracker.cpp
+        voter.cpp
+        shooter.cpp
+        rv_detector.cpp
+        rv_number.cpp
+        yolo.cpp
+        trt_yolos/trt_yolo_0708.cpp
+        trt_yolos/preprocess_kernel.cu
+        planner/planner.cpp
+    )
+    add_subdirectory(planner/tinympc)
+    target_link_libraries(auto_aim  PUBLIC 
+                                    io 
+                                    tinympcstatic     
+                                    ${OpenCV_LIBS}
+                                    nvinfer
+                                    CUDA::cudart  
+                                    pthread)
+
+    message(STATUS "--------------------TENSOR_RT_MAKE is ON--------------------")
+endif()
+
+if(NOT OPENVINO_MAKE AND NOT TENSOR_RT_MAKE)
+    add_library(auto_aim OBJECT 
+        armor.cpp
+        solver.cpp
+        aimer.cpp
+        target.cpp
+        tracker.cpp
+        voter.cpp
+        shooter.cpp
+        rv_detector.cpp
+        rv_number.cpp
+        planner/planner.cpp
+    )
+    add_subdirectory(planner/tinympc)
+    target_link_libraries(auto_aim io tinympcstatic)
+    message(STATUS "------------------OpenVINO_MAKE is OFF  TENSOR_RT_MAKE is OFF----------------------")
+endif()

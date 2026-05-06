@@ -55,7 +55,7 @@ auto_fire: true # 是否由自瞄控制射击
 camera_name: "hikrobot"
 camera_sn: "DA7188471"
 exposure_us: 5000
-gain: 0.7
+gain: 0.5
 gamma: 1
 vid_pid: "2bdf:0001"
 flip: false

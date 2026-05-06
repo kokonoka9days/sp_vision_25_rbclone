@@ -17,13 +17,17 @@ public:
   std::atomic<bool> is_paused_{false};
   std::atomic<bool> capturing_{false};// 相机正常运行
   std::chrono::steady_clock::time_point last_read_t;
+  std::string camera_sn_;
 
   virtual ~CameraBase() = default;
+  CameraBase(const std::string& sn) : camera_sn_(sn) {};
   virtual void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) = 0;
   virtual bool try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) = 0;
 
   virtual void pause() {} //停止
   virtual void resume() {} //开启
+
+  virtual void clear_camera_frame_buffer() = 0;
 };
 
 class Camera
@@ -50,6 +54,10 @@ public:
   bool get_capturing(){
     return this->camera_->capturing_.load();
   }
+  std::string get_camera_sn(){
+    return camera_->camera_sn_;
+  }
+  void clear_camera_frame_buffer() {camera_->clear_camera_frame_buffer();};
   
 
 private:
