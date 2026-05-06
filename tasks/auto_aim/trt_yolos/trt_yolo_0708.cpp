@@ -197,7 +197,7 @@ void TensorrtInferEngine::infer(Mat img, int detect_color) {
 
         Object obj;
         obj.prob = final_conf;
-        obj.color = color_id;
+        obj.color = !color_id;
         obj.label = class_id;
 
         for (int j = 0; j < 8; ++j) {

@@ -271,13 +271,13 @@ void Gimbal::read_thread()
 
     std::lock_guard<std::mutex> lock(mutex_);
     auto ypr_now = tools::eulers(q, 2, 1, 0);
-    // state_.yaw = ypr_now[0] * 57.3;
-    // state_.pitch = ypr_now[1] * 57.3;
+    state_.q2yaw = ypr_now[0] * 57.3;
+    state_.q2pitch = ypr_now[1] * 57.3;
 
     state_.yaw = tools::limit_rad(rx_data_.gimbal_yaw * CV_PI / 180. ) / CV_PI * 180. ;
     state_.pitch = tools::limit_rad(rx_data_.gimbal_pitch * CV_PI / 180. ) / CV_PI * 180. ;
-    state_.mode = rx_data_.mode;
-    // state_.mode = 1;
+    // state_.mode = rx_data_.mode;
+    state_.mode = 1;
     state_.enemy_color = !rx_data_.color;
     state_.bullet_speed = rx_data_.bullet_speed;
     // tools::logger()->info(state_.bullet_speed);

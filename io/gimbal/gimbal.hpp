@@ -82,6 +82,8 @@ struct GimbalState
   float yaw_vel;
   float pitch;
   float pitch_vel;
+  float q2yaw;
+  float q2pitch;
   uint8_t mode;
   uint8_t enemy_color; // 0: 蓝色, 1: 红色
   float bullet_speed;
