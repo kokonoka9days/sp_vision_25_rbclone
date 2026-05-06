@@ -11,4 +11,4 @@ cmake -B build
 # make -C build/ -j12
 
 # exec "$@"
-make -C build/ -j4
+make -C build/ -j10
