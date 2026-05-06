@@ -15,6 +15,8 @@ Planner::Planner(const std::string & config_path)
   auto yaml = tools::load(config_path);
   yaw_offset_ = tools::read<double>(yaml, "yaw_offset") / 57.3;
   pitch_offset_ = tools::read<double>(yaml, "pitch_offset") / 57.3;
+  target_dist_error_ = tools::read<double>(yaml, "target_dist_error");
+  target_h_error_ = tools::read<double>(yaml, "target_h_error");
   fire_thresh_ = tools::read<double>(yaml, "fire_thresh");
   decision_speed_ = tools::read<double>(yaml, "decision_speed");
   high_speed_delay_time_ = tools::read<double>(yaml, "high_speed_delay_time");
@@ -53,8 +55,10 @@ Plan Planner::plan(Target target, double bullet_speed)
       xyz = xyza.head<3>();
     }
   }
-  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
-  target.predict(bullet_traj.fly_time);
+  min_dist+=target_dist_error_;
+  double target_h = xyz.z(); 
+  target_h+= target_h_error_;
+  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, target_h);
 
   // 2. Get trajectory
   double yaw0;
@@ -133,6 +137,11 @@ bool Planner::rbShoot(Target target, double gimbal_yaw, bool tower_fixed_pitch){
 
   double shoot_range = target.armor_type == ArmorType::big ? big_armor_tolerance : small_armor_tolerance;
 
+  // if(target.name == ArmorName::outpost)
+  // {
+  //   shoot_range *= 0.1;
+  // }
+
     // 打击范围计算
   double ax = target_armor_xyza(0) - 0.5f * shoot_range * sin(target_yaw);
   double ay = target_armor_xyza(1) + 0.5f * shoot_range * cos(target_yaw);
@@ -160,6 +169,10 @@ bool Planner::rbShoot(Target target, double gimbal_yaw, bool tower_fixed_pitch){
       tools::limit_rad(atan2(target_armor_xyza(1), target_armor_xyza(0)) - gimbal_yaw );
   suggest_fire = (control_delta_angle < allow_fire_ang_max &&
                   control_delta_angle > allow_fire_ang_min && suggest_pitch) ;
+
+
+
+  if(!outpost_is_make) suggest_fire = 0;
   if(suggest_fire){
     // tools::logger()->info("fire! control_delta_angle: {},  allow_fire_ang_max: {}, allow_fire_ang_min: {}",
     //   control_delta_angle, allow_fire_ang_max, allow_fire_ang_min
@@ -194,9 +207,14 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
       xyz = xyza.head<3>();
     }
   }
-  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
+  min_dist+=target_dist_error_;
+  double target_h = xyz.z(); 
+  target_h+= target_h_error_;
+  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, target_h);
   
   target.predict(bullet_traj.fly_time);
+
+  // tools::logger()->info("h:{}, xy_d:{}, xyz_d:{}, fly_time:{}, ", target_h, min_dist, xyz.norm(), bullet_traj.fly_time);
 
   // 2. Get trajectory
   double yaw0;
@@ -242,6 +260,44 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   plan.pitch_acc = pitch_solver_->work->u(0, HALF_HORIZON);
 
   
+
+  // 前哨站迭代限制
+  if (target.name == ArmorName::outpost) {
+      double vz = target.ekf_x()(5); // 获取当前前哨站中心Z轴坐标
+      // double delta_z = std::abs(current_z - outpost_z_baseline_);
+      auto now = std::chrono::steady_clock::now();
+
+      // 如果Z轴变化幅度大于指定阈值（例如0.05米），重置基准和计时器，并禁止开火
+      if (vz > 0.09) { 
+          outpost_z_stable_start_time_ = now;
+          // suggest_fire = false; 
+          outpost_is_make = false;
+      } else {
+        // 如果变化幅度在阈值内，判断持续时间是否达到 0.7 秒
+        double stable_duration = tools::delta_time(now ,outpost_z_stable_start_time_ );
+        if (
+          // stable_duration < 1 || 
+          target.update_count_ < 500) {
+            // suggest_fire = false; // 持续时间不足 0.7s，不开火
+            outpost_is_make = false;
+        }
+        else{
+          outpost_is_make = true;
+        }
+      }
+
+      if(!outpost_is_make){
+        Eigen::Vector2d yaw_pitch_nan = heroaim(target, 100000, gimbal_yaw);
+        plan.yaw = yaw_pitch_nan(0);
+        plan.yaw_vel = 0;
+        plan.yaw_acc = 0;
+
+        plan.pitch = yaw_pitch_nan(1);
+        plan.pitch_vel = 0;
+        plan.pitch_acc = 0;
+      }
+  }
+
   // plan.fire =
   //   std::hypot(
   //     traj(0, HALF_HORIZON + shoot_offset_) - yaw_solver_->work->x(0, HALF_HORIZON + shoot_offset_),
@@ -252,13 +308,8 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   // tools::logger()->warn("fire:{}", plan.fire);
   plan.target_yaw = (aim_target_yaw + yaw_offset_ )* 57.3;
 
-  // ==========================================================
-  // [新增] 专属 5m 距离打中间 3m 的“击杀区”限制
-  // 仅当目标位于 -17° 到 17° 之间时，才允许保留开火指令
-  // ==========================================================
-  // if (plan.target_yaw < -5.0 || plan.target_yaw > 28.0) {
-  //     plan.fire = false; // 强制禁火，但云台依然会跟随让卡尔曼收敛
-  // }
+
+
 
   return plan;
 }
@@ -280,13 +331,12 @@ Plan Planner::rbHeroplan(Target target, double bullet_speed, double gimbal_yaw){
       xyz = xyza.head<3>();
     }
   }
-  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
-  // if(target.ekf_x()(7) < -0.69808){
-  //   bullet_traj.fly_time += 0.10;
-  // }
-  // if(target.ekf_x()(7) > 0.69808){
-  //   target.getEKFXest()
-  // }
+  min_dist+=target_dist_error_;
+  double target_h = xyz.z(); 
+  target_h+= target_h_error_;
+  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, target_h);
+
+  
   target.predict(bullet_traj.fly_time );
 
   // 2. Get trajectory

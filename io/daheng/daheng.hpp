@@ -48,8 +48,9 @@ public:
      * @param img 输出的图像
      * @param timestamp 时间戳
      */
-    void read(cv::Mat& img, std::chrono::steady_clock::time_point& timestamp);
-
+    void read(cv::Mat& img, std::chrono::steady_clock::time_point& timestamp) override;
+    bool try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) override;
+    void clear_camera_frame_buffer() { }
 private:
 
     struct CameraData {
@@ -67,7 +68,7 @@ private:
                         int nPixelFormat, int nPixelColorFilter, bool flip , bool mirror ) ;
 private:
     // 相机参数
-    std::string camera_sn_;
+    // std::string camera_sn_;
     double exposure_us_;
     double gain_;
     double gamma_;
@@ -88,13 +89,15 @@ private:
     void *pGammaLut = nullptr;
     
     // std::atomic<bool> connected_{false};
-    std::atomic<bool> capturing_{false};
+    // std::atomic<bool> capturing_{false};
     
     // 线程控制
     std::atomic<bool> daemon_quit_{false};
     std::atomic<bool> capture_quit_{false};
+    // std::atomic<bool> is_stop_collecting{false};// 断采集
     std::thread daemon_thread_;
     std::thread capture_thread_;
+    size_t stop_collecting_num = 0;
     
     // 数据队列
     tools::ThreadSafeQueue<CameraData> queue_;

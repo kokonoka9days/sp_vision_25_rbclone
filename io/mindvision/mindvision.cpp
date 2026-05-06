@@ -11,7 +11,8 @@ using namespace std::chrono_literals;
 namespace io
 {
 MindVision::MindVision(double exposure_us, double gamma, const std::string & vid_pid)
-: exposure_us_(exposure_us),
+: CameraBase("nan"),
+  exposure_us_(exposure_us),
   gamma_(gamma),
   handle_(-1),
   quit_(false),
@@ -58,6 +59,21 @@ void MindVision::read(cv::Mat & img, std::chrono::steady_clock::time_point & tim
   img = data.img;
   timestamp = data.timestamp;
 }
+
+bool MindVision::try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp)
+{
+  CameraData data;
+  bool read_full =  queue_.try_pop(data);
+
+  
+  if(read_full) {
+    img = data.img;
+    timestamp = data.timestamp;
+    last_read_t = data.timestamp;
+  }  
+  return read_full;
+}
+
 
 void MindVision::open()
 {

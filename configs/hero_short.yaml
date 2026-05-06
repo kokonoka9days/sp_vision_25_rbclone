@@ -43,8 +43,8 @@ pitch_offset: 1 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
-high_speed_delay_time: 0.09 # s
-low_speed_delay_time: 0.6 # s
+high_speed_delay_time: 0.026 # s
+low_speed_delay_time: 0.026 # s
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree
@@ -108,6 +108,8 @@ gimbal_r3: -2
 
 
 #####-----planner-----#####
+target_dist_error: -0.23
+target_h_error: 0.28
 fire_thresh: 0.003 # 
 small_armor_tolerance: 0.05
 big_armor_tolerance: 0.22

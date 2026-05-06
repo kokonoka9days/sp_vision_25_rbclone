@@ -44,6 +44,7 @@ public:
 
   inline void setSolver(Solver * solver__){this->solver_ = solver__; }
   void set_gimbal(io::Gimbal* gimbal) { gimbal_ = gimbal; }
+  inline size_t get_update_count(){return this->target_.update_count_;}
 private:
   Solver * solver_;
   io::Gimbal* gimbal_ = nullptr; // 新增一个云台指针，默认为空

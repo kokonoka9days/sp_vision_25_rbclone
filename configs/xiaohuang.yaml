@@ -1,8 +1,8 @@
-# enemy_color: "red"
-enemy_color: "blue"
+enemy_color: "auto"
+# enemy_color: "blue"
 
 #####-----神经网络参数-----#####
-yolo_name: yolov5
+yolo_name: yolov8
 classify_model: ../assets/tiny_resnet.onnx
 yolo11_model_path: ../assets/yolo11.xml
 yolov8_model_path: ../assets/yolov8.xml
@@ -38,13 +38,13 @@ max_temp_lost_count: 11
 outpost_max_temp_lost_count: 75
 
 #####-----aimer参数-----#####
-yaw_offset: 0 # degree -2.5
-pitch_offset: 5 # degree 2
+yaw_offset: -1 # degree -2.5
+pitch_offset: -0.9 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
-high_speed_delay_time: 0.09 # s
-low_speed_delay_time: 0.09 # s
+high_speed_delay_time: 0.025 # s
+low_speed_delay_time: 0.017 # s
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree
@@ -52,11 +52,21 @@ second_tolerance: 2 # 远距离射击容差，degree
 judge_distance: 2 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
-camera_name: "hikrobot"
-camera_sn: "DA7188447"
-exposure_us: 6000
-gain: 0.7
-vid_pid: "2bdf:0001"
+# camera_name: "hikrobot"
+# camera_sn: "DA9492714"
+# exposure_us: 6000
+# gain: 0.7
+# vid_pid: "2bdf:0001"
+# flip: true
+# mirror: true
+# timestamp_offset_us: 1000 #us
+
+camera_name: "daheng"
+camera_sn: "FDN24040486"
+exposure_us: 5000
+gain: 0.5
+gamma: 0.7  
+vid_pid: "2ba2:4d55"
 flip: true
 mirror: true
 timestamp_offset_us: 1000 #us
@@ -75,17 +85,16 @@ timestamp_offset_us: 1000 #us
 #  0 -1  0
 #  0  0  1
 # R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
-R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
+R_gimbal2imubody: [1, 0, 0, 0, 1, 0, 0, 0, -1]
 
-# 重投影误差: 0.0552px
-camera_matrix: [3572.373366013139, 0, 626.0114272779299, 0, 3574.718899324038, 518.1603213691299, 0, 0, 1]
-distort_coeffs: [-0.0016831637782622174, 0.22532265563867876, -0.0027424870134692965, -0.008116943124378675, -0.6996106730380051]
-
-# 相机同理想情况的偏角: yaw-0.89 pitch-0.80 roll-2.91 degree
-# 标定板到世界坐标系原点的水平距离: 3.31 m
-# 标定板同竖直摆放时的偏角: yaw-27.11 pitch13.66 roll-4.42 degree
-R_camera2gimbal: [0.016204877803424663, -0.013208430617676983, 0.9997814457650201, -0.9985794171285421, -0.05097575373680919, 0.015511937924892848, 0.05075972441412222, -0.9986125424265321, -0.014015722807625128]
-t_camera2gimbal: [0.18225833397346017, -0.026141913562430164, 0.049826940407687315]
+# 相机同理想情况的偏角: yaw-0.87 pitch-0.91 roll-1.00 degree
+# 标定板到世界坐标系原点的水平距离: 3.02 m
+# 标定板同竖直摆放时的偏角: yaw106.19 pitch9.00 roll-1.60 degree
+R_camera2gimbal: [0.015518470321146605, -0.015643013374447828, 0.9997572071315407, -0.9997280102863566, -0.017651979339967417, 0.015241819913124462, 0.017409265572517454, -0.9997218131850222, -0.01591269035321636]
+t_camera2gimbal: [0.18555554841512642, -0.016842994914804996, 0.030817235972619976]
+# 重投影误差: 0.1056px
+camera_matrix: [2441.827665989863, 0, 691.9455542050595, 0, 2425.7023748895353, 555.9135405662234, 0, 0, 1]
+distort_coeffs: [-0.049512074262373466, 0.23344510569813, 0.0026741357009112737, -0.00155865327356647, -0.41449838928263805]
 # _camera2gimbal第一位调yaw
 # _camera2gimbal第二位调yaw
 # _camera2gimbal第三位调pitch
@@ -100,8 +109,8 @@ com_port: "/dev/ttyACM0"
 # 陀螺仪是否装错, 编号012分别代表电控坐标系ypr，想换旋转轴只需要对编号进行互换即可，负号就是对当前值取负，交换完再取负
 # 上车前记得对齐电控坐标系和济瞄惯性系
 gimbal_y1: 1
-gimbal_p2: -3
-gimbal_r3: -2
+gimbal_p2: 2
+gimbal_r3: 3
 # 济瞄的惯性系  z轴往上, x轴是枪管指向
 #     x  z
 #      \ |
@@ -109,10 +118,12 @@ gimbal_r3: -2
 # y_ _ _ 0   z:yaw   x:roll   y:pitch
 
 #####-----planner-----#####
+target_dist_error: -0.23
+target_h_error: 0.28
 fire_thresh: 0.003 # 
 small_armor_tolerance: 0.12
 big_armor_tolerance: 0.22
-gimbal_control_delay: 0.08
+gimbal_control_delay: 0
 tower_pitch_prediction_time: 0.05
 
 max_yaw_acc: 50
@@ -147,7 +158,7 @@ detect:
   fanblades_body_contours_max_area: 4000
   standard_fanblade_path: ./assets/standard_fanblade.jpg
 
-model: "assets/yolo11_buff_int8.xml"
+model: "../assets/yolo11_buff_int8.xml"
 #####-----buff_aimer参数-----#####
 aim_time: 0.150         # s
 wait_time: 0.300        # s

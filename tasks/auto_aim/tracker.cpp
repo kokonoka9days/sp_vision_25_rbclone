@@ -7,6 +7,7 @@
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 
+
 namespace auto_aim
 {
 Tracker::Tracker(const std::string & config_path, Solver * solver)
@@ -149,8 +150,11 @@ std::list<Target> Tracker::track(
   //   [](const auto_aim::Armor & a, const auto_aim::Armor & b) { return a.priority < b.priority; });
 
   bool found = 0;
+
+  static uint8_t last_mode = g.mode;
+  bool mode_switch_0to1 = (last_mode == 0 && g.mode == 1);
   //按下右键时，mouse为1则跟随上一次的目标，不按则瞄准最近的装甲板
-  if(g.mode == 1)
+  if(!mode_switch_0to1)
   {
     if (state_ == "lost") {
         found = set_target(armors, t);
@@ -159,7 +163,7 @@ std::list<Target> Tracker::track(
     else {
       found = update_target(armors, t);
     }
-  }else if(g.mode == 0){
+  }else {
     if (state_ == "lost") {
         found = set_target(armors, t);
     }
@@ -178,6 +182,7 @@ std::list<Target> Tracker::track(
      
     }
   }
+  last_mode = g.mode;
   // found = set_target(armors, t);
 
   state_machine(found);
@@ -451,32 +456,21 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
 bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t)
 {
   target_.predict(t);
+  
+  bool found = false;
 
-  int found_count = 0;
-  double min_x = 1e10;  // 画面最左侧
-  for (const auto & armor : armors) {
-    if (armor.name != target_.name || armor.type != target_.armor_type) continue;
-    found_count++;
-    min_x = armor.center.x < min_x ? armor.center.x : min_x;
-  }
-
-  if (found_count == 0) return false;
-
-  // 只更新最左侧的装甲板
+  // 由于 armors 在 track/sb_track 中已经按距离图像中心的远近排序
+  // 遍历找到的第一个匹配目标的装甲板，即为视野中最居中、畸变最小的装甲板
   for (auto & armor : armors) {
-    if (
-      armor.name != target_.name || armor.type != target_.armor_type
-      || armor.center.x != min_x  // 恢复这个条件，确保只更新一个装甲板
-    )
-      continue;
-
-    solver_->solve(armor);
-
-    target_.update(armor);
-    break; // 找到第一个匹配的就退出
+    if (armor.name == target_.name && armor.type == target_.armor_type) {
+      solver_->solve(armor);
+      target_.update(armor);
+      found = true;
+      break; // 找到最优匹配后立即退出
+    }
   }
 
-  return true;
+  return found;
 }
 
 }  // namespace auto_aim
