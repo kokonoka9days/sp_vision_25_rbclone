@@ -398,10 +398,7 @@ Plan Planner::rbHeroplan(Target target, double bullet_speed, double gimbal_yaw){
           // suggest_fire = false; 
           outpost_is_make = false;
       } else {
-        // 如果变化幅度在阈值内，判断持续时间是否达到 0.7 秒
-        double stable_duration = tools::delta_time(now ,outpost_z_stable_start_time_ );
         if (
-          // stable_duration < 1 || 
           target.update_count_ < 500) {
             // suggest_fire = false; // 持续时间不足 0.7s，不开火
             outpost_is_make = false;
@@ -635,21 +632,47 @@ Eigen::Matrix<double, 2, 1> Planner::heroaim(const Target & target, double bulle
   auto min_dist1 = min_dist;
   if(target.name == ArmorName::outpost){
     Target target_pitch = target;
-    // double pitch_prediction_time_ = 0.05;
     min_dist1 = 1e10;
     Eigen::Vector3d xyz1;
     double yaw1;
+    double max_h_armor = 10e-6, min_h_armor = 10e+6;
+    size_t max_armor_id, min_armor_id;
     target_pitch.predict(tower_pitch_prediction_time_);
-    for (auto & xyza : target.armor_xyza_list()) {
+    // for (auto & xyza : target.armor_xyza_list()) {
+    //   auto dist = xyza.head<2>().norm();
+    //   if (dist < min_dist1) {
+    //     min_dist1 = dist;
+    //     xyz1 = xyza.head<3>();
+    //     yaw1 = xyza[3];
+    //   }
+    //   if(max_h_armor < xyza(2)) {
+    //     max_h_armor = xyza(2); 
+    //   }
+    // }
+    for(int i = 0; i < 3; i++){
+      auto  xyza = target.armor_xyza_list()[i];
       auto dist = xyza.head<2>().norm();
       if (dist < min_dist1) {
         min_dist1 = dist;
         xyz1 = xyza.head<3>();
         yaw1 = xyza[3];
       }
+      if(max_h_armor < xyza(2)) {
+        max_h_armor = xyza(2); 
+        max_armor_id = i;
+      }
+      if(min_h_armor > xyza(2)){
+        min_h_armor = xyza(2); 
+        min_armor_id = i;
+      }
     }
-    // aim_point_z = xyz1.z();
-    aim_point_z = target.ekf_x()(4);
+    size_t middle_armor_id = 0;
+    for(int i = 0; i < 3; i++){
+      if(min_armor_id != i && max_armor_id != i ) middle_armor_id = i;
+    }
+    // if(abs(max_h_armor - target.ekf_x()(4)) < 0.05) aim_point_z = 
+    // else aim_point_z = target.ekf_x()(4);
+    aim_point_z = target.armor_xyza_list()[middle_armor_id](2);
   }
   
   //补偿距离和补偿高度
