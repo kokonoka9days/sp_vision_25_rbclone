@@ -86,6 +86,7 @@ private:
   double yaw_offset_;
   double pitch_offset_;
   double fire_thresh_;
+  double target_dist_error_, target_h_error_;
   double low_speed_delay_time_, high_speed_delay_time_, decision_speed_;
   double small_armor_tolerance, big_armor_tolerance;
   double gimbal_control_delay;
@@ -105,6 +106,9 @@ private:
   Eigen::Matrix<double, 2, 1> heroaim(const Target & target, double bullet_speed, double gimbal_yaw);
   Trajectory get_trajectory(Target  target, double yaw0, double bullet_speed);
   Trajectory rbget_trajectory(Target target, double yaw0, double bullet_speed);
+
+  std::chrono::steady_clock::time_point outpost_z_stable_start_time_;
+  bool outpost_is_make = true;
 };
 
 }  // namespace auto_aim

@@ -40,14 +40,30 @@ io::VisionToGimbal Decider::decide_g(
   if (count_ < 0 || count_ > 2) {
     throw std::runtime_error("count_ out of valid range [0,2]");
   }
-  cams[count_]->read(omn_img, timestamp);
+  
+  io::VisionToGimbal vision_cmd;
+  vision_cmd.mode = 0;  // 不控制
+  vision_cmd.yaw = 0.0f;
+  vision_cmd.yaw_vel = 0.0f;
+  vision_cmd.yaw_acc = 0.0f;
+  vision_cmd.pitch = 0.0f;
+  vision_cmd.pitch_vel = 0.0f;
+  vision_cmd.pitch_acc = 0.0f;    
+  last_vision_cmd = vision_cmd;
+  
+  int camera_num = 2;
+  bool read_full = cams[count_]->try_read(omn_img, timestamp);
+  if(!read_full){
+    count_ = (count_ + 1) % camera_num;
+    // to
+  }
+  if(!read_full && !cams[count_]->try_read(omn_img, timestamp)){
+    count_ = (count_ + 1) % camera_num;
+    return vision_cmd;
+  }
+
   auto armors = yolo.detect(omn_img);
   auto empty = armor_filter(armors);
-
-  io::VisionToGimbal vision_cmd;
-
-  count_ = (count_ + 1) % 2;
-
 
   if(!empty){
     delta_angle = this->delta_angle_3d(armors, cams[count_]->main_and_secondary, left_solver, right_solver);
@@ -55,42 +71,31 @@ io::VisionToGimbal Decider::decide_g(
 
     tools::logger()->debug(
       "[{} camera] delta yaw:{:.2f},target pitch:{:.2f},armor number:{},armor name:{}",
-      ( cams[count_]->main_and_secondary), delta_angle[0], delta_angle[1],
+      ( cams[count_]->main_and_secondary), delta_angle[0]*57.3, delta_angle[1]*57.3,
       armors.size(), auto_aim::ARMOR_NAMES[armors.front().name]);
 
 
       
-    if(abs(delta_angle[0]) < 95){
-      delta_angle[0] = delta_angle[0] > 0 ? 95 : -95;
+    if(abs(delta_angle[0]) < 95/57.3){
+      delta_angle[0] = delta_angle[0] > 0 ? 95/57.3 : -95/57.3;
     }
     
     vision_cmd.mode = 3;  // 全向感知模式识别到目标，控制大云台
-    vision_cmd.yaw = static_cast<float>(-delta_angle[0] / 57.3);
+    vision_cmd.yaw = -delta_angle[0];
     vision_cmd.yaw_vel = 0.0f;  // 角速度设为0，可根据需要计算
     vision_cmd.yaw_acc = 0.0f;  // 角加速度设为0
-    vision_cmd.pitch = tools::limit_rad((delta_angle[1])/ 57.3);
+    vision_cmd.pitch = tools::limit_rad(delta_angle[1]);
     vision_cmd.pitch_vel = 0.0f;
     vision_cmd.pitch_acc = 0.0f;
 
     last_count_ = count_;
     last_vision_cmd = vision_cmd;
     
-    return vision_cmd;
-  }else{
-    // 如果没有找到目标，返回不控制的指令
-    vision_cmd.mode = 0;  // 不控制
-    vision_cmd.yaw = 0.0f;
-    vision_cmd.yaw_vel = 0.0f;
-    vision_cmd.yaw_acc = 0.0f;
-    vision_cmd.pitch = 0.0f;
-    vision_cmd.pitch_vel = 0.0f;
-    vision_cmd.pitch_acc = 0.0f;    
-    last_vision_cmd = vision_cmd;
-
-    // tools::logger()->debug("全向感知未识别到目标");
-    return vision_cmd;
   }
 
+  count_ = (count_ + 1) % 2;
+
+  return vision_cmd;
   // if (!empty && last_vision_cmd.mode == 0) {
     
   //   delta_angle = this->delta_angle(armors, cams[count_]->main_and_secondary);
@@ -275,9 +280,9 @@ Eigen::Vector2d Decider::delta_angle_3d(
     left_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0,-(105. * CV_PI / 180.0)), Eigen::Vector3d(-0.127611, -0.136932, 0.16) );
     auto xyz = armors.front().xyz_in_gimbal;
     tools::logger()->info("omn_xyz :x{}, y{} ,z{}", xyz(0), xyz(1), xyz(2));
-    auto ypd_angle = 120 - std::atan2(xyz(0), xyz(1))* 57.3 + 10;
+    auto ypd_angle = 140 /57.3 - std::atan2(xyz(0), xyz(1));
     delta_angle[0] = ypd_angle;
-    delta_angle[1] =std::atan2(xyz(2), std::sqrt(xyz(0) * xyz(0) + xyz(1) * xyz(1)))* 57.3; 
+    delta_angle[1] =std::atan2(xyz(2), std::sqrt(xyz(0) * xyz(0) + xyz(1) * xyz(1))); 
     return delta_angle;        
   }
 
@@ -285,13 +290,14 @@ Eigen::Vector2d Decider::delta_angle_3d(
     right_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0, -(105. * CV_PI / 180.0)), Eigen::Vector3d(-0.127611, 0.136932, 0.16) );
     auto xyz = armors.front().xyz_in_gimbal;
     tools::logger()->info("omn_xyz :x{}, y{} ,z{}", xyz(0), xyz(1), xyz(2));
-    auto ypd_angle = -120 - std::atan2(xyz(0), xyz(1))* 57.3 - 20;
+    auto ypd_angle = -140/57.3 - std::atan2(xyz(0), xyz(1));
     delta_angle[0] = ypd_angle;
-    delta_angle[1] =std::atan2(xyz(2), std::sqrt(xyz(0) * xyz(0) + xyz(1) * xyz(1)))* 57.3; 
+    delta_angle[1] = std::atan2(xyz(2), std::sqrt(xyz(0) * xyz(0) + xyz(1) * xyz(1))); 
     return delta_angle; 
   }
 
   else {
+    tools::logger()->debug("[Decider] left 和 right打错字了");
     delta_angle[0] = 170 + (54.2 / 2) - armors.front().center_norm.x * 54.2;
     delta_angle[1] = armors.front().center_norm.y * 44.5 - 44.5 / 2;
     return delta_angle;

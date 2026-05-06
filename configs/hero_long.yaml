@@ -43,8 +43,8 @@ pitch_offset: -1.2 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
-high_speed_delay_time: 0.09 # s
-low_speed_delay_time: 0.26 # s
+high_speed_delay_time: 0.026 # s
+low_speed_delay_time: 0.026 # s
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree
@@ -55,7 +55,7 @@ auto_fire: true # 是否由自瞄控制射击
 camera_name: "hikrobot"
 camera_sn: "DA7188471"
 exposure_us: 5000
-gain: 0.7
+gain: 0.5
 gamma: 1
 vid_pid: "2bdf:0001"
 flip: false
@@ -109,6 +109,8 @@ gimbal_r3: 3
 
 
 #####-----planner-----#####
+target_dist_error: -0.23
+target_h_error: 0.28
 fire_thresh: 0.2 # 
 small_armor_tolerance: 0.02
 big_armor_tolerance: 0.22

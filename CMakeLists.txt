@@ -31,6 +31,7 @@ if(OPENVINO_MAKE)
 endif()
 
 # add_subdirectory(sp_ws/src)
+find_package(Ceres REQUIRED)
 
 include_directories(${EIGEN3_INCLUDE_DIR})
 include_directories(${OpenCV_INCLUDE_DIRS})
@@ -55,6 +56,8 @@ add_executable(rb_auto_aim_debug  src/rb_auto_aim_debug.cpp)
 add_executable(rb_binocular_aim_debug  src/rb_binocular_aim_debug.cpp)
 add_executable(sb_omn_aim_mpc src/sb_omn_aim_mpc.cpp)
 add_executable(hero  src/hero.cpp)
+add_executable(rb_auto_standard_debug  src/rb_auto_standard_debug.cpp)
+add_executable(rb_auto_standard  src/rb_auto_standard.cpp)
 
 target_link_libraries(rb_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(sb_omn_aim_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io omniperception)
@@ -65,6 +68,8 @@ endif()
 add_executable(rb_rv_aim_debug src/rb_rv_aim_debug.cpp)
 target_link_libraries(rb_rv_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim  tools io)
 
+target_link_libraries(rb_auto_standard_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
+target_link_libraries(rb_auto_standard ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 
 ##################calibration################
 add_executable(capture calibration/capture.cpp)
@@ -129,6 +134,8 @@ add_executable(camera_thread_test tests/camera_thread_test.cpp)
 target_link_libraries(camera_thread_test ${OpenCV_LIBS} fmt::fmt auto_aim tools io)
 
 add_executable(time_calibrator tests/time_calibrator.cpp)
+add_executable(auto_label tests/auto_label.cpp)
+add_executable(cameras_test tests/cameras_test.cpp)
 target_link_libraries(time_calibrator ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
 add_executable(planner_test_offline tests/planner_test_offline.cpp)
@@ -151,7 +158,20 @@ target_link_libraries(camera_test ${OpenCV_LIBS} fmt::fmt tools io)
 target_link_libraries(rv_camera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim  tools io)
 target_link_libraries(cboard_test ${OpenCV_LIBS} fmt::fmt tools io)
 target_link_libraries(fire_test ${OpenCV_LIBS} fmt::fmt tools io)
-
+target_link_libraries(detector_video_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools auto_aim)
+target_link_libraries(gimbal_response_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
+target_link_libraries(multi_usbcamera_test ${OpenCV_LIBS} fmt::fmt tools io)
+target_link_libraries(usbcamera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+target_link_libraries(usbcamera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
+target_link_libraries(handeye_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+target_link_libraries(dm_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
+target_link_libraries(minimum_vision_system ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+target_link_libraries(omniperception_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim omniperception)
+target_link_libraries(binocular_camera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+target_link_libraries(4cmaera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+target_link_libraries(time_calibrator ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim Ceres::ceres)
+target_link_libraries(auto_label ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
+target_link_libraries(cameras_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
 
 add_executable(gimbal_test tests/gimbal_test.cpp)

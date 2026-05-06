@@ -51,6 +51,23 @@ public:
     queue_.pop();
   }
 
+  bool try_pop(T & value)
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+
+    // not_empty_condition_.wait(lock, [this] { return !queue_.empty(); });
+
+    if (queue_.empty()) {
+      return false;
+    }else{
+      value = queue_.front();
+      queue_.pop();     
+      return true;
+    }
+
+
+  }
+
   T pop()
   {
     std::unique_lock<std::mutex> lock(mutex_);
@@ -96,6 +113,10 @@ public:
       queue_.pop();
     }
     not_empty_condition_.notify_all();  // 如果其他线程正在等待队列不为空，这样可以唤醒它们
+  }
+
+  size_t size(){
+    return this->queue_.size();
   }
 
 private:

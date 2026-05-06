@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <memory>
 
 #include "buff_detector.hpp"
 #include "buff_type.hpp"
@@ -48,6 +49,8 @@ public:
 
   double spd = 0;  //调试用
 
+  virtual std::unique_ptr<Target> clone() const = 0;
+
 protected:
   virtual void init(double nowtime, const PowerRune & p) = 0;  // 纯虚函数
 
@@ -78,6 +81,8 @@ public:
 
   void predict(double dt) override;
 
+  std::unique_ptr<Target> clone() const override { return std::make_unique<SmallTarget>(*this); }
+
 private:
   void init(double nowtime, const PowerRune & p) override;
 
@@ -100,6 +105,8 @@ public:
     const std::optional<PowerRune> & p, std::chrono::steady_clock::time_point & timestamp) override;
 
   void predict(double dt) override;
+
+  std::unique_ptr<Target> clone() const override { return std::make_unique<BigTarget>(*this); }
 
 private:
   void init(double nowtime, const PowerRune & p) override;

@@ -25,9 +25,9 @@
 
 const std::string keys =
   "{help h usage ? |                                             | 输出命令行参数说明}"
-  "{aim_camera   | ../configs/sb_088.yaml                          | 自瞄相机配置文件路径 }"
-  "{l_cam          | ../configs/omniperception/omn_camera_left.yaml | 左感知相机 }"
-  "{r_cam          | ../configs/omniperception/omn_camera_right.yaml  | 右感知相机 }";
+  "{aim_camera   | ../configs/sb_short.yaml                          | 自瞄相机配置文件路径 }"
+  "{l_cam          | ../configs/omn_camera_left.yaml | 左感知相机 }"
+  "{r_cam          | ../configs/omn_camera_right.yaml  | 右感知相机 }";
 
 using namespace std::chrono_literals;
 
@@ -115,9 +115,26 @@ int main(int argc, char * argv[])
         // auto_aim::Planner * plan_short_or_long = target->cam_is_short ? &bincameras.planners.short_aim : &bincameras.planners.long_aim;
         auto_aim::Planner * plan_short_or_long = &short_camera_planner;
         auto plan =  plan_short_or_long->plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
-        gimbal.send(
-          plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
-          plan.pitch_acc);
+        // 1. 设置默认值
+        uint8_t name = 0;
+        float tx = 0.0f;
+        float ty = 0.0f;
+
+        // 2. 只有在 target 有值时才去提取数据
+        if (target.has_value()) {
+          name = static_cast<uint8_t>(target->name) + 1;
+          tx = target->ekf_x()[0]; 
+          ty = target->ekf_x()[2]; 
+
+          // tools::logger()->info("{},{},{}", name,tx,ty);
+
+        }
+
+        gimbal.sb_send(
+        plan.control, plan.fire,
+        plan.yaw, plan.yaw_vel, plan.yaw_acc,
+        plan.pitch, plan.pitch_vel, plan.pitch_acc,
+        tx,ty,name);
 
         auto fired = gs.bullet_count > last_bullet_count;
         last_bullet_count = gs.bullet_count;
@@ -202,15 +219,16 @@ int main(int argc, char * argv[])
     float yaw_deg = gimbal_euler[0] * 180.0 / M_PI;
     float pitch_deg = gimbal_euler[1] * 180.0 / M_PI;
     float roll_deg = gimbal_euler[2] * 180.0 / M_PI;
-    // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
-    // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
-    if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
-    //  tools::draw_text(img, fmt::format("DK_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 0, 255});
-    //   tools::draw_text(img, fmt::format("DK_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 0, 255});
-    // std::cout << "Roll: " << roll_deg << std::endl;
 
     // 主相机检测
     auto armors = yolo.detect(img);
+
+    // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
+    // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
+    if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
+     tools::draw_text(img, fmt::format("rb_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 128, 255});
+      tools::draw_text(img, fmt::format("rb_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 255, 255});
+    // std::cout << "Roll: " << roll_deg << std::endl;
     
     // // 更新无敌状态装甲板
     // decider.get_invincible_armor(ros2.subscribe_enemy_status());
@@ -236,7 +254,21 @@ int main(int argc, char * argv[])
           // && omn_detect_num == 3
         ) {
           omn_detect_num = 0;
-          gimbal.send(vision_cmd);
+          io::sb_VisionToGimbal sb_cmd;
+          sb_cmd.mode = vision_cmd.mode;         // 这里包含 mode = 3 的全向感知指令
+          sb_cmd.yaw = vision_cmd.yaw;
+          sb_cmd.yaw_vel = vision_cmd.yaw_vel;
+          sb_cmd.yaw_acc = vision_cmd.yaw_acc;
+          sb_cmd.pitch = vision_cmd.pitch;
+          sb_cmd.pitch_vel = vision_cmd.pitch_vel;
+          sb_cmd.pitch_acc = vision_cmd.pitch_acc;
+
+          // 全向感知暂时不输出特定目标的坐标和名称，赋 0 即可
+          sb_cmd.target_x = 0.0f;
+          sb_cmd.target_y = 0.0f;
+          sb_cmd.target_name = 0;
+
+          gimbal.sb_send(sb_cmd);
         }
     } 
 
@@ -356,13 +388,11 @@ int main(int argc, char * argv[])
     }
 
 
-    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    // cv::imshow("reprojection", img);
-    // auto key = cv::waitKey(1);
-    // if (key == 'q') break;
-    // if (key == 'c'){// 强制切换长短焦
-    //     bincameras.Switch(tracker);
-    // }
+    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    cv::imshow("reprojection", img);
+    auto key = cv::waitKey(1);
+    if (key == 'q') break;
+
 
 
 

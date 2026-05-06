@@ -17,7 +17,8 @@ public:
   MindVision(double exposure_us, double gamma, const std::string & vid_pid);
   ~MindVision() override;
   void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) override;
-
+  bool try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) override;
+  void clear_camera_frame_buffer() {}
 private:
   struct CameraData
   {
@@ -39,6 +40,8 @@ private:
   void close();
   void set_vid_pid(const std::string & vid_pid);
   void reset_usb() const;
+
+   
 };
 
 }  // namespace io
