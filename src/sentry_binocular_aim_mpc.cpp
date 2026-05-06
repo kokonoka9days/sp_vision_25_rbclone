@@ -120,9 +120,28 @@ int main(int argc, char * argv[])
         //MPC预测以及+自家火控
         auto_aim::Planner * plan_short_or_long = target->cam_is_short ? &bincameras.planners.short_aim : &bincameras.planners.long_aim;
         auto plan =  plan_short_or_long->plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
-        gimbal.send(
-          plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
-          plan.pitch_acc);
+        
+        // 1. 设置默认值
+        uint8_t name = 0;
+        float tx = 0.0f;
+        float ty = 0.0f;
+
+        // 2. 只有在 target 有值时才去提取数据
+        if (target.has_value()) {
+          name = static_cast<uint8_t>(target->name) + 1;
+          tx = target->ekf_x()[0]; 
+          ty = target->ekf_x()[2]; 
+
+          // tools::logger()->info("{},{},{}", name,tx,ty);
+
+        }
+
+        gimbal.sb_send(
+        plan.control, plan.fire,
+        plan.yaw, plan.yaw_vel, plan.yaw_acc,
+        plan.pitch, plan.pitch_vel, plan.pitch_acc,
+        tx,ty,name
+      );    
 
         auto fired = gs.bullet_count > last_bullet_count;
         last_bullet_count = gs.bullet_count;
@@ -191,12 +210,13 @@ int main(int argc, char * argv[])
     last = now;
     
     // 读取主相机图像
-    bool is_full = bincameras.read(img, timestamp, tracker);
+    // bool is_full = bincameras.read(img, timestamp, tracker);
+    bincameras.cameras.aim_ptr->read(img, timestamp);
 
-    if(!is_full) {
-      tools::logger()->debug("[BinocularAim] 双目相机无法读到数据");
-      continue;
-    }
+    // if(!is_full) {
+    //   tools::logger()->debug("[BinocularAim] 双目相机无法读到数据");
+    //   continue;
+    // }
     
     // 获取云台姿态（四元数）
     Eigen::Quaterniond q = gimbal.q(timestamp - 3ms);
@@ -207,7 +227,7 @@ int main(int argc, char * argv[])
     bincameras.solvers.aim_ptr-> set_R_gimbal2world(q);
     
     // 获取云台欧拉角
-    gimbal_euler = tools::eulers(bincameras.solvers.aim_ptr->R_gimbal2world(), 2, 1, 0);
+    gimbal_euler = tools::eulers(q, 2, 1, 0);
 
     float yaw_deg = gimbal_euler[0] * 180.0 / M_PI;
     float pitch_deg = gimbal_euler[1] * 180.0 / M_PI;
@@ -244,18 +264,42 @@ int main(int argc, char * argv[])
     // && tools::delta_time(last_track_point, std::chrono::steady_clock::now()) > 1
       // && omn_detect_num == 3
     ) {
+      // tools::logger()->debug("[Decider] 进入全向感知模式");
     // 只有需要时才执行重负载的 YOLO 和 决策
     io::VisionToGimbal vision_cmd = decider.decide_g(
         yolo, gimbal_euler, omn_cam1, omn_cam2, left_solver, right_solver);
-      gimbal.send(vision_cmd);
-    }
 
+      io::sb_VisionToGimbal sb_cmd;
+      sb_cmd.mode = vision_cmd.mode;         // 这里包含 mode = 3 的全向感知指令
+      sb_cmd.yaw = vision_cmd.yaw;
+      sb_cmd.yaw_vel = vision_cmd.yaw_vel;
+      sb_cmd.yaw_acc = vision_cmd.yaw_acc;
+      sb_cmd.pitch = vision_cmd.pitch;
+      sb_cmd.pitch_vel = vision_cmd.pitch_vel;
+      sb_cmd.pitch_acc = vision_cmd.pitch_acc;
+
+      // 全向感知暂时不输出特定目标的坐标和名称，赋 0 即可
+      sb_cmd.target_x = 0.0f;
+      sb_cmd.target_y = 0.0f;
+      sb_cmd.target_name = 0;
+
+      gimbal.sb_send(sb_cmd);
+    }
     if(tracker.state() != "lost"){
       last_track_point = std::chrono::steady_clock::now();
-      
+      omn_cam1.pause();
+      omn_cam2.pause();      
     }
-    if(tracker.state() == "lost"){//丢跟踪自动切换短焦
-      if(!bincameras.is_short) bincameras.Switch(tracker);
+    else
+    {
+      omn_cam1.resume();
+      omn_cam2.resume();
+    }
+
+    // 放在主循环的 while (!exiter.exit()) 内部，原“丢跟踪强制切回短焦”的位置
+    if (tracker.state() == "lost" && !bincameras.is_short) {
+            bincameras.Switch(tracker);
+        
     }
 
 
@@ -349,20 +393,20 @@ int main(int argc, char * argv[])
     }
 
     
-    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    cv::imshow("reprojection", img);
-    auto key = cv::waitKey(1);
-    if (key == 'q') break;
-    if (key == 'c'){// 强制切换长短焦
-        bincameras.Switch(tracker);
-    }
+    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    // cv::imshow("reprojection", img);
+    // auto key = cv::waitKey(1);
+    // if (key == 'q') break;
+    // if (key == 'c'){// 强制切换长短焦
+    //     bincameras.Switch(tracker);
+    // }
 
 
 
     
     // ROS2通信 - 发布目标信息
-    Eigen::Vector4d target_info = decider.get_target_info(armors, targets);
-    ros2.publish(target_info);
+    // Eigen::Vector4d target_info = decider.get_target_info(armors, targets);
+    // ros2.publish(target_info);
   }
   
   // 清理
@@ -371,7 +415,7 @@ int main(int argc, char * argv[])
     mpc_thread.join();
   }
   // 发送停止指令
-  gimbal.send(false, false, 0, 0, 0, 0, 0, 0);
+  gimbal.sb_send(false, false, 0, 0, 0, 0, 0, 0,0,0,0);
   
   return 0;
 }

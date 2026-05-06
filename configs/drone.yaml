@@ -1,23 +1,14 @@
-
-
-
-
-
-
-
-
-
-enemy_color: "auto"
+enemy_color: "red"
 # enemy_color: "blue"
 
 
 #####-----神经网络参数-----#####
-yolo_name: yolov8
+yolo_name: yolov5
 classify_model: ../assets/tiny_resnet.onnx
 yolo11_model_path: ../assets/yolo11.xml
 yolov8_model_path: ../assets/yolov8.xml
 yolov5_model_path: ../assets/yolov5.xml
-device: GPU
+device: CPU
 min_confidence: 0.8
 use_traditional: true
 
@@ -34,19 +25,16 @@ use_roi: false
 image_width: 1280
 image_height: 720
 
-fov_h: 61.9 #87.7
-fov_v: 77.3 
+fov_h: 57.7 #87.7
+fov_v: 56.7 
 
 
 new_fov_h: 63.133 #67
-new_fov_v: 65.0484
+new_fov_v: 75.0484
 usb_frame_rate: 120
 usb_exposure: 500 #1-80000______250
 usb_gamma: 160
 usb_gain: 10 #0-96
-
-#####-----decider参数-----#####
-mode: 1
 
 #####-----工业相机参数-----#####
 # camera_name: "hikrobot"
@@ -55,20 +43,18 @@ mode: 1
 # vid_pid: "2bdf:0001"
 # flip: false
 # mirror: false
-# timestamp_offset_us: 1000 #us
 
-camera_name: "daheng"
-camera_sn: "KE0210010004"
-exposure_us: 5000
+camera_name: "hikrobot"
+camera_sn: "DA9492714"
+exposure_us: 8000
 gain: 0.5
-gamma: 0.5  
-vid_pid: "2ba2:4d55"
-flip: true
-mirror: true
+gamma: 0.5
+vid_pid: "2bdf:0001"
+flip: false
+mirror: false
 timestamp_offset_us: 1000 #us
 
-
-# #####-----传统方法参数-----#####
+#####-----传统方法参数-----#####
 threshold: 150
 max_angle_error: 45 # degree
 min_lightbar_ratio: 1.5
@@ -80,27 +66,17 @@ max_side_ratio: 1.5
 max_rectangular_error: 25 # degree
 min_confidence: 0.8
 
+number_classifier:
+  model_path: "../assets/rv_model/mlp.onnx"   # 模型路径 (确保文件存在)
+  label_path: "../assets/rv_model/label.txt"  # 标签文件路径
+  threshold: 0.5                 # 数字分类阈值
+  ignore_classes: ["negative"]   # 忽略的类别
+
 #####-----cboard参数-----#####
 quaternion_canid: 0x01
 bullet_speed_canid: 0x110
 send_canid: 0xff
 can_interface: "can0"
-
-
-
-#####-----gimbal参数-----#####
-com_port: "/dev/ttyACM1"
-# 陀螺仪是否装错, 编号012分别代表电控坐标系ypr，想换旋转轴只需要对编号进行互换即可，负号就是对当前值取负，交换完再取负
-# 上车前记得对齐电控坐标系和济瞄惯性系
-gimbal_y1: 1
-gimbal_p2: 2
-gimbal_r3: -3
-# 济瞄的惯性系  z轴往上, x轴是枪管指向
-#     x  z
-#      \ |
-#       \|
-# y_ _ _ 0   z:yaw   x:roll   y:pitch
-
 
 #####-----tracker参数-----#####
 min_detect_count: 5
@@ -124,39 +100,18 @@ second_tolerance: 2 # 远距离射击容差，degree
 judge_distance: 3 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
-#####-----planner-----#####
-target_dist_error: -0.23
-target_h_error: 0.28
-fire_thresh: 0.0035
-small_armor_tolerance: 0.12
-big_armor_tolerance: 0.22
-tower_and_base_armor_tolerance_: 0.10  # 26赛季前哨站和基地装甲板检测宽度
-gimbal_control_delay: 0.08
-tower_pitch_prediction_time: 0.05
-
-max_yaw_acc: 50
-Q_yaw: [9e6, 0]
-R_yaw: [1]
-
-max_pitch_acc: 100
-Q_pitch: [9e6, 0]
-R_pitch: [1]
-
-
 #####-----decider参数-----#####
 mode: 1
 
 #####-----工业相机标定参数-----#####
 R_gimbal2imubody: [1, 0, 0, 0, 1, 0, 0, 0, 1]
 
-# 重投影误差: 0.0868px
-camera_matrix: [865.6250899407563, 0, 638.504110931064, 0, 865.6712100501375, 503.59263846059866, 0, 0, 1]
-distort_coeffs: [-0.09943623917037293, 0.10614026531742839, -0.0010132673774332932, -0.0003724015644815223, -0.021341154772438867]
+# 重投影误差: 0.1833px
+camera_matrix: [2414.9359264386621, 0, 717.26243105567414, 0, 2418.0489262208148, 582.68540529942845, 0, 0, 1]
+distort_coeffs: [-0.0209453389287673, 0.15028138841073832, -0.0006517722113234505, -0.0016861906197686788, 0]
 
 # 相机同理想情况的偏角: yaw-1.11 pitch0.01 roll-0.06 degree
 # 标定板到世界坐标系原点的水平距离: 1.20 m
 # 标定板同竖直摆放时的偏角: yaw123.89 pitch14.05 roll-0.86 degree
 R_camera2gimbal: [0.01928451708725664, 0.00012696140743255463, 0.99981402834802846, -0.99981344688553653, -0.0010834913551969569, 0.019284643459122196, 0.0010857382619952124, -0.99999940496346484, 0.00010604311483339372]
 t_camera2gimbal: [0.13089617453251859, 0.0038468007459533785, 0.094139945222010288]
-
-main_and_secondary: left

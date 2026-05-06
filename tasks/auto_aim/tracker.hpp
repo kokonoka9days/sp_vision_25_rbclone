@@ -32,6 +32,11 @@ public:
     bool cam_is_short = true,
     bool use_enemy_color = true);
 
+  std::list<Target> test_track(
+    std::list<Armor> & armors, std::chrono::steady_clock::time_point t, 
+    bool cam_is_short = true,
+    bool use_enemy_color = true);
+
 
   std::tuple<omniperception::DetectionResult, std::list<Target>> track(
     const std::vector<omniperception::DetectionResult> & detection_queue, std::list<Armor> & armors,
@@ -39,6 +44,7 @@ public:
 
   inline void setSolver(Solver * solver__){this->solver_ = solver__; }
   void set_gimbal(io::Gimbal* gimbal) { gimbal_ = gimbal; }
+  inline size_t get_update_count(){return this->target_.update_count_;}
 private:
   Solver * solver_;
   io::Gimbal* gimbal_ = nullptr; // 新增一个云台指针，默认为空

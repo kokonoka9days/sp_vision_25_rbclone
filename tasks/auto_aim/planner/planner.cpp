@@ -213,7 +213,7 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   
   target.predict(bullet_traj.fly_time);
 
-  // tools::logger()->info("h:{}, xy_d:{}, xyz_d:{}, fly_time:{}, ", xyz.z(), min_dist, xyz.norm(), bullet_traj.fly_time);
+  // tools::logger()->info("h:{}, xy_d:{}, xyz_d:{}, fly_time:{}, ", target_h, min_dist, xyz.norm(), bullet_traj.fly_time);
 
   // 2. Get trajectory
   double yaw0;
@@ -267,7 +267,7 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
       auto now = std::chrono::steady_clock::now();
 
       // 如果Z轴变化幅度大于指定阈值（例如0.05米），重置基准和计时器，并禁止开火
-      if (vz > 0.01) { 
+      if (vz > 0.09) { 
           outpost_z_stable_start_time_ = now;
           // suggest_fire = false; 
           outpost_is_make = false;

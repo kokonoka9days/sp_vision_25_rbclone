@@ -57,8 +57,8 @@ camera_name: "daheng"
 camera_sn: "FDN25030693"
 exposure_us: 5000
 gain: 0.5
-gamma: 0.5  
-vid_pid: "2ba2:4d55"
+gamma: 1
+vid_pid: "2bdf:0001"
 flip: false
 mirror: false
 timestamp_offset_us: 1000 #us
