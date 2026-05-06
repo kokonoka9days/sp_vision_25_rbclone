@@ -241,6 +241,7 @@ low_speed_delay_time: 0.09           # s  低速小陀螺&平移发弹延迟
 fire_thresh: 0.003                   # 原济瞄火控跟随火控阈值，更改影响火控频率和精度，已弃用
 small_armor_tolerance: 0.12          # cm 小装甲板开火区间，一般是一个小装甲板的宽度
 big_armor_tolerance: 0.22            # cm 大装甲板开火区间，一般是一个大装甲板的宽度
+tower_and_base_armor_tolerance_: 0.10  # 26赛季前哨站和基地装甲板检测宽度
 gimbal_control_delay: 0.08           # 云台跟随延迟 s
 tower_pitch_prediction_time: 0.05    # 英雄前哨站预测
 

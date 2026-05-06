@@ -58,7 +58,8 @@ public:
 
 
     auto future = std::chrono::steady_clock::now() + std::chrono::microseconds(int(delay_time * 1e6));
-
+    
+    
     target->predict(future);
 
     switch (strategy)
@@ -83,12 +84,15 @@ public:
   bool rbShoot(Target target, double gimbal_yaw,  bool tower_fixed_pitch = false);
   Plan rbHeroplan(Target target, double bullet_speed, double gimbal_yaw); 
 private:
+  bool is_far = false;
   double yaw_offset_;
   double pitch_offset_;
+  double far_pitch_offset_;
   double fire_thresh_;
   double target_dist_error_, target_h_error_;
   double low_speed_delay_time_, high_speed_delay_time_, decision_speed_;
   double small_armor_tolerance, big_armor_tolerance;
+  double tower_and_base_armor_tolerance_;
   double gimbal_control_delay;
   double tower_pitch_prediction_time_;
 

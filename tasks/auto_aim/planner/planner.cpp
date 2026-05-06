@@ -15,6 +15,7 @@ Planner::Planner(const std::string & config_path)
   auto yaml = tools::load(config_path);
   yaw_offset_ = tools::read<double>(yaml, "yaw_offset") / 57.3;
   pitch_offset_ = tools::read<double>(yaml, "pitch_offset") / 57.3;
+  far_pitch_offset_ = tools::read<double>(yaml, "far_pitch_offset") / 57.3;
   target_dist_error_ = tools::read<double>(yaml, "target_dist_error");
   target_h_error_ = tools::read<double>(yaml, "target_h_error");
   fire_thresh_ = tools::read<double>(yaml, "fire_thresh");
@@ -23,6 +24,7 @@ Planner::Planner(const std::string & config_path)
   low_speed_delay_time_ = tools::read<double>(yaml, "low_speed_delay_time");
   small_armor_tolerance = tools::read<double>(yaml, "small_armor_tolerance");
   big_armor_tolerance = tools::read<double>(yaml, "big_armor_tolerance");
+  tower_and_base_armor_tolerance_ = tools::read<double>(yaml, "tower_and_base_armor_tolerance_");
   gimbal_control_delay = tools::read<double>(yaml, "gimbal_control_delay");
   tower_pitch_prediction_time_ = tools::read<double>(yaml, "tower_pitch_prediction_time");
 
@@ -136,6 +138,8 @@ bool Planner::rbShoot(Target target, double gimbal_yaw, bool tower_fixed_pitch){
   // feedback_yaw = gimbal_yaw;
 
   double shoot_range = target.armor_type == ArmorType::big ? big_armor_tolerance : small_armor_tolerance;
+
+  if(target.name == ArmorName::base || target.name == ArmorName::outpost) shoot_range = tower_and_base_armor_tolerance_;
 
     // 打击范围计算
   double ax = target_armor_xyza(0) - 0.5f * shoot_range * sin(target_yaw);
@@ -329,8 +333,12 @@ Plan Planner::rbHeroplan(Target target, double bullet_speed, double gimbal_yaw){
   min_dist+=target_dist_error_;
   double target_h = xyz.z(); 
   target_h+= target_h_error_;
-  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, target_h);
 
+    // tools::logger()->info("h:{}, xy_d:{}, xyz_d:{}, fly_time:{}, ", xyz.z(), min_dist, xyz.norm(), bullet_traj.fly_time);
+
+  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, target_h);
+  is_far = target_h > 1.2;
+ tools::logger()->info("h:{}, xy_d:{}, xyz_d:{}, fly_time:{}, ", target_h, min_dist, xyz.norm(), bullet_traj.fly_time);
   
   target.predict(bullet_traj.fly_time );
 
@@ -375,6 +383,46 @@ Plan Planner::rbHeroplan(Target target, double bullet_speed, double gimbal_yaw){
                                                   );
   // tools::logger()->warn("fire:{}", plan.fire);
   plan.target_yaw = (aim_target_yaw + yaw_offset_ )* 57.3;
+
+
+
+  // 前哨站迭代限制
+  if (target.name == ArmorName::outpost) {
+      double vz = target.ekf_x()(5); // 获取当前前哨站中心Z轴坐标
+      // double delta_z = std::abs(current_z - outpost_z_baseline_);
+      auto now = std::chrono::steady_clock::now();
+
+      // 如果Z轴变化幅度大于指定阈值（例如0.05米），重置基准和计时器，并禁止开火
+      if (vz > 0.01) { 
+          outpost_z_stable_start_time_ = now;
+          // suggest_fire = false; 
+          outpost_is_make = false;
+      } else {
+        // 如果变化幅度在阈值内，判断持续时间是否达到 0.7 秒
+        double stable_duration = tools::delta_time(now ,outpost_z_stable_start_time_ );
+        if (
+          // stable_duration < 1 || 
+          target.update_count_ < 500) {
+            // suggest_fire = false; // 持续时间不足 0.7s，不开火
+            outpost_is_make = false;
+        }
+        else{
+          outpost_is_make = true;
+        }
+      }
+
+      if(!outpost_is_make){
+        Eigen::Vector2d yaw_pitch_nan = heroaim(target, 100000, gimbal_yaw);
+        plan.yaw = yaw_pitch_nan(0);
+        plan.yaw_vel = 0;
+        plan.yaw_acc = 0;
+
+        plan.pitch = yaw_pitch_nan(1) + 10/57.3;
+        plan.pitch_vel = 0;
+        plan.pitch_acc = 0;
+      }
+  }
+
   return plan;
 }
 
@@ -515,7 +563,9 @@ Eigen::Matrix<double, 2, 1> Planner::rbaim(const Target & target, double bullet_
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
   if (bullet_traj.unsolvable) throw std::runtime_error("Unsolvable bullet trajectory!");
 
-  return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + pitch_offset_};
+  auto now_pitch_offset = is_far ? far_pitch_offset_ : pitch_offset_;
+
+  return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + now_pitch_offset};
 
 
 }
@@ -613,7 +663,9 @@ Eigen::Matrix<double, 2, 1> Planner::heroaim(const Target & target, double bulle
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist1 - comp_dist, aim_point_z - comp_h);
   if (bullet_traj.unsolvable) throw std::runtime_error("Unsolvable bullet trajectory!");
 
-  return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + pitch_offset_};
+  auto now_pitch_offset = is_far ? far_pitch_offset_ : pitch_offset_;
+
+  return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + now_pitch_offset};
 }
 
 
