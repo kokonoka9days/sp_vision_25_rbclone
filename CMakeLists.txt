@@ -88,6 +88,16 @@ target_link_libraries(rb_auto_drone_debug
     ${TRT_LIB}
 )
 
+target_link_libraries(rb_auto_drone_ros_debug 
+    ${OpenCV_LIBS} 
+    fmt::fmt 
+    yaml-cpp 
+    auto_drone 
+    tools 
+    io 
+    ${TRT_LIB}
+)
+
 # 链接 ROS 2 依赖给主程序 (标准做法)
 ament_target_dependencies(rb_auto_drone_debug rclcpp std_msgs)
 ament_target_dependencies(rb_auto_drone_ros_debug rclcpp std_msgs)

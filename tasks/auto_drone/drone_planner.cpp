@@ -13,6 +13,12 @@ Planner::Planner(const std::string & config_path)
   auto yaml = tools::load(config_path);
   yaw_offset_ = tools::read<double>(yaml, "yaw_offset") / 57.3;
   pitch_offset_ = tools::read<double>(yaml, "pitch_offset") / 57.3;
+  auto xyz_offset_vec = tools::read<std::vector<double>>(yaml, "xyz_offset");
+  if (xyz_offset_vec.size() == 3) {
+    xyz_offset_ = Eigen::Vector3d(xyz_offset_vec[0], xyz_offset_vec[1], xyz_offset_vec[2]);
+  } else {
+    xyz_offset_ = Eigen::Vector3d::Zero();
+  }
   fire_thresh_ = tools::read<double>(yaml, "fire_thresh");
 
   // 初始化 MPC 求解器矩阵[cite: 1]
@@ -121,7 +127,7 @@ void Planner::setup_pitch_solver(const std::string & config_path)
 
 Eigen::Matrix<double, 2, 1> Planner::aim(const Target & target, double /*bullet_speed*/)
 {
-  Eigen::Vector3d xyz = target.get_xyz();
+  Eigen::Vector3d xyz = target.get_xyz() + xyz_offset_;
   auto min_dist = xyz.head<2>().norm();
 
   // 无人机无额外 Yaw 朝向，调试用赋值 0.0[cite: 1]

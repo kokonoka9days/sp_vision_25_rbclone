@@ -56,6 +56,7 @@ private:
   double pitch_offset_;
   double fire_thresh_;
   double gimbal_control_delay;
+  Eigen::Vector3d xyz_offset_;
 
   TinySolver * yaw_solver_ = nullptr;
   TinySolver * pitch_solver_ = nullptr;

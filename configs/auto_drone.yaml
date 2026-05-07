@@ -5,15 +5,15 @@
 #####----- 相机参数 (io::Camera) -----#####
 camera_name: "hikrobot"       # 可选: "hikrobot", "daheng", "mindvision", "usbcamera"
 camera_sn: "DA9784621"        # 相机序列号 (海康/大恒必须)
-exposure_us: 2000             # 曝光时间 (微秒，打无人机建议适当调低防拖影)
-gain: 0.7                     # 增益
+exposure_us: 6000             # 曝光时间 (微秒，打无人机建议适当调低防拖影)
+gain: 0.95                     # 增益
 vid_pid: "2bdf:0001"          # USB 设备的 VID:PID
 flip: true                    # 图像上下翻转
 mirror: true                  # 图像左右镜像
 timestamp_offset_us: 2000     # 软硬件时间戳同步补偿 (微秒)
 
 #####----- 串口云台参数 (io::Gimbal) -----#####
-com_port: "/dev/ttyACM0"      # 串口号
+com_port: "/dev/ttyUSB0"      # 串口号
 # 陀螺仪轴向重映射 (0代表y, 1代表p, 2代表r, 负号代表反向)
 gimbal_y1: 1
 gimbal_p2: 2
@@ -25,7 +25,7 @@ gimbal_r3: 3
 # ==========================================
 
 #####----- 神经网络参数 (YOLO) -----#####
-model_path: "../assets/module_s_400.engine"  # TensorRT 模型路径
+model_path: "../assets/module_all.engine"  # TensorRT 模型路径
 
 #####----- 坐标系与相机内参 (Solver) -----#####
 # 云台到 IMU 机体的旋转矩阵 (3x3 行优先，需根据电控安装方向调整)
@@ -51,8 +51,9 @@ min_detect_count: 3           # 连续识别几帧后从 detecting 进入 tracki
 max_temp_lost_count: 10       # 丢失几帧后从 temp_lost 彻底判定为 lost
 
 #####----- 弹道与预测参数 (Planner) -----#####
-yaw_offset: 4.8               # Yaw 轴硬件偏置补偿 (度)
-pitch_offset: 0.0             # Pitch 轴硬件偏置补偿 (度)
+yaw_offset: 4.2               # Yaw 轴硬件偏置补偿 (度)
+pitch_offset: 0.80             # Pitch 轴硬件偏置补偿 (度)
+xyz_offset: [0.0, 0.0, 0.0275]    # PnP 后 xyz 固定偏移 (米), [x, y, z]
 fire_thresh: 0.1              # 允许开火的角度误差阈值 (度)
 
 # 高低速判断与预测延迟补偿 (秒)

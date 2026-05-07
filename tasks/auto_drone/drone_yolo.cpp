@@ -28,8 +28,8 @@ YOLO::YOLO(const std::string& config_path, bool /*debug*/)
     
     this->input_w_ = 640;
     this->input_h_ = 640;
-    this->score_threshold_ = 0.3f;
-    this->nms_threshold_ = 0.2f;
+    this->score_threshold_ = 0.85f;
+    this->nms_threshold_ = 0.6f;
     
     // 【修复1】：单类模型必须填1，否则后处理解码器偏移量会整体错乱导致读取到坐标值
     this->num_classes_ = 1; // 0: drone
@@ -216,6 +216,15 @@ std::vector<Drone> YOLO::postprocessing() {
             boxes[idx], 
             kpts
         );
+    }
+
+    // 只保留置信度最高的一个目标
+    if (!results.empty()) {
+        auto best_it = std::max_element(results.begin(), results.end(),
+            [](const Drone& a, const Drone& b) {
+                return a.confidence < b.confidence;
+            });
+        return { *best_it };
     }
 
     return results;

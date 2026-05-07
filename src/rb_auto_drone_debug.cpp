@@ -1,13 +1,13 @@
 #include <fmt/core.h>
 #include <atomic>
 #include <chrono>
-#include <nlohmann/json.hpp>
+#include <nlohmann/json.hpp>  
 #include <opencv2/opencv.hpp>
 #include <thread>
 
 // 底层 IO 与工具
 #include "io/camera.hpp"
-#include "io/gimbal/gimbal.hpp"
+#include "io/gimbal/gimbal.hpp" 
 #include "tools/exiter.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
@@ -98,6 +98,7 @@ int main(int argc, char * argv[])
         data["target_x"] = xyz.x();
         data["target_y"] = xyz.y();
         data["target_z"] = xyz.z();
+        data["target_distance"] = xyz.norm(); 
 
         plotter.plot(data);
       } 
@@ -177,18 +178,18 @@ int main(int argc, char * argv[])
       // tools::draw_points(img, reproj_points, {0, 0, 255}); // 红色表示预测位置框
 
       // (B) 算出瞄准的中心点并画一条连接真实中心和预测中心的射击引导线
-      auto pred_center_img = solver.world2pixel({cv::Point3f(aim_xyz.x(), aim_xyz.y(), aim_xyz.z())});
-      auto real_center_img = solver.world2pixel({cv::Point3f(target.get_xyz().x(), target.get_xyz().y(), target.get_xyz().z())});
+      // auto pred_center_img = solver.world2pixel({cv::Point3f(aim_xyz.x(), aim_xyz.y(), aim_xyz.z())});
+      // auto real_center_img = solver.world2pixel({cv::Point3f(target.get_xyz().x(), target.get_xyz().y(), target.get_xyz().z())});
       
-      if (!pred_center_img.empty() && !real_center_img.empty()) {
-        // 画出真实位置中心
-        cv::circle(img, real_center_img[0], 6, cv::Scalar(51, 153, 237), -1);
-        // 画出预测位置中心
-        cv::circle(img, pred_center_img[0], 8, cv::Scalar(0, 0, 255), -1);
-        // 画出提前量引导线
-        cv::line(img, real_center_img[0], pred_center_img[0], cv::Scalar(0, 255, 255), 2);
-        tools::draw_text(img, "AIM", cv::Point(pred_center_img[0].x + 10, pred_center_img[0].y), {0, 0, 255});
-      }
+      // if (!pred_center_img.empty() && !real_center_img.empty()) {
+      //   // 画出真实位置中心
+      //   cv::circle(img, real_center_img[0], 6, cv::Scalar(51, 153, 237), -1);
+      //   // 画出预测位置中心
+      //   cv::circle(img, pred_center_img[0], 8, cv::Scalar(0, 0, 255), -1);
+      //   // 画出提前量引导线
+      //   cv::line(img, real_center_img[0], pred_center_img[0], cv::Scalar(0, 255, 255), 2);
+      //   tools::draw_text(img, "AIM", cv::Point(pred_center_img[0].x + 10, pred_center_img[0].y), {0, 0, 255});
+      // }
     }
 
     // 缩小一半显示防止撑爆屏幕
