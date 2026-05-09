@@ -24,6 +24,7 @@ public:
   virtual void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) = 0;
   virtual bool try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) = 0;
 
+
   virtual void pause() {} //停止
   virtual void resume() {} //开启
 

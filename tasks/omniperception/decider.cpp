@@ -340,11 +340,38 @@ bool Decider::armor_filter(std::list<auto_aim::Armor> & armors)
   return armors.empty();
 }
 
+bool Decider::not_base_armor_filter(std::list<auto_aim::Armor> & armors)
+{
+  if (armors.empty()) return true;
+
+
+  if(gimbal_ == nullptr) {
+    tools::logger()->error("[omniperception::Decider] gimbal_不能为空指针，请先调用set_gimbal()设置云台指针");
+    return {};
+  }
+  io::GimbalState g = gimbal_->state();
+  if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ?   auto_aim::Color::red : auto_aim::Color::blue;
+
+  // 过滤非基地装甲的装甲板
+  armors.remove_if([&](const auto_aim::Armor & a) { return a.name != auto_aim::ArmorName::base; });
+
+  return armors.empty();
+}
+
+
 void Decider::set_priority(std::list<auto_aim::Armor> & armors)
 {
   if (armors.empty()) return;
 
-  const PriorityMap & priority_map = (mode_ == MODE_ONE) ? mode1 : mode2;
+  // const= (mode_ == MODE_ONE) ? mode1 : mode2;
+  PriorityMap  priority_map ;
+  switch(mode_){
+    case MODE_ONE: priority_map = mode1;
+    break;
+    case MODE_TWO: priority_map = mode2;
+    break;
+    case MODE_THREE: priority_map = mode3;
+  }
 
   if (!armors.empty()) {
     for (auto & armor : armors) {

@@ -54,11 +54,11 @@ int main(int argc, char * argv[])
   std::string omnl_yaml_name = cli.get<std::string>("l_cam");
   std::string omnr_yaml_name = cli.get<std::string>("r_cam");
   io::Camera omn_cam1(omnl_yaml_name);
-  io::Camera omn_cam2(omnr_yaml_name);
+  // io::Camera omn_cam2(omnr_yaml_name);
   auto omn_l_yaml = tools::load(omnl_yaml_name);
   auto omn_r_yaml = tools::load(omnr_yaml_name);
-  // omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
-  omn_cam2.main_and_secondary = tools::read<std::string>(omn_r_yaml, "main_and_secondary");
+  omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
+  // omn_cam2.main_and_secondary = tools::read<std::string>(omn_r_yaml, "main_and_secondary");
   // io::Camera back_camera("configs/camera.yaml");
   tools::logger()->info("初始化");
   // 改为使用Gimbal串口通信（替代CBoard）
@@ -130,8 +130,8 @@ int main(int argc, char * argv[])
     if( key == 'p') {
       // 暂停全向相机
       auto t1 = std::chrono::steady_clock::now();
-      omn_cam1.pause();
-      omn_cam2.pause();
+      // omn_cam1.pause();
+      // omn_cam2.pause();
       long_camera.pause();
       // short_camera.pause();
       is_omn_paused = true; // 更新状态标志
@@ -143,8 +143,8 @@ int main(int argc, char * argv[])
       // 恢复全向相机
       auto t1 = std::chrono::steady_clock::now();
       long_camera.resume();
-      omn_cam1.resume();
-      omn_cam2.resume();
+      // omn_cam1.resume();
+      // omn_cam2.resume();
       // short_camera.resume();
       is_omn_paused = false; // 更新状态标志
       auto t2 = std::chrono::steady_clock::now();

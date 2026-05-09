@@ -42,10 +42,10 @@ int main(int argc, char * argv[])
   auto long_camera_config_path = cli.get<std::string>("long_camera");
 
 
-  
+  io::Camera long_camera(long_camera_config_path);  
   // 主相机（工业相机）
   io::Camera short_camera(short_camera_config_path);
-  io::Camera long_camera(long_camera_config_path);
+
   
   // 串口通信
   io::Gimbal gimbal(short_camera_config_path);

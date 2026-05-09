@@ -285,8 +285,8 @@ void Gimbal::read_thread()
     state_.yaw = ypr_now[0] * 57.3;
     state_.pitch = ypr_now[1] * 57.3;
     
-    // state_.mode = 1;
-    state_.mode = rx_data_.mode;
+    state_.mode = 1;
+    // state_.mode = rx_data_.mode;
     state_.enemy_color = !rx_data_.color;
     state_.bullet_speed = rx_data_.bullet_speed;
     state_.bullet_count = rx_data_.bullet_count;
@@ -305,6 +305,9 @@ void Gimbal::read_thread()
         break;
       case 3:
         mode_ = GimbalMode::BIG_BUFF;
+        break;
+      case 4:
+        mode_ = GimbalMode::LONG_FOCAL_LENGTH;
         break;
       default:
         mode_ = GimbalMode::IDLE;

@@ -8,6 +8,7 @@
 // #include "io/usbcamera/usbcamera.hpp"
 #include "tasks/auto_aim/yolo.hpp"
 #include "tasks/omniperception/decider.hpp"
+#include "tasks/auto_aim/rv_detector.hpp"
 #include "tools/exiter.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
@@ -45,21 +46,25 @@ int main(int argc, char * argv[])
 
   // ROS2 通信
   io::ROS2 ros2;
-  
+
   // 主相机（工业相机）
-  io::Camera short_camera(short_camera_config_path);
+  
   io::Camera long_camera(long_camera_config_path);
+  io::Camera short_camera(short_camera_config_path);
   
-  
-  // 全向感知相机（工业相机）
-  std::string omnl_yaml_name = cli.get<std::string>("l_cam");
   std::string omnr_yaml_name = cli.get<std::string>("r_cam");
+    io::Camera omn_cam2(omnr_yaml_name);
+    // 全向感知相机（工业相机）
+  std::string omnl_yaml_name = cli.get<std::string>("l_cam");
+
   io::Camera omn_cam1(omnl_yaml_name);
-  io::Camera omn_cam2(omnr_yaml_name);
+
   auto omn_l_yaml = tools::load(omnl_yaml_name);
   auto omn_r_yaml = tools::load(omnr_yaml_name);
   omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
   omn_cam2.main_and_secondary = tools::read<std::string>(omn_r_yaml, "main_and_secondary");
+
+
   // io::Camera back_camera("configs/camera.yaml");
 
   // 改为使用Gimbal串口通信（替代CBoard）
@@ -87,6 +92,7 @@ int main(int argc, char * argv[])
   auto_aim::Solver left_solver(omnl_yaml_name);
   auto_aim::Solver right_solver(omnr_yaml_name);
   omniperception::Decider decider(omnl_yaml_name);
+  rv_aim::Detector base_decider(short_camera_config_path);
 
   decider.set_gimbal(&gimbal);
   
@@ -199,7 +205,7 @@ int main(int argc, char * argv[])
   });
   std::chrono::steady_clock::time_point last, last_track_point = std::chrono::steady_clock::now();
   // 主循环
-
+long_camera.pause();
 
   while (!exiter.exit()) {
     // 读取云台模式
@@ -211,7 +217,7 @@ int main(int argc, char * argv[])
     
     // 读取主相机图像
     // bool is_full = bincameras.read(img, timestamp, tracker);
-    bincameras.cameras.aim_ptr->read(img, timestamp);
+    bincameras.read(img, timestamp, tracker);
 
     // if(!is_full) {
     //   tools::logger()->debug("[BinocularAim] 双目相机无法读到数据");
@@ -233,7 +239,6 @@ int main(int argc, char * argv[])
     float pitch_deg = gimbal_euler[1] * 180.0 / M_PI;
     float roll_deg = gimbal_euler[2] * 180.0 / M_PI;
 
-
     // 主相机检测
     auto armors = yolo.detect(img);
 
@@ -245,18 +250,11 @@ int main(int argc, char * argv[])
       tools::draw_text(img, fmt::format("rb_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 255, 255});
     // std::cout << "Roll: " << roll_deg << std::endl;
     
-    // 更新无敌状态装甲板
-    decider.get_invincible_armor(ros2.subscribe_enemy_status());
-    
-    // 过滤装甲板
-    decider.armor_filter(armors);
-    
-    // 设置优先级
-    decider.set_priority(armors);
 
     // static size_t omn_detect_num = 0;
-    // 跟踪目标
-    auto targets = tracker.track(armors, timestamp);
+    // // 跟踪目标
+    // auto targets = tracker.track(armors, timestamp);
+    std::list<auto_aim::Target> targets;
 
 
     // 只有在 lost 状态下才发送全向指令，避免干扰主线程控制
@@ -285,23 +283,61 @@ int main(int argc, char * argv[])
 
       gimbal.sb_send(sb_cmd);
     }
-    if(tracker.state() != "lost"){
+    if(tracker.state() != "lost" || gimbal.state().mode == (uint8_t)4 ){
       last_track_point = std::chrono::steady_clock::now();
       omn_cam1.pause();
-      omn_cam2.pause();      
+      omn_cam2.pause();
     }
-    else
+    else //if(tracker.state() == "lost")
     {
+      // long_camera.pause();
       omn_cam1.resume();
       omn_cam2.resume();
     }
 
+    // tools::logger()->info(" gimbal.state().mode == {}", gimbal.state().mode);
+    std::list<auto_aim::Armor> base_armors;
     // 放在主循环的 while (!exiter.exit()) 内部，原“丢跟踪强制切回短焦”的位置
-    if (tracker.state() == "lost" && !bincameras.is_short) {
-            bincameras.Switch(tracker);
-        
+
+    if (tracker.state() == "lost" && !bincameras.is_short 
+    && gimbal.state().mode != 4 
+    && gimbal.state().mode != 5 //强制切短焦相机
+    ) {
+          bincameras.Switch(tracker);
+    }
+    if(gimbal.state().mode == 4 
+    && bincameras.is_short ){ // 强制切长焦相机
+      bincameras.Switch(tracker, true); 
+      // if(!base_armors.empty()) {
+      //   targets = tracker.track(base_armors, timestamp);
+      // }else{
+      //   targets = tracker.track(armors, timestamp);          
+      // }
+       decider.set_mode(3);
     }
 
+   if(gimbal.state().mode == 4 
+    && !bincameras.is_short ){
+      tools::logger()->info(" gimbal.state().mode == {}", gimbal.state().mode);
+ 
+      base_armors = base_decider.detect(img);
+      decider.not_base_armor_filter(base_armors);
+    }else{
+      decider.set_mode(1);      
+    }
+
+    if(!base_armors.empty()) armors.push_back(base_armors.front());
+    
+    // 更新无敌状态装甲板
+    decider.get_invincible_armor(ros2.subscribe_enemy_status());
+    
+    // 过滤装甲板
+    decider.armor_filter(armors);
+    
+    // 设置优先级
+    decider.set_priority(armors);
+  
+    targets = tracker.track(armors, timestamp);
 
     {
       // 自瞄模式 - 使用MPC
@@ -368,7 +404,7 @@ int main(int argc, char * argv[])
         // 将目标放入队列供MPC线程处理
         target_queue.push(targets.front());
         //自动切换相机
-        bincameras.ChangeTheScope(targets.front(), tracker);
+        if(gimbal.state().mode != 4 && gimbal.state().mode != 5) bincameras.ChangeTheScope(targets.front(), tracker);
       } else {
         target_queue.push(std::nullopt);
       }
@@ -393,13 +429,13 @@ int main(int argc, char * argv[])
     }
 
     
-    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    // cv::imshow("reprojection", img);
-    // auto key = cv::waitKey(1);
-    // if (key == 'q') break;
-    // if (key == 'c'){// 强制切换长短焦
-    //     bincameras.Switch(tracker);
-    // }
+    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    cv::imshow("reprojection", img);
+    auto key = cv::waitKey(1);
+    if (key == 'q') break;
+    if (key == 'c'){// 强制切换长短焦
+        bincameras.Switch(tracker);
+    }
 
 
 

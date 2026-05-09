@@ -46,6 +46,8 @@ public:
 
   bool armor_filter(std::list<auto_aim::Armor> & armors);
 
+  bool not_base_armor_filter(std::list<auto_aim::Armor> & armors);
+
   void set_priority(std::list<auto_aim::Armor> & armors);
   //对队列中的每一个DetectionResult进行过滤，同时将DetectionResult排序
   void sort(std::vector<DetectionResult> & detection_queue);
@@ -61,6 +63,10 @@ public:
   io::Gimbal* gimbal_ = nullptr; // 新增一个云台指针，默认为空
 
   void set_gimbal(io::Gimbal* gimbal) { gimbal_ = gimbal; }
+
+  void set_mode(int mode){
+    this->mode_ = mode;
+  }
 
 private:
   int img_width_;
@@ -101,12 +107,24 @@ private:
     {auto_aim::ArmorName::outpost, auto_aim::ArmorPriority::third},
     {auto_aim::ArmorName::base, auto_aim::ArmorPriority::third},
     {auto_aim::ArmorName::not_armor, auto_aim::ArmorPriority::third}};
+
+  const PriorityMap mode3 = {
+    {auto_aim::ArmorName::outpost, auto_aim::ArmorPriority::first},
+    {auto_aim::ArmorName::base, auto_aim::ArmorPriority::second},
+    {auto_aim::ArmorName::one, auto_aim::ArmorPriority::second},
+    {auto_aim::ArmorName::two, auto_aim::ArmorPriority::second},
+    {auto_aim::ArmorName::three, auto_aim::ArmorPriority::second},
+    {auto_aim::ArmorName::four, auto_aim::ArmorPriority::third},
+    {auto_aim::ArmorName::five, auto_aim::ArmorPriority::third},
+    {auto_aim::ArmorName::sentry, auto_aim::ArmorPriority::third},
+    {auto_aim::ArmorName::not_armor, auto_aim::ArmorPriority::third}};
 };
 
 enum PriorityMode
 {
   MODE_ONE = 1,
-  MODE_TWO
+  MODE_TWO,
+  MODE_THREE
 };
 
 }  // namespace omniperception

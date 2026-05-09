@@ -60,15 +60,19 @@ struct BinocularAim{
   double long2short_point = 2.5;
 
   /// @brief 长短焦强制切换
-  void Switch(auto_aim::Tracker& tracker){
+  void Switch(auto_aim::Tracker& tracker, bool forced_switch = false){
 
-    if(tools::delta_time(std::chrono::steady_clock::now(), switch_time_point) < 1.5) return ;
-    if(is_short && tracker.get_update_count() < 130 ) return;
+    if(!forced_switch){
+      if(tools::delta_time(std::chrono::steady_clock::now(), switch_time_point) < 1.5) return ;
+      // if(is_short && tools::delta_time(std::chrono::steady_clock::now(), switch_time_point) < 3) return;      
+    }
     auto is_switch = [&](){
       this->cameras.aim_ptr->clear_camera_frame_buffer();
+      this->cameras.aim_ptr->pause();
       this->cameras.Switch();
       this->solvers.Switch();
       this->planners.Switch();
+      this->cameras.aim_ptr->resume();
       is_short = !is_short;
       switch_time_point = std::chrono::steady_clock::now();
       tracker.setSolver(this->solvers.aim_ptr); 

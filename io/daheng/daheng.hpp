@@ -40,7 +40,6 @@ public:
     
     ~DahengCamera();
 
-
     bool capture_stop();
     
     /**
@@ -67,6 +66,7 @@ private:
     void ProcessData(void *pImageBuf, void *pImageRaw8Buf, void *pImageRGBBuf, int nImageWidth, int nImageHeight,
                         int nPixelFormat, int nPixelColorFilter, bool flip , bool mirror ) ;
 private:
+
     // 相机参数
     // std::string camera_sn_;
     double exposure_us_;
@@ -103,7 +103,7 @@ private:
     tools::ThreadSafeQueue<CameraData> queue_;
     
     // SDK状态
-    bool sdk_initialized_ = false;
+    bool sdk_initialized_ ;//= false;
     
     // 图像参数缓存
     size_t image_width_ = 0;

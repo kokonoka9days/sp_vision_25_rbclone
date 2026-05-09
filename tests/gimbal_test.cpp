@@ -68,10 +68,10 @@ int main(int argc, char * argv[])
     std::cout << "Pitch: " << pitch_deg << "°, ";
     std::cout << "Roll: " << roll_deg << "°, "<<std::endl;
     std::cout<<"Data: ";
-    std::cout << "mode "<<(int)mode;
+    std::cout << " mode "<<(int)mode;
     // std::cout << "enemy_color: " << (int)enemy_color  << std::endl;
     // std::cout << "mode: " <<(int) mode << std::endl;
-    std::cout << "bullet_speed: " <<(float) bullet_speed;
+    std::cout << "  bullet_speed: " <<(float) bullet_speed;
     std::cout << "  bullet_count: " <<(float) state.bullet_count << std::endl;
 
     // std::cout<<q<<std::endl;

@@ -79,8 +79,8 @@ auto_fire: true # 是否由自瞄控制射击
 
 camera_name: "daheng"
 camera_sn: "KE0210010003"
-exposure_us: 5000
-gain: 0.5
+exposure_us: 6000
+gain: 0.7
 gamma: 0.5
 vid_pid: "2ba2:4d55"
 flip: true

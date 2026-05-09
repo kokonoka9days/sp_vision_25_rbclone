@@ -172,7 +172,7 @@ int main(int argc, char * argv[])
     float roll_deg = ypr[2] * 180.0 / M_PI;
         
     solver.set_R_gimbal2world(q);
-    auto armors = detector.detect(img);
+    auto armors = yolo.detect(img);
     auto targets = tracker.track(armors, t);
     // recor.record(img, q, t);
 

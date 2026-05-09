@@ -41,14 +41,7 @@ int main(int argc, char * argv[])
   }
   auto short_camera_config_path = cli.get<std::string>("short_camera");
   auto long_camera_config_path = cli.get<std::string>("long_camera");
-
-
-  // 主相机（工业相机）
-  io::Camera short_camera(short_camera_config_path);
-  // io::Camera long_camera(long_camera_config_path);
-  
-  
-  // 全向感知相机（工业相机）
+ // 全向感知相机（工业相机）
   std::string omnl_yaml_name = cli.get<std::string>("l_cam");
   std::string omnr_yaml_name = cli.get<std::string>("r_cam");
   io::Camera omn_cam1(omnl_yaml_name);
@@ -57,6 +50,13 @@ int main(int argc, char * argv[])
   auto omn_r_yaml = tools::load(omnr_yaml_name);
   omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
   omn_cam2.main_and_secondary = tools::read<std::string>(omn_r_yaml, "main_and_secondary");
+
+  // 主相机（工业相机）
+  io::Camera short_camera(short_camera_config_path);
+  // io::Camera long_camera(long_camera_config_path);
+  
+  
+ 
   // io::Camera back_camera("configs/camera.yaml");
   
   // 改为使用Gimbal串口通信（替代CBoard）
