@@ -62,7 +62,7 @@ int main(int argc, char * argv[])
   auto_buff::Buff_Detector buff_detector(config_path);
   auto_buff::Solver buff_solver(config_path);
   auto_buff::SmallTarget buff_small_target;
-  auto_buff::BigTarget buff_big_target;
+  auto_buff::BigTarget buff_big_target; 
   auto_buff::Aimer buff_aimer(config_path);
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
@@ -98,6 +98,8 @@ int main(int argc, char * argv[])
         data["gimbal_yaw_vel"] = gs.yaw_vel;
         data["gimbal_pitch"] = gs.pitch;
         data["gimbal_pitch_vel"] = gs.pitch_vel;
+
+        data["gimbal_mode"] = gs.mode;
 
         data["target_yaw"] = plan.target_yaw;
         data["target_pitch"] = plan.target_pitch;

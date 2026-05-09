@@ -289,6 +289,7 @@ int main(int argc, char * argv[])
         // ========================== 新增：打符内部数据上传PlotJuggler ==========================
         if (active_target && !active_target->is_unsolve()) {
           Eigen::VectorXd x = active_target->ekf_x();
+          
           data["R_yaw"] = x[0];
           data["R_V_yaw"] = x[1];
           data["R_pitch"] = x[2];
