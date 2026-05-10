@@ -29,7 +29,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/xiaohei.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/xiaohuang.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -47,7 +47,7 @@ int main(int argc, char * argv[])
   io::Camera camera(config_path);
 
   auto_aim::YOLO yolo(config_path, true);
-  auto_aim::Detector detector(config_path, false);
+  auto_aim::Detector detector(config_path, true);
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, &solver);
   tracker.set_gimbal(&gimbal);
@@ -145,7 +145,7 @@ int main(int argc, char * argv[])
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
     // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
     last_t = t;
-    tools::logger()->info("fps:: {:.2f}", fps);
+    // tools::logger()->info("fps:: {:.2f}", fps);
 
     auto ypr = tools::eulers(q, 2, 1, 0);
 
@@ -154,7 +154,8 @@ int main(int argc, char * argv[])
     float roll_deg = ypr[2] * 180.0 / M_PI;
         
     solver.set_R_gimbal2world(q);
-    auto armors = yolo.detect(img);
+    // auto armors = yolo.detect(img);
+    auto armors = detector.detect(img);
     auto targets = tracker.track(armors, t);
     // recor.record(img, q, t);
 
