@@ -113,6 +113,7 @@ int main(int argc, char * argv[])
       data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);
       data["gimbal_yaw"] = gs.yaw;
       data["gimbal_pitch"] = gs.pitch;
+      data["gimbal_roll"] = gs.roll;
       data["target_yaw"] = target_yaw;
       data["target_pitch"] = target_pitch;
       data["plan_yaw"] = plan_yaw;
@@ -149,9 +150,9 @@ int main(int argc, char * argv[])
   while (!exiter.exit()) {
     camera.read(img, t);
 
-    // 获取插值后的四元数并传入 Solver (考虑相机与通信的延迟 3ms)
-    auto q = gimbal.q(t);
-    solver.set_R_gimbal2world(q);
+    // 获取插值后的欧拉角并传入 Solver (考虑相机与通信的延迟 3ms)
+    auto ypr = gimbal.ypr(t);
+    solver.set_R_gimbal2world(ypr[0], ypr[1], ypr[2]);
 
     // 帧率计算
     double fps = 1.0 / std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count() * 1000000;
@@ -159,9 +160,8 @@ int main(int argc, char * argv[])
     current_fps = fps;
 
     // 解析当前云台的真实角度用于显示
-    auto ypr = tools::eulers(q, 2, 1, 0);
-    float yaw_deg = ypr[0] * 180.0 / M_PI;
-    float pitch_deg = ypr[1] * 180.0 / M_PI;
+    float yaw_deg = ypr[0] * 57.3f;
+    float pitch_deg = ypr[1] * 57.3f;
 
     // 核心视觉与追踪管线
     auto drones = yolo.detect(img);

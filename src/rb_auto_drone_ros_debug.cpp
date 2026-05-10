@@ -178,9 +178,9 @@ int main(int argc, char * argv[])
   while (!exiter.exit()) {
     camera.read(img, t);
 
-    // 获取插值后的四元数并传入 Solver (考虑相机与通信的延迟 3ms)
-    auto q = gimbal.q(t);
-    solver.set_R_gimbal2world(q);
+    // 获取插值后的欧拉角并传入 Solver (考虑相机与通信的延迟 3ms)
+    auto ypr = gimbal.ypr(t);
+    solver.set_R_gimbal2world(ypr[0], ypr[1], ypr[2]);
 
     // 帧率计算
     double fps = 1.0 / std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count() * 1000000;
@@ -188,7 +188,6 @@ int main(int argc, char * argv[])
     current_fps = fps;
 
     // 解析当前云台的真实角度用于显示
-    auto ypr = tools::eulers(q, 2, 1, 0);
     float yaw_deg = ypr[0] * 180.0 / M_PI;
     float pitch_deg = ypr[1] * 180.0 / M_PI;
 

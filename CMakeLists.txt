@@ -110,7 +110,9 @@ add_executable(calibrate_robotworld_handeye calibration/calibrate_robotworld_han
 add_executable(split_video calibration/split_video.cpp)
 add_executable(test_simple calibration/test_simple.cpp)
 add_executable(run_calibration calibration/run_calibration.cpp)
+add_executable(serial_test calibration/serial_test.cpp)
 
+target_link_libraries(serial_test fmt::fmt io)
 target_link_libraries(capture ${OpenCV_LIBS} fmt::fmt tools io)
 target_link_libraries(run_calibration ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_drone tools io ${TRT_LIB})
 target_link_libraries(calibrate_camera ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)

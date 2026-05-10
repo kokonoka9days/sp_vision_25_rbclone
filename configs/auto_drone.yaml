@@ -16,8 +16,8 @@ timestamp_offset_us: 2000     # 软硬件时间戳同步补偿 (微秒)
 com_port: "/dev/ttyUSB0"      # 串口号
 # 陀螺仪轴向重映射 (0代表y, 1代表p, 2代表r, 负号代表反向)
 gimbal_y1: 1
-gimbal_p2: 2
-gimbal_r3: 3
+gimbal_p2: 3
+gimbal_r3: 2
 
 
 # ==========================================

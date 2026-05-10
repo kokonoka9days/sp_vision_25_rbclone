@@ -15,7 +15,7 @@ public:
   explicit Solver(const std::string & config_path);
 
   Eigen::Matrix3d R_gimbal2world() const;
-  void set_R_gimbal2world(const Eigen::Quaterniond & q);
+  void set_R_gimbal2world(double yaw, double pitch, double roll);
 
   // 注意：参数原名遗留叫Armor，这里也改为 Drone 增加统一性
   void solve(Drone & drone) const;
