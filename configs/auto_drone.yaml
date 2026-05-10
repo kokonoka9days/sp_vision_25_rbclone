@@ -5,8 +5,8 @@
 #####----- 相机参数 (io::Camera) -----#####
 camera_name: "hikrobot"       # 可选: "hikrobot", "daheng", "mindvision", "usbcamera"
 camera_sn: "DA9784621"        # 相机序列号 (海康/大恒必须)
-exposure_us: 6000             # 曝光时间 (微秒，打无人机建议适当调低防拖影)
-gain: 0.95                     # 增益
+exposure_us: 8000             # 曝光时间 (微秒，打无人机建议适当调低防拖影)
+gain: 0.90                     # 增益
 vid_pid: "2bdf:0001"          # USB 设备的 VID:PID
 flip: true                    # 图像上下翻转
 mirror: true                  # 图像左右镜像
@@ -51,13 +51,13 @@ min_detect_count: 3           # 连续识别几帧后从 detecting 进入 tracki
 max_temp_lost_count: 10       # 丢失几帧后从 temp_lost 彻底判定为 lost
 
 #####----- 弹道与预测参数 (Planner) -----#####
-yaw_offset: 4.2               # Yaw 轴硬件偏置补偿 (度)
-pitch_offset: 0.80             # Pitch 轴硬件偏置补偿 (度)
-xyz_offset: [0.0, 0.0, 0.0275]    # PnP 后 xyz 固定偏移 (米), [x, y, z]
+yaw_offset: 3.42               # Yaw 轴硬件偏置补偿 (度)
+pitch_offset: 2.70            # Pitch 轴硬件偏置补偿 (度)
+xyz_offset: [-0.0706, 0.1886, -0.4520]   # PnP 后 xyz 固定偏移 (米), [x, y, z]
 fire_thresh: 0.1              # 允许开火的角度误差阈值 (度)
 
 # 高低速判断与预测延迟补偿 (秒)
-gimbal_control_delay: 0.01    # 云台控制通信延迟补偿
+gimbal_control_delay: 0.02    # 云台控制通信延迟补偿
 
 #####----- MPC 求解器参数 (TinyMPC) -----#####
 max_yaw_acc: 50.0             # Yaw 轴最大加速度限制

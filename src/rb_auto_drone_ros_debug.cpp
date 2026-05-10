@@ -83,6 +83,7 @@ int main(int argc, char * argv[])
   target_queue.push(std::nullopt);
 
   std::atomic<bool> quit = false;
+  std::atomic<double> current_fps(0.0);
 
   // =================================================================
   // 线程 A：云台规划控制与数据记录线程 (高频独立运行)
@@ -90,6 +91,9 @@ int main(int argc, char * argv[])
   auto plan_thread = std::thread([&]() {
     auto t0 = std::chrono::steady_clock::now();
     uint16_t last_bullet_count = 0;
+    int plot_count = 0;
+    auto last_plot_time = std::chrono::steady_clock::now();
+    int current_freq = 0;
 
     while (!quit) {
       // 获取最新目标与云台状态
@@ -99,6 +103,9 @@ int main(int argc, char * argv[])
       // ---------- 修改 3：读取 ROS2 收到的角度 ----------
       float current_target_yaw = target_yaw.load();
       float current_target_pitch = target_pitch.load();
+
+      float target_yaw = 0.0f, target_pitch = 0.0f, plan_yaw = 0.0f, plan_pitch = 0.0f;
+      float target_x = 0.0f, target_y = 0.0f, target_z = 0.0f;
 
       if (target.has_value()) {
         // MPC 弹道预测与控制解算
@@ -115,29 +122,46 @@ int main(int argc, char * argv[])
         auto fired = gs.bullet_count > last_bullet_count;
         last_bullet_count = gs.bullet_count;
 
-        // --- 数据绘图与输出 (Plotter) ---
-        nlohmann::json data;
-        data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);
-        data["gimbal_yaw"] = gs.yaw;
-        data["gimbal_pitch"] = gs.pitch;
-        data["target_yaw"] = plan.target_yaw * 57.3;
-        data["target_pitch"] = plan.target_pitch * 57.3;
-        data["plan_yaw"] = plan.yaw * 57.3;
-        data["plan_pitch"] = plan.pitch * 57.3;
+        target_yaw = plan.target_yaw * 57.3f;
+        target_pitch = plan.target_pitch * 57.3f;
+        plan_yaw = plan.yaw * 57.3f;
+        plan_pitch = plan.pitch * 57.3f;
         
-        // 记录目标的 EKF 空间位置
         const auto xyz = target->get_xyz();
-        data["target_x"] = xyz.x();
-        data["target_y"] = xyz.y();
-        data["target_z"] = xyz.z();
-
-        plotter.plot(data);
+        target_x = xyz.x();
+        target_y = xyz.y();
+        target_z = xyz.z();
       } 
       else {
         // 丢失目标，向云台发送当前姿态的空闲指令（防暴走）
         gimbal.drone_send(false, false, gs.yaw + current_target_yaw, 0.0f, 0.0f, gs.pitch + current_target_pitch, 0.0f, 0.0f);
 
       }
+
+      // --- 数据绘图与输出 (Plotter) ---
+      nlohmann::json data;
+      data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);
+      data["gimbal_yaw"] = gs.yaw;
+      data["gimbal_pitch"] = gs.pitch;
+      data["target_yaw"] = target_yaw;
+      data["target_pitch"] = target_pitch;
+      data["plan_yaw"] = plan_yaw;
+      data["plan_pitch"] = plan_pitch;
+      data["target_x"] = target_x;
+      data["target_y"] = target_y;
+      data["target_z"] = target_z;
+      data["fps"] = current_fps.load();
+
+      plot_count++;
+      auto now = std::chrono::steady_clock::now();
+      if (std::chrono::duration_cast<std::chrono::seconds>(now - last_plot_time).count() >= 1) {
+        current_freq = plot_count;
+        plot_count = 0;
+        last_plot_time = now;
+      }
+      data["send_freq"] = current_freq;
+
+      plotter.plot(data);
 
       // 控制频率：~200Hz
       std::this_thread::sleep_for(5ms);
@@ -161,6 +185,7 @@ int main(int argc, char * argv[])
     // 帧率计算
     double fps = 1.0 / std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count() * 1000000;
     last_t = t;
+    current_fps = fps;
 
     // 解析当前云台的真实角度用于显示
     auto ypr = tools::eulers(q, 2, 1, 0);

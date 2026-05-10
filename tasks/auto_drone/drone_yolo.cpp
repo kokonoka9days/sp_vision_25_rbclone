@@ -28,7 +28,7 @@ YOLO::YOLO(const std::string& config_path, bool /*debug*/)
     
     this->input_w_ = 640;
     this->input_h_ = 640;
-    this->score_threshold_ = 0.85f;
+    this->score_threshold_ = 0.70f;
     this->nms_threshold_ = 0.6f;
     
     // 【修复1】：单类模型必须填1，否则后处理解码器偏移量会整体错乱导致读取到坐标值
