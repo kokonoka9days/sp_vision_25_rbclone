@@ -29,9 +29,9 @@ struct __attribute__((packed)) GimbalToVision
   // uint16_t color; // 0: 红色, 1: 蓝色
   uint8_t len;
   float q[4];    // wxyz顺序
-  float pitch = 0;
-  float roll =  0;
-  float yaw  =  0; 
+  // float pitch = 0;
+  // float roll =  0;
+  // float yaw  =  0; 
   // float bullet_speed;
   // uint16_t bullet_count;  // 子弹累计发送次数
   // float gimbal_yaw;
