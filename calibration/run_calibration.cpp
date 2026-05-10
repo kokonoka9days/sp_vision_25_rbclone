@@ -124,8 +124,8 @@ int main(int argc, char * argv[]) {
 
     while (true) {
         camera.read(img, t);
-        auto ypr = gimbal.ypr(t);
-        solver.set_R_gimbal2world(ypr[0], ypr[1], ypr[2]);
+        auto q = gimbal.q(t);
+        solver.set_R_gimbal2world(q);
 
         auto drones = yolo.detect(img);
         auto targets = tracker.track(drones, t);

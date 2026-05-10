@@ -17,12 +17,13 @@ const std::string keys =
   "{@config-path c  | ../configs/calibration.yaml | yaml配置文件路径 }"
   "{output-folder o |      ../assets/img_with_q   | 输出文件夹路径   }";
  
-void write_ypr(const std::string ypr_path, const Eigen::Vector3d & ypr)
+void write_q(const std::string q_path, const Eigen::Quaterniond & q)
 {
-  std::ofstream ypr_file(ypr_path);
-  // 输出顺序为 yaw pitch roll（弧度）
-  ypr_file << fmt::format("{} {} {}", ypr[0], ypr[1], ypr[2]);
-  ypr_file.close();
+  std::ofstream q_file(q_path);
+  Eigen::Vector4d xyzw = q.coeffs();
+  // 输出顺序为wxyz
+  q_file << fmt::format("{} {} {} {}", xyzw[3], xyzw[0], xyzw[1], xyzw[2]);
+  q_file.close();
 }
 
 void capture_loop(
@@ -47,11 +48,11 @@ void capture_loop(
   int count = 0;
   while (true) {
     camera.read(img, timestamp);
-    Eigen::Vector3d ypr = gimbal.ypr(timestamp);
+    Eigen::Quaterniond q = gimbal.q(timestamp);
 
     // 在图像上显示欧拉角，用来判断imuabs系的xyz正方向，同时判断imu是否存在零漂
     auto img_with_ypr = img.clone();
-    Eigen::Vector3d zyx = ypr * 57.3;  // degree
+    Eigen::Vector3d zyx = tools::eulers(q, 2, 1, 0) * 57.3;  // degree
     tools::draw_text(img_with_ypr, fmt::format("Z {:.2f}", zyx[0]), {40, 40}, {0, 0, 255});
     tools::draw_text(img_with_ypr, fmt::format("Y {:.2f}", zyx[1]), {40, 80}, {0, 0, 255});
     tools::draw_text(img_with_ypr, fmt::format("X {:.2f}", zyx[2]), {40, 120}, {0, 0, 255});
@@ -88,9 +89,9 @@ void capture_loop(
     // 保存图片和四元数
     count++;
     auto img_path = fmt::format("{}/{}.jpg", output_folder, count);
-    auto ypr_path = fmt::format("{}/{}.txt", output_folder, count);
+    auto q_path = fmt::format("{}/{}.txt", output_folder, count);
     cv::imwrite(img_path, img);
-    write_ypr(ypr_path, ypr);
+    write_q(q_path, q);
     tools::logger()->info("[{}] Saved in {}", count, output_folder);
   }
 
@@ -118,7 +119,7 @@ int main(int argc, char * argv[])
   // 主循环，保存图片和对应四元数
   capture_loop(config_path, "can0", output_folder);
 
-  tools::logger()->warn("注意欧拉角输出顺序为 yaw pitch roll（弧度）");
+  tools::logger()->warn("注意四元数输出顺序为wxyz");
 
   return 0;
 }

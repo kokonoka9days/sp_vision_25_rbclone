@@ -44,12 +44,9 @@ Solver::Solver(const std::string & config_path) : R_gimbal2world_(Eigen::Matrix3
 
 Eigen::Matrix3d Solver::R_gimbal2world() const { return R_gimbal2world_; }
 
-void Solver::set_R_gimbal2world(double yaw, double pitch, double roll)
+void Solver::set_R_gimbal2world(const Eigen::Quaterniond & q)
 {
-  Eigen::Matrix3d R_imubody2imuabs = (
-    Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
-    Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) *
-    Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX())).toRotationMatrix();
+  Eigen::Matrix3d R_imubody2imuabs = q.toRotationMatrix();
   R_gimbal2world_ = R_gimbal2imubody_.transpose() * R_imubody2imuabs * R_gimbal2imubody_;
 }
 

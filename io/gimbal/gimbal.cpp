@@ -72,46 +72,38 @@ std::string Gimbal::str(GimbalMode mode) const
 Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t)
 {
   while (true) {
+    // 1. 阻塞等待并弹出队列中最老的一帧数据
     auto [q_a, t_a] = queue_.pop();
 
+    // 2. 防死锁核心：如果弹出后队列空了，绝对不能再去调用 front()！
+    // 否则 front() 会永久阻塞等待下一个数据导致画面卡死。
+    // 此时直接返回当前唯一可用的数据即可。
     if (queue_.empty()) {
       return q_a;
     }
 
-    auto [q_b, t_b] = queue_.front();
+    // 3. 此时队列非空，可以安全地偷看（不弹出）下一个数据，绝不会阻塞
+    auto [q_b, t_b] = queue_.front(); 
 
+    // 4. 如果请求时间比插值终点还要晚，说明 q_a 已经没有保留价值了
+    // 丢弃 q_a，在下一轮循环中让 q_b 成为新的起点
     if (t > t_b) {
-      continue;
+      continue; 
     }
 
+    // 5. 正常的时间戳线性插值
     auto t_ab = tools::delta_time(t_a, t_b);
     auto t_ac = tools::delta_time(t_a, t);
-    
-    // 【修复1】：防止 t_ab 过小导致的除零错或 K 值爆炸
-    if (t_ab < 1e-4) { 
-      return q_a; // 两次数据间隔小于 0.1ms，直接返回，不插值
-    }
-
     auto k = t_ac / t_ab;
-    
-    // 【修复2】：限制 k 的范围。
-    // 允许合理的稍微外推（比如 -1.0 到 2.0 之间），但是拒绝离谱的疯狂外推
-    k = std::clamp(k, -1.0, 2.0);
-
     Eigen::Quaterniond q_c = q_a.slerp(k, q_b).normalized();
-
-    // 如果目标时间比我们能查到的最老时间还老，就只能认命返回推算值了
+    
     if (t < t_a) return q_c;
-
+    
+    // 此时 t 一定在 (t_a, t_b] 区间内
     if (!(t_a < t && t <= t_b)) continue;
 
     return q_c;
   }
-}
-
-Eigen::Vector3d Gimbal::ypr(std::chrono::steady_clock::time_point t)
-{
-  return tools::eulers(q(t), 2, 1, 0);
 }
 
 void Gimbal::sb_send(io::sb_VisionToGimbal VisionToGimbal)
@@ -222,14 +214,22 @@ void Gimbal::drone_send(
 //   }
 // }
 
+bool Gimbal::read(uint8_t * buffer, size_t size)
+{
+  try {
+    return serial_.read(buffer, size) == size;
+  } catch (const std::exception & e) {
+    tools::logger()->warn("[Gimbal] Failed to read serial: {}", e.what());
+    return false;
+  }
+}
+
 void Gimbal::read_thread()
 {
   tools::logger()->info("[Gimbal] read_thread started.");
   int error_count = 0;
   int frame_count = 0;
   auto last_print_time = std::chrono::steady_clock::now();
-  std::vector<uint8_t> rx_buffer;
-  constexpr size_t FRAME_SIZE = sizeof(GimbalToVision);
 
   while (!quit_) {
     auto now = std::chrono::steady_clock::now();
@@ -241,91 +241,77 @@ void Gimbal::read_thread()
     if (error_count > 50000) {
       error_count = 0;
       tools::logger()->warn("[Gimbal] Too many errors, attempting to reconnect...");
-      rx_buffer.clear();
       reconnect();
       continue;
     }
 
-    // 1. 把串口当前所有可读数据追加到本地缓冲区
-    bool read_something = false;
-    try {
-      size_t avail = serial_.available();
-      if (avail > 0) {
-        std::vector<uint8_t> new_data;
-        serial_.read(new_data, avail);
-        if (!new_data.empty()) {
-          rx_buffer.insert(rx_buffer.end(), new_data.begin(), new_data.end());
-          read_something = true;
-        }
-      }
-    } catch (const std::exception & e) {
-      tools::logger()->warn("[Gimbal] Failed to read serial: {}", e.what());
+    // 1. 一次性读取完整的一帧数据（基于 GimbalToVision 结构体的大小）
+    if (!read(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
       error_count++;
       continue;
     }
 
-    // 2. 在缓冲区中逐字节查找帧头 0x5a，凑够完整一帧后校验 CRC
-    bool found_frame = false;
-    for (size_t i = 0; i + FRAME_SIZE <= rx_buffer.size(); ++i) {
-      if (rx_buffer[i] == 0x5a) {
-        std::memcpy(&rx_data_, &rx_buffer[i], FRAME_SIZE);
-
-        if (!tools::check_crc16(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
-          // 这个 0x5a 只是数据里的巧合，继续往后找
-          continue;
-        }
-
-        // 找到有效帧，移除本帧及之前的所有数据
-        rx_buffer.erase(rx_buffer.begin(), rx_buffer.begin() + i + FRAME_SIZE);
-        found_frame = true;
-        break;
-      }
-    }
-
-    if (!found_frame) {
-      // 防止缓冲区无限增长：没找齐帧时只保留末尾可能属于下一帧的数据
-      if (rx_buffer.size() > FRAME_SIZE * 4) {
-        rx_buffer.erase(rx_buffer.begin(), rx_buffer.end() - FRAME_SIZE + 1);
-      }
-      // 没读到新数据时短暂 sleep，避免空转占满 CPU
-      if (!read_something) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-      }
+    // 2. 检查帧头是否正确
+    if (rx_data_.head != 0x5a) {
+      // 如果帧头不对，说明数据由于丢包等原因发生了错位（失步）
+      // 此时必须立刻清空底层的接收缓冲区，把残留的错位数据全部丢弃，以便下一次能读到全新的完整帧
+      serial_.flushInput(); 
+      error_count++;
+      // 可选：添加一条 debug 日志观察失步频率
+      tools::logger()->debug("[Gimbal] 帧头错位，已清空缓冲区");
       continue;
     }
 
     // 3. 记录成功接收到有效帧的时间戳
     auto t = std::chrono::steady_clock::now();
 
+    // 4. 检查 CRC 校验和
+    if (!tools::check_crc16(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_))) {
+      tools::logger()->debug("[Gimbal] CRC16 check failed.");
+      error_count++;
+      continue;
+    }
+
+    // if (rx_data_.end != 0x53) {
+    //   // 如果帧头不对，说明数据由于丢包等原因发生了错位（失步）
+    //   // 此时必须立刻清空底层的接收缓冲区，把残留的错位数据全部丢弃，以便下一次能读到全新的完整帧
+    //   serial_.flushInput(); 
+    //   error_count++;
+    //   // 可选：添加一条 debug 日志观察失步频率
+    //   // tools::logger()->debug("[Gimbal] 帧头错位，已清空缓冲区");
+    //   continue;
+    // }
+
+
     // --- 以下为原本的数据处理逻辑，保持不变 ---
+
+    
 
     error_count = 0;
     frame_count++;
-
-    // 电控直接发送欧拉角，先做坐标系映射
-    Eigen::Vector3d ypr_raw(rx_data_.yaw, rx_data_.pitch, rx_data_.roll);
-
-    float yaw = ypr_raw[abs(gimbal_yaw2vision) -  1];
-    float pitch = ypr_raw[abs(gimbal_pitch2vision) - 1];
-    float roll = ypr_raw[abs(gimbal_roll2vision) - 1];
+    Eigen::Quaterniond q_(rx_data_.q[0], rx_data_.q[1], rx_data_.q[2], rx_data_.q[3]);
+    auto ypr = tools::eulers(q_, 2, 1, 0);
+    
+    float yaw = ypr[abs(gimbal_yaw2vision) -  1];
+    float pitch = ypr[abs(gimbal_pitch2vision) - 1];
+    float roll = ypr[abs(gimbal_roll2vision) - 1];
 
     yaw = gimbal_yaw2vision > 0 ? yaw : -yaw;
     pitch = gimbal_pitch2vision > 0 ? pitch : -pitch;
     roll = gimbal_roll2vision > 0 ? roll : -roll;
 
-    // 电控发来的是角度制，先转成弧度再构建四元数入队（保证插值平滑）
-    constexpr double D2R = M_PI / 180.0;
-    Eigen::Quaterniond q =
-        Eigen::AngleAxisd(yaw * D2R, Eigen::Vector3d::UnitZ()) *
-        Eigen::AngleAxisd(pitch * D2R, Eigen::Vector3d::UnitY()) *
-        Eigen::AngleAxisd(roll * D2R, Eigen::Vector3d::UnitX());
+    Eigen::Quaterniond q = 
+        Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) * // 绕Z轴旋转yaw
+        Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
+        Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
+
     queue_.push({q, t});
 
     std::lock_guard<std::mutex> lock(mutex_);
-    state_.yaw = yaw;
-    state_.pitch = pitch;
-    state_.roll = roll;
-
+    auto ypr_now = tools::eulers(q, 2, 1, 0);
+    state_.yaw = rx_data_.yaw;
+    state_.pitch = rx_data_.pitch;
+    
   //   state_.mode = rx_data_.mode;
   //   state_.enemy_color = !rx_data_.color;
   //   state_.bullet_speed = rx_data_.bullet_speed;

@@ -28,7 +28,7 @@ struct __attribute__((packed)) GimbalToVision
   // uint8_t mode;  // 0: 空闲, 1: 自瞄, 2: 小符, 3: 大符  电控控制右键0，1
   // uint16_t color; // 0: 红色, 1: 蓝色
   uint8_t len;
-  // float q[4];    // wxyz顺序
+  float q[4];    // wxyz顺序
   float pitch = 0;
   float roll =  0;
   float yaw  =  0; 
@@ -98,7 +98,6 @@ struct GimbalState
   float pitch_vel;
   float q2yaw;
   float q2pitch;
-  float roll;
   uint8_t mode;
   uint8_t enemy_color; // 0: 蓝色, 1: 红色
   float bullet_speed;
@@ -116,7 +115,6 @@ public:
   GimbalState state() const;
   std::string str(GimbalMode mode) const;
   Eigen::Quaterniond q(std::chrono::steady_clock::time_point t);
-  Eigen::Vector3d ypr(std::chrono::steady_clock::time_point t);
 
   void send(
     bool control,bool fire, float yaw, float yaw_vel, float yaw_acc, float pitch, float pitch_vel,
@@ -157,6 +155,7 @@ private:
 
   int gimbal_yaw2vision, gimbal_pitch2vision, gimbal_roll2vision;
 
+  bool read(uint8_t * buffer, size_t size);
   void read_thread();
   void reconnect();
 };
