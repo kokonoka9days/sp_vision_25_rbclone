@@ -75,6 +75,8 @@ int main(int argc, char * argv[])
 
   std::atomic<bool> quit = false;
   std::atomic<io::GimbalMode> mode{io::GimbalMode::IDLE}; // 全局云台模式
+  
+  std::atomic<double> vision_fps{0.0};
 
   auto plan_thread = std::thread([&]() {
     auto t0 = std::chrono::steady_clock::now();
@@ -99,7 +101,8 @@ int main(int argc, char * argv[])
         auto t1 = std::chrono::steady_clock::now();
 
         nlohmann::json data;
-        data["fps"] = 1 / tools::delta_time(t1, t0);
+       data["plan_fps"] = 1 / tools::delta_time(t1, t0);
+       data["vision_fps"] = vision_fps.load();
         t0 = t1;
 
         data["gimbal_yaw"] = gs.yaw;
@@ -182,6 +185,7 @@ int main(int argc, char * argv[])
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
     // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
     last_t = t;
+    vision_fps.store(fps);
     // tools::logger()->info("fps:: {:.2f}", fps);
 
     auto ypr = tools::eulers(q, 2, 1, 0);
