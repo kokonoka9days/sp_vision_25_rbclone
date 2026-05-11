@@ -96,8 +96,11 @@ int main(int argc, char * argv[])
         auto fired = gs.bullet_count > last_bullet_count;
         last_bullet_count = gs.bullet_count;
 
+        auto t1 = std::chrono::steady_clock::now();
+
         nlohmann::json data;
-        data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0);
+        data["fps"] = 1 / tools::delta_time(t1, t0);
+        t0 = t1;
 
         data["gimbal_yaw"] = gs.yaw;
         data["gimbal_yaw_vel"] = gs.yaw_vel;
@@ -174,7 +177,7 @@ int main(int argc, char * argv[])
     }
 
 
-    auto q = gimbal.q(t - 3ms);
+    auto q = gimbal.q(t - 1ms);
 
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
     // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
@@ -388,16 +391,16 @@ int main(int argc, char * argv[])
 
     } 
     cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    // cv::imshow("reprojection", img);
-    // auto key = cv::waitKey(1);
-    // if (key == 'q') break;
-    // if(key == 'r') {//TUDO :右键手动更改
-    //   io::GimbalState* g_demo = gimbal.set_state_();
-    //   g_demo->mode = !g_demo->mode;
-    // }
-    // if(key == 's') {
-    //   stopkey = !stopkey;
-    // }
+    cv::imshow("reprojection", img);
+    auto key = cv::waitKey(1);
+    if (key == 'q') break;
+    if(key == 'r') {//TUDO :右键手动更改
+      io::GimbalState* g_demo = gimbal.set_state_();
+      g_demo->mode = !g_demo->mode;
+    }
+    if(key == 's') {
+      stopkey = !stopkey;
+    }
   }
   quit = true;
   if (plan_thread.joinable()) plan_thread.join();
