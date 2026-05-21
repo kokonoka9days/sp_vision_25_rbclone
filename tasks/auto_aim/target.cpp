@@ -218,13 +218,11 @@ void Target::predict_fgo(double dt)
   auto prev_id = frame_id_;
   frame_id_++; 
 
-  // 获取上一帧的状态
   auto prev_pos = current_estimate_.at<gtsam::Point3>(X(prev_id));
   auto prev_vel = current_estimate_.at<gtsam::Vector3>(V(prev_id));
   auto prev_yaw = current_estimate_.at<gtsam::Rot2>(R(prev_id));
   auto prev_vyaw = current_estimate_.at<double>(W(prev_id));
 
-  // 基于匀速模型预测初值
   gtsam::Point3 curr_pos = prev_pos + prev_vel * dt;
   gtsam::Rot2 curr_yaw = prev_yaw * gtsam::Rot2::fromAngle(prev_vyaw * dt);
   
@@ -233,11 +231,16 @@ void Target::predict_fgo(double dt)
   new_values.insert(R(frame_id_), curr_yaw);
   new_values.insert(W(frame_id_), prev_vyaw);
 
-  // 添加运动约束因子 (需根据实际工况调节 Sigma 参数)
-  auto trans_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(3) << 0.1, 0.1, 0.1).finished());
-  auto vel_noise   = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(3) << 1.0, 1.0, 1.0).finished());
-  auto yaw_noise   = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(1) << 0.1).finished());
-  auto vyaw_noise  = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(1) << 1.0).finished());
+  // ==== 载入你提供的 Factor Noise (过程噪声) ====
+  
+  // translation_factor_noise: {0.001, 0.001, 0.001}
+  auto trans_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(3) << 0.001, 0.001, 0.001).finished());
+  // velocity_factor_noise: {0.01, 0.01, 0.01}
+  auto vel_noise   = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(3) << 0.01, 0.01, 0.01).finished());
+  // yaw_factor_noise: 0.005
+  auto yaw_noise   = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(1) << 0.005).finished());
+  // vyaw_factor_noise: 0.05
+  auto vyaw_noise  = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(1) << 0.05).finished());
 
   graph.add(TranslationFactor(trans_noise, X(prev_id), V(prev_id), X(frame_id_), dt));
   graph.add(VelocityFactor(vel_noise, V(prev_id), V(frame_id_)));
@@ -405,29 +408,35 @@ void Target::update_fgo(const Armor & armor, int id)
   if (current_estimate_.empty()) return;
 
   gtsam::NonlinearFactorGraph graph;
-  gtsam::Values new_values; // 观测步不新增独立状态节点，但需要将当前装甲板的Pose注入作为被约束变量
+  gtsam::Values new_values; 
 
-  // 将云台结算出的装甲板世界坐标转为 GTSAM Pose3 变量
   gtsam::Rot3 rot = gtsam::Rot3::Ypr(armor.ypr_in_world[0], armor.ypr_in_world[1], armor.ypr_in_world[2]); 
   gtsam::Point3 trans(armor.xyz_in_world[0], armor.xyz_in_world[1], armor.xyz_in_world[2]);
   gtsam::Pose3 armor_pose_world(rot, trans);
 
-  // 为这一帧的 Armor Pose 分配 Key 并插入初值
   gtsam::Key pose_key = gtsam::Symbol('p', frame_id_);
   new_values.insert(pose_key, armor_pose_world);
 
-  // 利用一个较松的先验因子固定 PNP 解算出的 Pose，或者交由底层的重投影误差约束
+  // 这里使用一个较松的先验固定 PNP 解算位姿本身，主要靠下面的自定义观测因子收敛
   auto pose_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(6) << 0.05, 0.05, 0.05, 0.05, 0.05, 0.05).finished());
   graph.addPrior(pose_key, armor_pose_world, pose_noise);
 
-  // 这里的 T_camera_to_odom 我们传入 Identity，因为传入的已经是世界坐标系的 Pose
   Eigen::Isometry3d T_identity = Eigen::Isometry3d::Identity();
-  auto obs_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(4) << 0.05, 0.05, 0.05, 0.05).finished());
+  
+  // ==== 载入你提供的 Observation Noise (观测噪声) ====
+  // 按照 factors.cpp 中 evaluateError 返回的 error 顺序：
+  // error = [tangential_error(切向), radial_error(径向), height_error(高度Z), yaw_error(偏航角)]
+  // 对应配置参数: 0.01, 0.01, 0.01, 0.005
+  auto obs_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(4) << 0.01, 0.01, 0.01, 0.005).finished());
+
+  // 载入装甲板半径极值范围
+  double radius_min = 0.15;
+  double radius_max = 0.50;
 
   if (name == ArmorName::outpost) {
-      graph.add(ArmorRadiusDZFactor(obs_noise, pose_key, RADIUS_KEY, DZ_KEY, R(frame_id_), X(frame_id_), T_identity, static_cast<ArmorIndex>(id), 0.1, 0.5, armor_num_));
+      graph.add(ArmorRadiusDZFactor(obs_noise, pose_key, RADIUS_KEY, DZ_KEY, R(frame_id_), X(frame_id_), T_identity, static_cast<ArmorIndex>(id), radius_min, radius_max, armor_num_));
   } else {
-      graph.add(ArmorRadiusCenterZFactor(obs_noise, pose_key, RADIUS_KEY, R(frame_id_), X(frame_id_), T_identity, static_cast<ArmorIndex>(id), 0.1, 0.5));
+      graph.add(ArmorRadiusCenterZFactor(obs_noise, pose_key, RADIUS_KEY, R(frame_id_), X(frame_id_), T_identity, static_cast<ArmorIndex>(id), radius_min, radius_max));
   }
 
   isam2_->update(graph, new_values);
@@ -502,6 +511,7 @@ void Target::init_fgo(const Armor & armor, double radius)
   params.relinearizeSkip = 1;
   isam2_ = std::make_shared<gtsam::ISAM2>(params);
 
+  // 插入初值
   gtsam::Values initial_values;
   initial_values.insert(X(0), gtsam::Point3(armor.xyz_in_world[0], armor.xyz_in_world[1], armor.xyz_in_world[2]));
   initial_values.insert(V(0), gtsam::Vector3(0, 0, 0));
@@ -510,10 +520,34 @@ void Target::init_fgo(const Armor & armor, double radius)
   initial_values.insert(RADIUS_KEY, radius);
   initial_values.insert(DZ_KEY, (name == ArmorName::outpost) ? TOWER_ARMOR_DH : 0.0);
 
-  // 对第0帧添加强先验，防止漂移
+  // ==== 载入你提供的 Prior Noise (先验噪声) ====
   gtsam::NonlinearFactorGraph graph;
-  auto prior_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(3) << 0.1, 0.1, 0.1).finished());
-  graph.addPrior(X(0), gtsam::Point3(armor.xyz_in_world[0], armor.xyz_in_world[1], armor.xyz_in_world[2]), prior_noise);
+  
+  // translation_prior_noise: {x: 0.1, y: 0.1, z: 0.1}
+  auto prior_x_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(3) << 0.1, 0.1, 0.1).finished());
+  graph.addPrior(X(0), gtsam::Point3(armor.xyz_in_world[0], armor.xyz_in_world[1], armor.xyz_in_world[2]), prior_x_noise);
+
+  // velocity_prior_noise: {x: 0.5, y: 0.5, z: 0.5}
+  auto prior_v_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(3) << 0.5, 0.5, 0.5).finished());
+  graph.addPrior(V(0), gtsam::Vector3(0, 0, 0), prior_v_noise);
+
+  // yaw_prior_noise: 9.0 (表示极度不信任通过 PNP 直接解算的单板 Yaw，允许后端大范围调整)
+  auto prior_r_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(1) << 9.0).finished());
+  graph.addPrior(R(0), gtsam::Rot2::fromAngle(armor.ypr_in_world[0]), prior_r_noise);
+
+  // vyaw_prior_noise: 9.0
+  auto prior_w_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(1) << 9.0).finished());
+  graph.addPrior(W(0), 0.0, prior_w_noise);
+
+  // radius_prior_noise: 0.005
+  auto prior_radius_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(1) << 0.005).finished());
+  graph.addPrior(RADIUS_KEY, radius, prior_radius_noise);
+
+  if (name == ArmorName::outpost) {
+      // dz_prior_noise: 0.05
+      auto prior_dz_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(1) << 0.05).finished());
+      graph.addPrior(DZ_KEY, TOWER_ARMOR_DH, prior_dz_noise);
+  }
 
   isam2_->update(graph, initial_values);
   current_estimate_ = isam2_->calculateEstimate();
