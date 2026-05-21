@@ -4,6 +4,8 @@ set(OpenVINO_DIR "/opt/intel/openvino_2024.6.0/runtime/cmake")
 
 find_package(OpenVINO REQUIRED COMPONENTS Runtime)
 
+find_package(GTSAM REQUIRED)
+
 add_subdirectory(planner/tinympc)
 
 add_library(auto_aim OBJECT 
@@ -23,6 +25,7 @@ add_library(auto_aim OBJECT
     multithread/commandgener.cpp
     multithread/mt_detector.cpp
     planner/planner.cpp
+    factors.cpp
 )
 
-target_link_libraries(auto_aim io openvino::runtime tinympcstatic)
+target_link_libraries(auto_aim io openvino::runtime tinympcstatic gtsam)

@@ -62,6 +62,8 @@ private:
 
   bool update_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
 
+  bool use_fgo_ = false;
+
   
 };
 

@@ -28,6 +28,8 @@ Tracker::Tracker(const std::string & config_path, Solver * solver)
   normal_temp_lost_count_ = max_temp_lost_count_;
 
   last_cam_is_short = true;
+
+  use_fgo_ = yaml["use_fgo"].IsDefined() ? yaml["use_fgo"].as<bool>() : false;
 }
 
 std::string Tracker::state() const { return state_; }
@@ -356,24 +358,35 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
                     (armor.name == ArmorName::three || armor.name == ArmorName::four ||
                      armor.name == ArmorName::five);
 
+  double target_radius = 0.2; // 默认半径
+
   if (is_balance) {
     Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1}};
-    target_ = Target(armor, t, 0.2, 2, P0_dig);
+    target_radius = 0.2;
+    target_ = Target(armor, t, target_radius, 2, P0_dig);
   }
-
   else if (armor.name == ArmorName::outpost) {
     Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 81, 0.4, 100, 1e-4, 0, 0}};
-    target_ = Target(armor, t, 0.2765, 3, P0_dig);
+    target_radius = 0.2765;
+    target_ = Target(armor, t, target_radius, 3, P0_dig);
   }
-
   else if (armor.name == ArmorName::base) {
     Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 64, 0.4, 100, 1e-4, 0, 0}};
-    target_ = Target(armor, t, 0.3205, 3, P0_dig);
+    target_radius = 0.3205;
+    target_ = Target(armor, t, target_radius, 3, P0_dig);
   }
-
   else {
     Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1}};
-    target_ = Target(armor, t, 0.2, 4, P0_dig);
+    target_radius = 0.2;
+    target_ = Target(armor, t, target_radius, 4, P0_dig);
+  }
+
+  // ==== 桥接：告诉 Target 开启 FGO，并执行 ISAM2 初始化 ====
+  // 注意：Tracker 的构造函数中需要事先读取 yaml 并给 Tracker::use_fgo_ 赋值。
+  // 即：use_fgo_ = yaml["use_fgo"].IsDefined() ? yaml["use_fgo"].as<bool>() : false;
+  target_.use_fgo_ = this->use_fgo_;
+  if (target_.use_fgo_) {
+    target_.init_fgo(armor, target_radius);
   }
 
   return true;

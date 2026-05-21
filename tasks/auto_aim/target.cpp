@@ -6,10 +6,20 @@
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 
+#include <gtsam/inference/Symbol.h>
+#include "factors.hpp"
+
 // 物理常量定义
 constexpr double TOWER_ARMOR_DH = 0.10;  // 前哨站两个装甲板之间的标准高低差(m)
 constexpr double TOWER_ARMOR_DTB = 0.16;  // 前哨装甲大跳变阈值(m)
 constexpr double TOWER_ARMOR_XTB = 0.05;  // 前哨装甲小跳变阈值(m)
+
+using gtsam::symbol_shorthand::X; // 装甲车中心位置: Point3 
+using gtsam::symbol_shorthand::V; // 装甲车线速度: Vector3
+using gtsam::symbol_shorthand::R; // 装甲车自转 Yaw: Rot2
+using gtsam::symbol_shorthand::W; // 装甲车自转角速度: double
+const gtsam::Key RADIUS_KEY = gtsam::Symbol('r', 0); // 装甲板旋转半径
+const gtsam::Key DZ_KEY = gtsam::Symbol('z', 0);     // 前哨站高低差
 
 namespace auto_aim
 {
@@ -102,6 +112,12 @@ void Target::predict(std::chrono::steady_clock::time_point t)
 
 void Target::predict(double dt)
 {
+  if (use_fgo_) {
+    predict_fgo(dt);
+    return;
+  }
+
+  // ==== 以下为完整保留的原有 EKF 预测逻辑 ====
   double vyaw = std::abs(ekf_.x[7]);
   double v_linear = std::hypot(ekf_.x[1], ekf_.x[3]); // 计算XY方向合成线速度 
   
@@ -112,7 +128,6 @@ void Target::predict(double dt)
   const double V_LOW = 0.3;        // 退出平移旋转的线速度阈值 (m/s)
 
   // ================= 运动状态转移逻辑 =================
-  // 核心目的是根据车辆当前的平移和自转速度，动态调整过程噪声Q，使得滤波器既能跟得紧，又不会乱漂
   switch (motion_state_) {
     case MotionState::TRANSLATION:
       if (vyaw > OMEGA_HIGH) {
@@ -144,7 +159,7 @@ void Target::predict(double dt)
 
   double v1, v2;
   if (name == ArmorName::outpost) {
-    this->ekf_x()(10) = TOWER_ARMOR_DH;
+    ekf_.x(10) = TOWER_ARMOR_DH; // 修复原代码中 this->ekf_x()(10) 返回临时变量的问题
     // 前哨站位置固定，收敛后极大限制平移噪声
     if (this->convergened()) {
         v1 = 0.1;  // 锁死 X, Y, Z 中心
@@ -193,18 +208,57 @@ void Target::predict(double dt)
   ekf_.predict(F, Q, f);
 }
 
+void Target::predict_fgo(double dt) 
+{
+  if (current_estimate_.empty()) return;
+  
+  gtsam::NonlinearFactorGraph graph;
+  gtsam::Values new_values;
+  
+  auto prev_id = frame_id_;
+  frame_id_++; 
+
+  // 获取上一帧的状态
+  auto prev_pos = current_estimate_.at<gtsam::Point3>(X(prev_id));
+  auto prev_vel = current_estimate_.at<gtsam::Vector3>(V(prev_id));
+  auto prev_yaw = current_estimate_.at<gtsam::Rot2>(R(prev_id));
+  auto prev_vyaw = current_estimate_.at<double>(W(prev_id));
+
+  // 基于匀速模型预测初值
+  gtsam::Point3 curr_pos = prev_pos + prev_vel * dt;
+  gtsam::Rot2 curr_yaw = prev_yaw * gtsam::Rot2::fromAngle(prev_vyaw * dt);
+  
+  new_values.insert(X(frame_id_), curr_pos);
+  new_values.insert(V(frame_id_), prev_vel);
+  new_values.insert(R(frame_id_), curr_yaw);
+  new_values.insert(W(frame_id_), prev_vyaw);
+
+  // 添加运动约束因子 (需根据实际工况调节 Sigma 参数)
+  auto trans_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(3) << 0.1, 0.1, 0.1).finished());
+  auto vel_noise   = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(3) << 1.0, 1.0, 1.0).finished());
+  auto yaw_noise   = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(1) << 0.1).finished());
+  auto vyaw_noise  = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(1) << 1.0).finished());
+
+  graph.add(TranslationFactor(trans_noise, X(prev_id), V(prev_id), X(frame_id_), dt));
+  graph.add(VelocityFactor(vel_noise, V(prev_id), V(frame_id_)));
+  graph.add(YawFactor(yaw_noise, R(prev_id), W(prev_id), R(frame_id_), dt));
+  graph.add(VyawFactor(vyaw_noise, W(prev_id), W(frame_id_)));
+
+  isam2_->update(graph, new_values);
+  current_estimate_ = isam2_->calculateEstimate();
+}
+
 void Target::update(const Armor & armor)
 {
   int id = 0;
 
-
   if (this->name == ArmorName::outpost) {
     // 【策略 A：前哨站专用】
-    // 纯几何匹配(距离+复合角度)，绕开因高度阶梯跳变导致 EKF 协方差波动的干扰
+    // 纯几何匹配(距离+复合角度)
     auto min_angle_error = 1e10;
     const std::vector<Eigen::Vector4d> & xyza_list = armor_xyza_list();
 
-    this->ekf_x()(10) = TOWER_ARMOR_DH;
+    if (!use_fgo_) ekf_.x(10) = TOWER_ARMOR_DH; 
 
     std::vector<std::pair<Eigen::Vector4d, int>> xyza_i_list;
     for (int i = 0; i < armor_num_; i++) {
@@ -233,7 +287,6 @@ void Target::update(const Armor & armor)
         min_angle_error = angle_error;
       }
     }
-
   } else {
     // 【策略 B：其他兵种通用】
     // 马氏距离匹配 + 迟滞防抖，有效应对平移带来的透视形变
@@ -292,18 +345,16 @@ void Target::update(const Armor & armor)
       }
     }
 
-    // 迟滞防抖动（Hysteresis）机制：倾向于保持上一次匹配的ID
+    // 迟滞防抖动
     id = best_id;
     double CHI_SQ_THRESHOLD = 9.488; 
     double HYSTERESIS_MARGIN = 5.0; 
-
     if (md_list[last_id] < CHI_SQ_THRESHOLD) {
       if (min_mahalanobis_dist > md_list[last_id] - HYSTERESIS_MARGIN) {
         id = last_id;
       }
     }
   }
-
 
   if (id != 0) jumped = true;
 
@@ -315,7 +366,7 @@ void Target::update(const Armor & armor)
     // 换板时，将上一块装甲板的历史累加数据计算为平均高度锚点
     if (name == ArmorName::outpost) {
       if (tower_armor_hs_datas_ptr[last_id] > 0) {
-        tower_armor_hs[last_id].first = true; // 标记该装甲板已有有效的历史数据
+        tower_armor_hs[last_id].first = true;
         tower_armor_hs[last_id].second = tower_armor_hs_datas[last_id] / tower_armor_hs_datas_ptr[last_id];
       }
     }
@@ -325,14 +376,12 @@ void Target::update(const Armor & armor)
 
   // 累加当前块装甲板的高度特征
   if(name == ArmorName::outpost){
-    double a = 0.1; // 互补滤波系数
+    double a = 0.1; 
     tower_armor_h = a * armor.xyz_in_world[2] + (1 - a) * last_tower_armor_h[id];
-    
     tower_armor_hs_datas[id] += tower_armor_h;
     last_tower_armor_h[id] = tower_armor_h;
     tower_armor_hs_datas_ptr[id]++;     
 
-    // 历史高度数据保护机制，防止长时间追踪导致累加溢出
     if(tower_armor_hs_datas[id] > 10000){
       tower_armor_hs_datas[id] = (tower_armor_hs_datas[id] / tower_armor_hs_datas_ptr[id]) * 600;
       tower_armor_hs_datas_ptr[id] = 600;
@@ -343,8 +392,46 @@ void Target::update(const Armor & armor)
   update_count_++;    
   xyz_in_world = armor.xyz_in_world;
 
-  // 调用 EKF 更新观测值
-  update_ypda(armor, id);
+  // ==== 路由：决定使用哪种后端进行状态更新 ====
+  if (use_fgo_) {
+    update_fgo(armor, id);
+  } else {
+    update_ypda(armor, id);
+  }
+}
+
+void Target::update_fgo(const Armor & armor, int id) 
+{
+  if (current_estimate_.empty()) return;
+
+  gtsam::NonlinearFactorGraph graph;
+  gtsam::Values new_values; // 观测步不新增独立状态节点，但需要将当前装甲板的Pose注入作为被约束变量
+
+  // 将云台结算出的装甲板世界坐标转为 GTSAM Pose3 变量
+  gtsam::Rot3 rot = gtsam::Rot3::Ypr(armor.ypr_in_world[0], armor.ypr_in_world[1], armor.ypr_in_world[2]); 
+  gtsam::Point3 trans(armor.xyz_in_world[0], armor.xyz_in_world[1], armor.xyz_in_world[2]);
+  gtsam::Pose3 armor_pose_world(rot, trans);
+
+  // 为这一帧的 Armor Pose 分配 Key 并插入初值
+  gtsam::Key pose_key = gtsam::Symbol('p', frame_id_);
+  new_values.insert(pose_key, armor_pose_world);
+
+  // 利用一个较松的先验因子固定 PNP 解算出的 Pose，或者交由底层的重投影误差约束
+  auto pose_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(6) << 0.05, 0.05, 0.05, 0.05, 0.05, 0.05).finished());
+  graph.addPrior(pose_key, armor_pose_world, pose_noise);
+
+  // 这里的 T_camera_to_odom 我们传入 Identity，因为传入的已经是世界坐标系的 Pose
+  Eigen::Isometry3d T_identity = Eigen::Isometry3d::Identity();
+  auto obs_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(4) << 0.05, 0.05, 0.05, 0.05).finished());
+
+  if (name == ArmorName::outpost) {
+      graph.add(ArmorRadiusDZFactor(obs_noise, pose_key, RADIUS_KEY, DZ_KEY, R(frame_id_), X(frame_id_), T_identity, static_cast<ArmorIndex>(id), 0.1, 0.5, armor_num_));
+  } else {
+      graph.add(ArmorRadiusCenterZFactor(obs_noise, pose_key, RADIUS_KEY, R(frame_id_), X(frame_id_), T_identity, static_cast<ArmorIndex>(id), 0.1, 0.5));
+  }
+
+  isam2_->update(graph, new_values);
+  current_estimate_ = isam2_->calculateEstimate();
 }
 
 void Target::update_ypda(const Armor & armor, int id)
@@ -408,8 +495,67 @@ void Target::update_ypda(const Armor & armor, int id)
   ekf_.update(z, H, R, h, z_subtract);
 }
 
+void Target::init_fgo(const Armor & armor, double radius) 
+{
+  gtsam::ISAM2Params params;
+  params.relinearizeThreshold = 0.01;
+  params.relinearizeSkip = 1;
+  isam2_ = std::make_shared<gtsam::ISAM2>(params);
+
+  gtsam::Values initial_values;
+  initial_values.insert(X(0), gtsam::Point3(armor.xyz_in_world[0], armor.xyz_in_world[1], armor.xyz_in_world[2]));
+  initial_values.insert(V(0), gtsam::Vector3(0, 0, 0));
+  initial_values.insert(R(0), gtsam::Rot2::fromAngle(armor.ypr_in_world[0]));
+  initial_values.insert(W(0), 0.0);
+  initial_values.insert(RADIUS_KEY, radius);
+  initial_values.insert(DZ_KEY, (name == ArmorName::outpost) ? TOWER_ARMOR_DH : 0.0);
+
+  // 对第0帧添加强先验，防止漂移
+  gtsam::NonlinearFactorGraph graph;
+  auto prior_noise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(3) << 0.1, 0.1, 0.1).finished());
+  graph.addPrior(X(0), gtsam::Point3(armor.xyz_in_world[0], armor.xyz_in_world[1], armor.xyz_in_world[2]), prior_noise);
+
+  isam2_->update(graph, initial_values);
+  current_estimate_ = isam2_->calculateEstimate();
+  frame_id_ = 0;
+}
+
 // 获取 EKF 状态向量
-Eigen::VectorXd Target::ekf_x() const { return ekf_.x; }
+Eigen::VectorXd Target::ekf_x() const 
+{ 
+  // 当开启了 FGO 并且内部已经有估计值时，从 GTSAM 图中提取
+  if (use_fgo_ && !current_estimate_.empty()) {
+    Eigen::VectorXd x = Eigen::VectorXd::Zero(11);
+    
+    auto pos = current_estimate_.at<gtsam::Point3>(X(frame_id_));
+    auto vel = current_estimate_.at<gtsam::Vector3>(V(frame_id_));
+    auto yaw = current_estimate_.at<gtsam::Rot2>(R(frame_id_));
+    auto vyaw = current_estimate_.at<double>(W(frame_id_));
+    
+    double radius = 0.2;
+    if (current_estimate_.exists(RADIUS_KEY)) {
+      radius = current_estimate_.at<double>(RADIUS_KEY);
+    }
+    
+    double dz = 0.0;
+    if (current_estimate_.exists(DZ_KEY)) {
+      dz = current_estimate_.at<double>(DZ_KEY);
+    }
+
+    // 重新封装为旧系统的格式：
+    // [0]x, [1]vx, [2]y, [3]vy, [4]z, [5]vz, [6]yaw, [7]vyaw, [8]r, [9]r_, [10]z_
+    x << pos.x(), vel.x(), 
+         pos.y(), vel.y(), 
+         pos.z(), vel.z(), 
+         yaw.theta(), vyaw, 
+         radius, 0.0, dz; 
+         
+    return x;
+  }
+  
+  // 没有使用 FGO 或者数据还未初始化完成时，降级使用 EKF 的原生结构
+  return ekf_.x; 
+}
 
 // 获取滤波器常引用
 const tools::ExtendedKalmanFilter & Target::ekf() const { return ekf_; }

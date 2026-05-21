@@ -11,6 +11,10 @@
 #include "armor.hpp"
 #include "tools/extended_kalman_filter.hpp"
 
+#include <gtsam/nonlinear/ISAM2.h>
+#include <gtsam/nonlinear/NonlinearFactorGraph.h>
+#include <gtsam/nonlinear/Values.h>
+
 namespace auto_aim
 {
 
@@ -78,6 +82,10 @@ public:
   
   int update_count_;
 
+  bool use_fgo_ = false;
+
+  void init_fgo(const Armor & armor, double radius);
+
 private:
   int armor_num_;
   int switch_count_;
@@ -95,6 +103,14 @@ private:
 
   void update_ypda(const Armor & armor, int id);  // yaw pitch distance angle
   Eigen::MatrixXd h_jacobian(const Eigen::VectorXd & x, int id) const;
+
+  std::shared_ptr<gtsam::ISAM2> isam2_;
+  gtsam::Values current_estimate_;
+  uint64_t frame_id_ = 0; // 记录帧数，用于给 Factor 分配 Key
+  
+  // FGO 专用的内部函数
+  void predict_fgo(double dt);
+  void update_fgo(const Armor & armor, int id);
 };
 
 }  // namespace auto_aim
