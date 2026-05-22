@@ -296,10 +296,14 @@ void Target::update_ypda(const Armor & armor, int id)
   auto center_yaw = std::atan2(armor.xyz_in_world[1], armor.xyz_in_world[0]);
   auto delta_angle = tools::limit_rad(armor.ypr_in_world[0] - center_yaw);
 
-  auto r2_azimuth = 4e-3;
-  auto r2_pitch = 4e-3;
-  auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2;
-  auto r2_d = log(std::abs(delta_angle) + 1) + 1;
+  // 用距离判断观测数据，距离越远观测越不可信
+  double distance = std::abs(armor.ypd_in_world[2]);
+  double dist_penalty = distance * distance * 0.05;
+
+  auto r2_azimuth = 4e-3 + distance * 1e-3;
+  auto r2_pitch   = 4e-3 + distance * 1e-3;
+  auto r2_angle   = log(distance + 1) / 200 + 9e-2 + dist_penalty * 0.1;
+  auto r2_d       = log(std::abs(delta_angle) + 1) + 1 + dist_penalty;
   
   if(last_cam_is_short != cam_is_short){
     cam_is_switch_time_point = std::chrono::steady_clock::now();
