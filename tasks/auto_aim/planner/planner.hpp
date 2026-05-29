@@ -37,7 +37,8 @@ public:
   enum ShootStrategy{//开火策略
     Dynamics,          //动力学
     rbSuppressiveFire, //旧火控,火力压制
-    rbHero             //英雄
+    rbHero,             //英雄
+    SB                  //哨兵
   };
   Eigen::Vector4d debug_xyza;
   double aim_target_yaw;
@@ -73,6 +74,8 @@ public:
     case rbHero:
       return rbHeroplan(*target, bullet_speed, gimbal_yaw);
       break;
+      case SB:
+      return sbplan(*target, bullet_speed, gimbal_yaw);
     default:
       // tools::logger()->warn("planner model error!");
       break;
@@ -81,6 +84,7 @@ public:
     
   }
   Plan rbplan(Target target, double bullet_speed, double gimbal_yaw);
+  Plan sbplan(Target target, double bullet_speed, double gimbal_yaw);
   bool rbShoot(Target target, double gimbal_yaw,  bool tower_fixed_pitch = false);
   Plan rbHeroplan(Target target, double bullet_speed, double gimbal_yaw); 
 private:

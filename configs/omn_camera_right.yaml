@@ -10,7 +10,7 @@ yolo11_model_path: ../assets/yolo11.xml
 yolov8_model_path: ../assets/yolov8.xml
 yolov5_model_path: ../assets/yolov5.xml
 device: GPU
-min_confidence: 0.8
+min_confidence: 0.7
 use_traditional: true
 
 #####-----ROI-----#####
@@ -79,8 +79,8 @@ auto_fire: true # 是否由自瞄控制射击
 
 camera_name: "daheng"
 camera_sn: "KE0210010003"
-exposure_us: 6000
-gain: 0.7
+exposure_us: 12000
+gain: 1
 gamma: 0.5
 vid_pid: "2ba2:4d55"
 flip: true

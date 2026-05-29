@@ -42,25 +42,27 @@ int main(int argc, char * argv[])
     cli.printMessage();
     return 0;
   }
+
+  io::Camera::initSDK();
   auto short_camera_config_path = cli.get<std::string>("short_camera");
   auto long_camera_config_path = cli.get<std::string>("long_camera");
+  // 全向感知相机（工业相机）
+  std::string omnl_yaml_name = cli.get<std::string>("l_cam");
+  std::string omnr_yaml_name = cli.get<std::string>("r_cam");
+  io::Camera omn_cam1(omnl_yaml_name);
+  io::Camera omn_cam2(omnr_yaml_name);
+  auto omn_l_yaml = tools::load(omnl_yaml_name);
+  auto omn_r_yaml = tools::load(omnr_yaml_name);
 
   // 主相机（工业相机）
   io::Camera short_camera(short_camera_config_path);
   io::Camera long_camera(long_camera_config_path);
   
   
-  // 全向感知相机（工业相机）
-  std::string omnl_yaml_name = cli.get<std::string>("l_cam");
-  std::string omnr_yaml_name = cli.get<std::string>("r_cam");
-  io::Camera omn_cam1(omnl_yaml_name);
-  // io::Camera omn_cam2(omnr_yaml_name);
-  auto omn_l_yaml = tools::load(omnl_yaml_name);
-  auto omn_r_yaml = tools::load(omnr_yaml_name);
-  omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
+
+  // omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
   // omn_cam2.main_and_secondary = tools::read<std::string>(omn_r_yaml, "main_and_secondary");
   // io::Camera back_camera("configs/camera.yaml");
-  tools::logger()->info("初始化");
   // 改为使用Gimbal串口通信（替代CBoard）
   // io::Gimbal gimbal(short_camera_config_path);
   
@@ -89,13 +91,19 @@ int main(int argc, char * argv[])
   // 新增一个变量用于记录全向相机是否处于暂停状态
   bool is_omn_paused = false; 
 
+
+  
+  // while(1){
+  //   // tools::logger()->info("100fps_time: s");
+  // }
   // 主循环
   while (!exiter.exit()) {
     // 读取云台模式
     // auto mode = gimbal.mode();
     
     
-    short_camera.try_read(img3, timestamp);
+    bool read = short_camera.try_read(img3, timestamp);
+    if(!read) continue;
 
     auto now = std::chrono::steady_clock::now();
     auto dt = tools::delta_time(now, last_t);
@@ -109,7 +117,7 @@ int main(int argc, char * argv[])
 
     std::list<auto_aim::Armor> armors;
 
-     armors = detector.detect(img3);
+    // armors = detector.detect(img3);
 
     // i++;
     // if(i == 100)
@@ -132,7 +140,7 @@ int main(int argc, char * argv[])
       auto t1 = std::chrono::steady_clock::now();
       // omn_cam1.pause();
       // omn_cam2.pause();
-      long_camera.pause();
+      // long_camera.pause();
       // short_camera.pause();
       is_omn_paused = true; // 更新状态标志
       auto t2 = std::chrono::steady_clock::now();
@@ -142,7 +150,7 @@ int main(int argc, char * argv[])
     if( key == 'r') {
       // 恢复全向相机
       auto t1 = std::chrono::steady_clock::now();
-      long_camera.resume();
+      // long_camera.resume();
       // omn_cam1.resume();
       // omn_cam2.resume();
       // short_camera.resume();
@@ -151,5 +159,5 @@ int main(int argc, char * argv[])
       auto dt = tools::delta_time(t2, t1);
       tools::logger()->info("恢复相机线程 {:.2f} s",dt);
     }
-}
+  }
 }

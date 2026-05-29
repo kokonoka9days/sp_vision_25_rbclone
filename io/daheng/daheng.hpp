@@ -23,6 +23,15 @@ namespace io
 
 class DahengCamera  : public CameraBase{
 public:
+
+    static void initSDK(){
+        // 初始化SDK
+        GX_STATUS status = GXInitLib();
+        if (status != GX_STATUS_SUCCESS) {
+            tools::logger()->error("[Daheng] 大恒相机初始化失败，错误码: {:#x}", status);
+            return;
+        }
+    }
     /**
      * @brief 构造函数
      * @param exposure_us 曝光时间(微秒)

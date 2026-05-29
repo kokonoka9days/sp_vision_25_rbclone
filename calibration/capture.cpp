@@ -32,6 +32,7 @@ void capture_loop(
 {
   // io::CBoard cboard(config_path);
   io::Gimbal gimbal(config_path);
+  io::Camera::initSDK();
   io::Camera camera(config_path);
   cv::Mat img;
   std::chrono::steady_clock::time_point timestamp;
@@ -53,10 +54,7 @@ void capture_loop(
 
     // 在图像上显示欧拉角，用来判断imuabs系的xyz正方向，同时判断imu是否存在零漂
     auto img_with_ypr = img.clone();
-    Eigen::Vector3d zyx = tools::eulers(q, 2, 1, 0) * 57.3;  // degree
-    tools::draw_text(img_with_ypr, fmt::format("Z {:.2f}", zyx[0]), {40, 40}, {0, 0, 255});
-    tools::draw_text(img_with_ypr, fmt::format("Y {:.2f}", zyx[1]), {40, 80}, {0, 0, 255});
-    tools::draw_text(img_with_ypr, fmt::format("X {:.2f}", zyx[2]), {40, 120}, {0, 0, 255});
+
 
     std::vector<cv::Point2f> corners_2d;
     // 修改：使用棋盘格角点检测
@@ -65,7 +63,10 @@ void capture_loop(
                                                                             // cv::CALIB_CB_FILTER_QUADS
                                                                             cv::CALIB_CB_FAST_CHECK
                                                                           );
-    
+    Eigen::Vector3d zyx = tools::eulers(q, 2, 1, 0) * 57.3;  // degree
+    tools::draw_text(img_with_ypr, fmt::format("Z {:.2f}", zyx[0]), {40, 40}, {0, 0, 255});
+    tools::draw_text(img_with_ypr, fmt::format("Y {:.2f}", zyx[1]), {40, 80}, {0, 0, 255});
+    tools::draw_text(img_with_ypr, fmt::format("X {:.2f}", zyx[2]), {40, 120}, {0, 0, 255});    
     // 修改：如果找到角点，进行亚像素级精确化
     if (success) {
       cv::Mat gray;

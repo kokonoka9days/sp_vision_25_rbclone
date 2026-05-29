@@ -60,14 +60,15 @@ outpost_max_temp_lost_count: 75
 # low_speed_delay_time: 0.093 # s
 
 #####-----aimer参数-----##### 12mm
-yaw_offset: 1.3 # degree 
-pitch_offset: -1.3 # degree 2
+yaw_offset: -0.5 # degree 
+pitch_offset: 0.4 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
-decision_speed: 8 # rad/s
-high_speed_delay_time: 0.025 # s   远 0.25
+decision_speed: 8 # rad/
+
+high_speed_delay_time: 0.018 # s   远 0.25
 low_speed_delay_time: 0.017 # s    远 0.25
-far_pitch_offset: 0.0
+far_pitch_offset: 1.2
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree
@@ -126,14 +127,14 @@ R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 # # _camera2gimbal第三位调pitch
 
 # #12mm camera
-# 相机同理想情况的偏角: yaw-0.79 pitch1.06 roll-4.20 degree
-# 标定板到世界坐标系原点的水平距离: 3.34 m
-# 标定板同竖直摆放时的偏角: yaw60.84 pitch6.46 roll-1.94 degree
-R_camera2gimbal: [0.012327063892437396, 0.019537169872920205, 0.9997331356362796, -0.9972365299131897, -0.07301355263027091, 0.013723138817584352, 0.07326217920927436, -0.9971395690301648, 0.018583136760108223]
-t_camera2gimbal: [-0.2695252097558897, 0.09472533638902465, 0.07472640888695327]
-# 重投影误差: 0.0748px
-camera_matrix: [4712.409049922741, 0, 526.5852166977706, 0, 4745.503144906068, 446.4478654312003, 0, 0, 1]
-distort_coeffs: [-0.025416134357036983, 0.5373406454217504, -0.002895088522104565, -0.001737896767850305, -3.321171689166433]
+# 相机同理想情况的偏角: yaw-1.01 pitch0.40 roll-3.17 degree
+# 标定板到世界坐标系原点的水平距离: 3.99 m
+# 标定板同竖直摆放时的偏角: yaw18.59 pitch10.91 roll179.05 degree
+R_camera2gimbal: [0.01724177990211943, 0.008031166851665581, 0.9998190943289729, -0.9983196678891441, -0.05519050378990992, 0.017659246788155888, 0.05532234387221791, -0.9984435430460833, 0.007066089305084381]
+t_camera2gimbal: [-0.06053188184293589, 0.04306961926275315, 0.07400899334239491]
+# 重投影误差: 0.1039px
+camera_matrix: [4733.43401413086, 0, 599.7636786594903, 0, 4741.85173415842, 478.8499763209543, 0, 0, 1]
+distort_coeffs: [0.021580388912033843, -1.367908470971454, -0.0014335525678331896, -0.0030262393654059178, 31.166315287522888]
 gimbal_y1: 1
 gimbal_p2: 2
 gimbal_r3: 3
@@ -148,13 +149,13 @@ com_port: "/dev/ttyACM1"
 
 
 #####-----planner-----#####
-target_dist_error: -0.45
-target_h_error: 0
+target_dist_error: 0.0
+target_h_error: 0.4
 fire_thresh: 0.003 # 
-small_armor_tolerance: 0.12
+small_armor_tolerance: 0.03
 big_armor_tolerance: 0.22
 tower_and_base_armor_tolerance_: 0.10  # 26赛季前哨站和基地装甲板检测宽度
-gimbal_control_delay: 0.06
+gimbal_control_delay: 0.02 
 tower_pitch_prediction_time: 0.3
 
 max_yaw_acc: 50

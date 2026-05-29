@@ -47,22 +47,28 @@ int main(int argc, char * argv[])
   // ROS2 通信
   io::ROS2 ros2;
 
-  // 主相机（工业相机）
   
-  io::Camera long_camera(long_camera_config_path);
-  io::Camera short_camera(short_camera_config_path);
-  
-  std::string omnr_yaml_name = cli.get<std::string>("r_cam");
-    io::Camera omn_cam2(omnr_yaml_name);
+
+  io::Camera::initSDK();
+
     // 全向感知相机（工业相机）
   std::string omnl_yaml_name = cli.get<std::string>("l_cam");
-
+  std::string omnr_yaml_name = cli.get<std::string>("r_cam");
   io::Camera omn_cam1(omnl_yaml_name);
-
+  io::Camera omn_cam2(omnr_yaml_name);
   auto omn_l_yaml = tools::load(omnl_yaml_name);
   auto omn_r_yaml = tools::load(omnr_yaml_name);
   omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
   omn_cam2.main_and_secondary = tools::read<std::string>(omn_r_yaml, "main_and_secondary");
+  
+  // 主相机（工业相机） 
+
+  io::Camera short_camera(short_camera_config_path);
+  std::this_thread::sleep_for(2s);
+  io::Camera long_camera(long_camera_config_path);  
+
+  
+
 
 
   // io::Camera back_camera("configs/camera.yaml");
@@ -125,7 +131,7 @@ int main(int argc, char * argv[])
           
         //MPC预测以及+自家火控
         auto_aim::Planner * plan_short_or_long = target->cam_is_short ? &bincameras.planners.short_aim : &bincameras.planners.long_aim;
-        auto plan =  plan_short_or_long->plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
+        auto plan =  plan_short_or_long->plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::SB);
         
         // 1. 设置默认值
         uint8_t name = 0;
@@ -205,24 +211,24 @@ int main(int argc, char * argv[])
   });
   std::chrono::steady_clock::time_point last, last_track_point = std::chrono::steady_clock::now();
   // 主循环
-long_camera.pause();
+  // long_camera.pause();/
 
   while (!exiter.exit()) {
     // 读取云台模式
     auto mode = gimbal.mode();
     auto now = std::chrono::steady_clock::now();
     auto dt = tools::delta_time(now, last);
-    tools::logger()->info("{:.2f} fps", 1 / dt);
+    // tools::logger()->info("{:.2f} fps", 1 / dt);
     last = now;
     
     // 读取主相机图像
-    // bool is_full = bincameras.read(img, timestamp, tracker);
-    bincameras.read(img, timestamp, tracker);
+    bool is_full = bincameras.read(img, timestamp, tracker);
+    // bincameras.read(img, timestamp, tracker);
 
-    // if(!is_full) {
-    //   tools::logger()->debug("[BinocularAim] 双目相机无法读到数据");
-    //   continue;
-    // }
+    if(!is_full) {
+      tools::logger()->debug("[BinocularAim] 双目相机无法读到数据");
+      continue;
+    }
     
     // 获取云台姿态（四元数）
     Eigen::Quaterniond q = gimbal.q(timestamp - 3ms);
@@ -283,7 +289,9 @@ long_camera.pause();
 
       gimbal.sb_send(sb_cmd);
     }
-    if(tracker.state() != "lost" || gimbal.state().mode == (uint8_t)4 ){
+    if(tracker.state() != "lost" 
+    // || gimbal.state().mode == (uint8_t)4 
+  ){
       last_track_point = std::chrono::steady_clock::now();
       omn_cam1.pause();
       omn_cam2.pause();
@@ -307,7 +315,8 @@ long_camera.pause();
     }
     if(gimbal.state().mode == 4 
     && bincameras.is_short ){ // 强制切长焦相机
-      bincameras.Switch(tracker, true); 
+      bincameras.Switch(tracker); 
+      
       // if(!base_armors.empty()) {
       //   targets = tracker.track(base_armors, timestamp);
       // }else{
@@ -315,6 +324,7 @@ long_camera.pause();
       // }
        decider.set_mode(3);
     }
+    tools::logger()->info(" gimbal.state().mode == {}", gimbal.state().mode);
 
    if(gimbal.state().mode == 4 
     && !bincameras.is_short ){
@@ -337,7 +347,7 @@ long_camera.pause();
     // 设置优先级
     decider.set_priority(armors);
   
-    targets = tracker.track(armors, timestamp);
+    targets = tracker.track(armors, timestamp, bincameras.is_short);
 
     {
       // 自瞄模式 - 使用MPC
@@ -404,7 +414,7 @@ long_camera.pause();
         // 将目标放入队列供MPC线程处理
         target_queue.push(targets.front());
         //自动切换相机
-        if(gimbal.state().mode != 4 && gimbal.state().mode != 5) bincameras.ChangeTheScope(targets.front(), tracker);
+        // if(gimbal.state().mode != 4 ) bincameras.ChangeTheScope(targets.front(), tracker);
       } else {
         target_queue.push(std::nullopt);
       }
@@ -427,6 +437,7 @@ long_camera.pause();
         tools::draw_points(img, image_points, {0, 0, 255});
      }
     }
+    recorder.record(img, q, timestamp);
 
     
     cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸

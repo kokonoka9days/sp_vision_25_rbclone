@@ -157,10 +157,10 @@ void Target::predict(double dt)
     // 根据状态机分配不同的噪声
     switch (motion_state_) {
       case MotionState::TRANSLATION:
-        v1 = 100; v2 = 20; // 灵活平移
+        v1 = 100; v2 = 400; // 灵活平移
         break;
       case MotionState::IN_PLACE_ROTATION:
-        v1 = 1;   v2 = 0.1; // 抑制平移漂移，紧跟自转
+        v1 = 100;   v2 = 400; // 抑制平移漂移，紧跟自转
         break;
       case MotionState::TRANSLATION_ROTATION:
         v1 = 100; v2 = 400; // 高机动状态，全部放开
@@ -253,7 +253,7 @@ void Target::update(const Armor & armor)
       last_cam_is_short = cam_is_short;
     }
     if(last_cam_is_short){
-      tools::logger()->info("[Target] last_cam_is_short");
+      // tools::logger()->info("[Target] last_cam_is_short");
       
     }
     auto now = std::chrono::steady_clock::now();

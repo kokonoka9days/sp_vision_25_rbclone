@@ -36,13 +36,13 @@ int main(int argc, char * argv[])
   tools::Exiter exiter;
   tools::Plotter plotter;
 
-  cv::CommandLineParser cli(argc, argv, keys);
+  cv::CommandLineParser cli(argc, argv, keys);  
   auto config_path = cli.get<std::string>(0);
   if (cli.has("help") || config_path.empty()) {
     cli.printMessage();
     return 0;
   }
-
+  io::Camera::initSDK();
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
 
@@ -130,7 +130,7 @@ int main(int argc, char * argv[])
         data["tower_h2"] = target->tower_armor_hs[1];
         data["tower_h3"] = target->tower_armor_hs[2];
         data["tower_armor_h"] = target->tower_armor_h;
-
+                                              
         const auto ekf_satic = target->ekf_x();
         data["ekf_x"] = ekf_satic(0);
         data["ekf_vx"] = ekf_satic(1);
@@ -157,7 +157,7 @@ int main(int argc, char * argv[])
 
   while (!exiter.exit()) {
     camera.read(img, t);
-    auto q = gimbal.q(t - 3ms);
+    auto q = gimbal.q(t);
 
     auto now = std::chrono::steady_clock::now();
     double fps = 1./tools::delta_time(now, last_t);
@@ -273,14 +273,14 @@ int main(int argc, char * argv[])
     }
 
 
-    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    cv::imshow("reprojection", img);
-    auto key = cv::waitKey(1);
-    if (key == 'q') break;
-    if(key == 'r') {//TUDO :右键手动更改
-      io::GimbalState* g_demo = gimbal.set_state_();
-      g_demo->mode = !g_demo->mode;
-    }
+    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    // cv::imshow("reprojection", img);
+    // auto key = cv::waitKey(1);
+    // if (key == 'q') break;
+    // if(key == 'r') {//TUDO :右键手动更改
+    //   io::GimbalState* g_demo = gimbal.set_state_();
+    //   g_demo->mode = !g_demo->mode;
+    // }
     // if(key == 's') {
     //   stopkey = !stopkey;
     // }

@@ -115,7 +115,7 @@ fire_thresh: 0.006
 small_armor_tolerance: 0.12
 big_armor_tolerance: 0.22
 tower_and_base_armor_tolerance_: 0.10  # 26赛季前哨站和基地装甲板检测宽度
-gimbal_control_delay: 0.0
+gimbal_control_delay: 0.0012
 tower_pitch_prediction_time: 0.19
 
 max_yaw_acc: 50

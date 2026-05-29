@@ -39,6 +39,8 @@ public:
   
 
   Camera(const std::string & config_path);
+
+  static void initSDK();
   void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp);
   bool try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp);
 
