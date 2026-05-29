@@ -102,6 +102,7 @@ camera_sn: "FDN24040487"
 exposure_us: 4000
 gain: 0.4
 gamma: 0.6
+img_gamma: 1
 vid_pid: "2ba2:4d55"
 flip: true
 mirror: true

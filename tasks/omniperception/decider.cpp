@@ -7,6 +7,7 @@
 
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
+#include "tools/img_tools.hpp"
 #include "tasks/auto_aim/armor.hpp"
 
 namespace omniperception
@@ -59,11 +60,20 @@ io::VisionToGimbal Decider::decide_g(
   }
   if(!read_full && !cams[count_]->try_read(omn_img, timestamp)){
     count_ = (count_ + 1) % camera_num;
+    tools::logger()->info("[omniperception::Decider] 感知相机均无img");
     return vision_cmd;
   }
 
+
   auto armors = yolo.detect(omn_img);
   auto empty = armor_filter(armors);
+
+  for(auto armor : armors){
+    auto image_points = armor.points;
+    tools::draw_points(omn_img, image_points, {235, 206, 135});    
+  }
+
+  // tools::logger()->info("[omniperception::Decider] 1111");
 
   if(!empty){
     delta_angle = this->delta_angle_3d(armors, cams[count_]->main_and_secondary, left_solver, right_solver);

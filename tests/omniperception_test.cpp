@@ -31,7 +31,7 @@ int main(int argc, char * argv[])
 {
   tools::Exiter exiter;
   tools::Plotter plotter;
-  tools::Recorder recorder(90);
+  // tools::Recorder recorder(90);
   int i =0;
   
   cv::CommandLineParser cli(argc, argv, keys);
@@ -79,8 +79,8 @@ int main(int argc, char * argv[])
   // 主循环5
   while (!exiter.exit()) {
 
-    omn_caml.read(img1, t1);
-    omn_camr.read(img2, t2);
+    // omn_caml.read(img1, t1);
+    // omn_camr.read(img2, t2);
 
     // 获取云台欧拉角
     auto gimbal_euler = tools::eulers(solver.R_gimbal2world(), 2, 1, 0);
@@ -96,14 +96,14 @@ int main(int argc, char * argv[])
     // data["yaw"] =(float)vision_cmd.yaw;
 
     plotter.plot(data);
-    recorder.record(img1, q, t1);
+    // recorder.record(img1, q, t1);
     
     // gimbal.send(vision_cmd);
 
-    cv::imshow("l_cam", img1);
-    cv::imshow("r_cam", img2);
-    auto key = cv::waitKey(1);
-    if (key == 'q') break;
+    // cv::imshow("l_cam", img1);
+    // cv::imshow("r_cam", img2);
+    // auto key = cv::waitKey(1);
+    // if (key == 'q') break;
     
 
 }

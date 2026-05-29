@@ -50,9 +50,10 @@ mode: 1
 
 camera_name: "daheng"
 camera_sn: "KE0210010004"
-exposure_us: 12000
+exposure_us: 2000
 gain: 1
 gamma: 0.5  
+img_gamma: 0.25
 vid_pid: "2ba2:4d55"
 flip: true
 mirror: true
@@ -69,7 +70,6 @@ min_armor_ratio: 1
 max_armor_ratio: 5
 max_side_ratio: 1.5
 max_rectangular_error: 25 # degree
-min_confidence: 0.8
 
 #####-----cboard参数-----#####
 quaternion_canid: 0x01
@@ -133,9 +133,6 @@ max_pitch_acc: 100
 Q_pitch: [9e6, 0]
 R_pitch: [1]
 
-
-#####-----decider参数-----#####
-mode: 1
 
 #####-----工业相机标定参数-----#####
 R_gimbal2imubody: [1, 0, 0, 0, 1, 0, 0, 0, 1]

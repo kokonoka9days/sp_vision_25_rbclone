@@ -29,7 +29,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/sb_long.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/sb_short.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -67,8 +67,6 @@ int main(int argc, char * argv[])
       auto target = target_queue.front(); 
       auto gs = gimbal.state();
 
-
-
       //MPC预测以及+自家火控
       auto plan = planner.plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
 
@@ -82,7 +80,6 @@ int main(int argc, char * argv[])
         name = static_cast<uint8_t>(target->name) + 1;
         tx = target->ekf_x()[0]; 
         ty = target->ekf_x()[2]; 
-
         // tools::logger()->info("{},{},{}", name,tx,ty);
 
       }

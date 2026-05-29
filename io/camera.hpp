@@ -36,6 +36,8 @@ class Camera
 public:
   std::string main_and_secondary = "main"; //是否是主相机
   std::chrono::microseconds timestamp_offset = std::chrono::microseconds(0); //时间戳偏移量
+  cv::Mat img_gamma_lut;
+  double  img_gamma = 1.0;
   
 
   Camera(const std::string & config_path);
