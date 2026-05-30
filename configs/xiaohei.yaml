@@ -40,6 +40,7 @@ outpost_max_temp_lost_count: 75
 #####-----aimer参数-----#####
 yaw_offset: -0.3 # degree -2.5
 pitch_offset: 2.7 # degree 2
+far_pitch_offset: 1.7
 comming_angle: 50 # degree
 leaving_angle: 0 # degree
 decision_speed: 8 # rad/s
@@ -56,9 +57,10 @@ auto_fire: true # 是否由自瞄控制射击
 
 camera_name: "hikrobot"
 camera_sn: "DA9492714"
-exposure_us: 6000
-gain: 0.7
+exposure_us: 3000
+gain: 1
 vid_pid: "2bdf:0001"
+img_gamma: 0.2
 flip: true
 mirror: true
 timestamp_offset_us: 2000 #us
