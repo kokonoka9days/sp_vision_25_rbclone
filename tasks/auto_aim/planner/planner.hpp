@@ -53,13 +53,11 @@ public:
     if (!target.has_value()) return {false};
 
     double delay_time =
-      std::abs(target->ekf_x()[7]) > decision_speed_ ? high_speed_delay_time_ : low_speed_delay_time_;
+      (std::abs(target->ekf_x()[7]) > decision_speed_ ? high_speed_delay_time_ : low_speed_delay_time_) + gimbal_delay_;
 
     if(std::abs(target->ekf_x()[7]) > decision_speed_) tools::logger()->warn("std::abs(target->ekf_x()[7]) > {}", decision_speed_);
 
-
     auto future = std::chrono::steady_clock::now() + std::chrono::microseconds(int(delay_time * 1e6));
-    
     
     target->predict(future);
 
@@ -117,6 +115,10 @@ private:
 
   std::chrono::steady_clock::time_point outpost_z_stable_start_time_;
   bool outpost_is_make = true;
+
+  double gimbal_delay_;
+
+  int shoot_offset_;
 };
 
 }  // namespace auto_aim

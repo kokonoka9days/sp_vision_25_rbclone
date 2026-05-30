@@ -61,6 +61,8 @@ leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
 high_speed_delay_time: 0.013 # s   远 0.25
 low_speed_delay_time: 0.013 # s    远 0.25
+gimbal_delay: 0.002
+shoot_offset: 2
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree

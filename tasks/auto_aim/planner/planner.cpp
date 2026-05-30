@@ -27,6 +27,8 @@ Planner::Planner(const std::string & config_path)
   tower_and_base_armor_tolerance_ = tools::read<double>(yaml, "tower_and_base_armor_tolerance_");
   gimbal_control_delay = tools::read<double>(yaml, "gimbal_control_delay");
   tower_pitch_prediction_time_ = tools::read<double>(yaml, "tower_pitch_prediction_time");
+  gimbal_delay_ = tools::read<double>(yaml, "gimbal_delay");
+  shoot_offset_ = tools::read<int>(yaml, "shoot_offset");
 
   setup_yaw_solver(config_path);
   setup_pitch_solver(config_path);
@@ -103,7 +105,7 @@ Plan Planner::plan(Target target, double bullet_speed)
   plan.pitch_vel = pitch_solver_->work->x(1, HALF_HORIZON);
   plan.pitch_acc = pitch_solver_->work->u(0, HALF_HORIZON);
 
-  auto shoot_offset_ = 2;
+  // auto shoot_offset_ = 2;
   plan.fire =
     std::hypot(
       traj(0, HALF_HORIZON + shoot_offset_) - yaw_solver_->work->x(0, HALF_HORIZON + shoot_offset_),
@@ -232,7 +234,7 @@ Plan Planner::sbplan(Target target, double bullet_speed, double gimbal_yaw)
       }
   }
 
-  auto shoot_offset_ = 2;
+  // auto shoot_offset_ = 2;
   if(abs(tools::limit_rad((gimbal_yaw )/57.3 - yaw_offset_ - plan.target_yaw)) * 57.3 < 3){
     plan.fire =
       std::hypot(
