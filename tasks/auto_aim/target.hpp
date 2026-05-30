@@ -14,13 +14,6 @@
 namespace auto_aim
 {
 
-// 定义运动状态枚举
-enum class MotionState {
-  TRANSLATION,          // 纯平移
-  IN_PLACE_ROTATION,    // 原地旋转
-  TRANSLATION_ROTATION  // 平移 + 旋转
-};
-
 class Target
 {
 public:
@@ -89,9 +82,6 @@ private:
   tools::ExtendedKalmanFilter ekf_; 
 
   std::chrono::steady_clock::time_point t_;
-
-  // 记录当前的运动状态
-  MotionState motion_state_ = MotionState::TRANSLATION;
 
   void update_ypda(const Armor & armor, int id);  // yaw pitch distance angle
   Eigen::MatrixXd h_jacobian(const Eigen::VectorXd & x, int id) const;
