@@ -78,18 +78,18 @@ Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t)
     // 2. 防死锁核心：如果弹出后队列空了，绝对不能再去调用 front()！
     // 否则 front() 会永久阻塞等待下一个数据导致画面卡死。
     // 此时直接返回当前唯一可用的数据即可。
-    if (queue_.empty()) {
-      return q_a;
-    }
+    // if (queue_.empty()) {
+    //   return q_a;
+    // }
 
     // 3. 此时队列非空，可以安全地偷看（不弹出）下一个数据，绝不会阻塞
     auto [q_b, t_b] = queue_.front(); 
 
     // 4. 如果请求时间比插值终点还要晚，说明 q_a 已经没有保留价值了
     // 丢弃 q_a，在下一轮循环中让 q_b 成为新的起点
-    if (t > t_b) {
-      continue; 
-    }
+    // if (t > t_b) {
+    //   continue; 
+    // }
 
     // 5. 正常的时间戳线性插值
     auto t_ab = tools::delta_time(t_a, t_b);

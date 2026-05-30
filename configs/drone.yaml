@@ -1,5 +1,6 @@
-enemy_color: "red"
+enemy_color: "auto"
 # enemy_color: "blue"
+# enemy_color: "red"
 
 
 #####-----神经网络参数-----#####
@@ -45,10 +46,10 @@ usb_gain: 10 #0-96
 # flip: false
 # mirror: false
 
-camera_name: "daheng"
-camera_sn: "FDN24040487"
-exposure_us: 5000
-gain: 0.5
+camera_name: "hikrobot"
+camera_sn: "DA7188471"
+exposure_us: 6000
+gain: 0.7
 gamma: 0.7
 vid_pid: "2bdf:0001"
 flip: false
@@ -85,15 +86,15 @@ max_temp_lost_count: 25
 outpost_max_temp_lost_count: 75
 
 #####-----aimer参数-----#####
-yaw_offset: -2.0 # degree -2.5
-pitch_offset: -4.7  # degree 2
+yaw_offset: 2.2 # degree -2.5
+pitch_offset: -1.8  # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 left_yaw_offset: -1
 right_yaw_offset: -0.6
 decision_speed: 10 # rad/s
-high_speed_delay_time: 0.26 # s
-low_speed_delay_time: 0.25 # s
+high_speed_delay_time: 0.025 # s
+low_speed_delay_time: 0.020 # s
 
 #####-----shooter参数-----#####
 first_tolerance: 5 # 近距离射击容差，degree
@@ -102,10 +103,12 @@ judge_distance: 3 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
 #####-----planner-----#####
-fire_thresh: 0.003 # 
+fire_thresh: 3 # 
+target_dist_error: 0
+target_h_error: -0.20
 small_armor_tolerance: 0.12
 big_armor_tolerance: 0.22
-gimbal_control_delay: 0
+gimbal_control_delay: 0.012
 tower_pitch_prediction_time: 0.05
 
 max_yaw_acc: 50
@@ -122,13 +125,13 @@ mode: 1
 #####-----工业相机标定参数-----#####
 R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 
-# 重投影误差: 0.1374px
-camera_matrix: [3463.7701919588485, 0, 680.43669894383868, 0, 3450.3152115133189, 694.32610333730372, 0, 0, 1]
-distort_coeffs: [-0.0094903762961805541, -0.10983451974022652, 0.0067729760529102474, 0.0046422730249848871, 2.7718267775770777]
+# 重投影误差: 0.0600px
+camera_matrix: [3629.2604024723614, 0, 615.76296028559454, 0, 3617.5424611963276, 537.28249377915051, 0, 0, 1]
+distort_coeffs: [-0.0064563365740047977, 0.26597520888340187, -0.00091608724392189006, -0.0084950810347407466, -0.87748546654082848]
 
-# 相机同理想情况的偏角: yaw-3.23 pitch1.67 roll-0.20 degree
-R_camera2gimbal: [0.05616961400956666, 0.02920234427776968, 0.99799408693173064, -0.9984153408019103, -0.0017935384096012807, 0.05624580403353209, 0.0034324500610342138, -0.99957191152445646, 0.029055326154125538]
-t_camera2gimbal: [0.27105015504526542, 0.10053004506772954, -0.14559443254888874]
+# 相机同理想情况的偏角: yaw0.37 pitch1.64 roll-2.29 degree
+R_camera2gimbal: [-0.0075966848382389429, 0.028332439342095388, 0.99956968904643917, -0.99917500836468665, -0.040094976336004562, -0.0064572077590568473, 0.039894774581351655, -0.99879410578634353, 0.028613654215451589]
+t_camera2gimbal: [-0.0064300910580854069, 0.037276498186262115, -0.055090648902732367]
 
 
 com_port: "/dev/ttyUSB0"
@@ -136,4 +139,4 @@ com_port: "/dev/ttyUSB0"
 # 上车前记得对齐电控坐标系和济瞄惯性系
 gimbal_y1: 1
 gimbal_p2: 2
-gimbal_r3: -3
+gimbal_r3: 3

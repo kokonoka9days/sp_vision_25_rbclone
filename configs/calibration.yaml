@@ -25,14 +25,14 @@ square_size_mm: 30   # 棋盘格方块大小（毫米）
 # timestamp_offset_us: 1000 #us
 
 #omn_r
-camera_name: "daheng"
-camera_sn: "FDN24040487"
-exposure_us: 12000
-gain: 0.5
+camera_name: "hikrobot"
+camera_sn: "DA7188471"
+exposure_us: 18000
+gain: 0.3
 gamma: 0.9  
 vid_pid: "2ba2:4d55"
-flip: true
-mirror: true
+flip: false
+mirror: false
 timestamp_offset_us: 1000 #us
 
 #omn_l
@@ -46,15 +46,15 @@ timestamp_offset_us: 1000 #us
 # mirror: false
 # timestamp_offset_us: 1000 #us
 
-camera_name: "daheng"
-camera_sn: "FDN24040486"
-exposure_us: 10000
-gain: 0.5
-gamma: 0.5
-vid_pid: "2ba2:4d55"
-flip: true
-mirror: true
-timestamp_offset_us: 1000 #us
+# camera_name: "daheng"
+# camera_sn: "FDN24040486"
+# exposure_us: 10000
+# gain: 0.5
+# gamma: 0.5
+# vid_pid: "2ba2:4d55"
+# flip: true
+# mirror: true
+# timestamp_offset_us: 1000 #us
 
 #####-----cboard参数-----#####
 quaternion_canid: 0x01
@@ -71,15 +71,16 @@ R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 R_camera2gimbal: [0.054173795801965755, -0.012022496889007464, 0.9984591425876975, -0.9985244799230355, 0.0031030309223427574, 0.054214704587644574, -0.0037500457113888983, -0.999922912412576, -0.01183665448991832]
 t_camera2gimbal: [0.2616737948916601, -0.07153032005460355, 0.004140131101408284]
 
-# 重投影误差: 0.1374px
-camera_matrix: [3463.7701919588485, 0, 680.43669894383868, 0, 3450.3152115133189, 694.32610333730372, 0, 0, 1]
-distort_coeffs: [-0.0094903762961805541, -0.10983451974022652, 0.0067729760529102474, 0.0046422730249848871, 2.7718267775770777]
+# 重投影误差: 0.0600px
+camera_matrix: [3629.2604024723614, 0, 615.76296028559454, 0, 3617.5424611963276, 537.28249377915051, 0, 0, 1]
+distort_coeffs: [-0.0064563365740047977, 0.26597520888340187, -0.00091608724392189006, -0.0084950810347407466, -0.87748546654082848]
+
 com_port: "/dev/ttyUSB0"
 # 陀螺仪是否装错, 编号012分别代表电控坐标系ypr，想换旋转轴只需要对编号进行互换即可，负号就是对当前值取负，交换完再取负
 # 上车前记得对齐电控坐标系和济瞄惯性系
 gimbal_y1: 1
 gimbal_p2: 2
-gimbal_r3: -3
+gimbal_r3: 3
 # 济瞄的惯性系  z轴往上, x轴是枪管指向
 #     x  z
 #      \ |
