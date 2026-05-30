@@ -138,14 +138,14 @@ void Target::predict(double dt)
   ekf_.predict(F, Q, f);
 
   // ================= 2. 单板 KF (CA模型) 动态自适应预测 =================
-  // 获取当前整车算出的自旋角速度
   double vyaw = std::abs(ekf_.x[7]);
 
   Eigen::MatrixXd F_CA = Eigen::MatrixXd::Identity(9, 9);
   for(int i = 0; i < 3; i++) {
     F_CA(i*3, i*3+1) = dt;
-    F_CA(i*3, i*3+2) = 0.5 * dt * dt;
-    F_CA(i*3+1, i*3+2) = dt;
+    // 将以下两行修改为 0，切断加速度对位置和速度预测的影响
+    F_CA(i*3, i*3+2) = 0.0; // 原为: 0.5 * dt * dt;
+    F_CA(i*3+1, i*3+2) = 0.0; // 原为: dt;
   }
 
   // --- [动态放大Q阵：自旋越快，CA模型的预测噪声越大] ---
@@ -354,17 +354,28 @@ void Target::update(const Armor & armor)
     armor_kfs_[id] = tools::ExtendedKalmanFilter(x0_ca, P0_ca, x_add_ca);
     armor_kf_init_[id] = true;
   } else {
-    // 发生换板（跳变），新板子刚从背面转过来，原CA模型可能发散
-    // 我们用整车EKF的位置纠正CA模型的位置，并衰减过往的速度/加速度以防毛刺
     if (is_switch_) {
+        // 1. 位置完美继承
         Eigen::Vector3d ekf_xyz = h_armor_xyz(ekf_.x, id);
         armor_kfs_[id].x[0] = ekf_xyz[0];
         armor_kfs_[id].x[3] = ekf_xyz[1];
         armor_kfs_[id].x[6] = ekf_xyz[2];
         
-        armor_kfs_[id].x[1] *= 0.5; armor_kfs_[id].x[2] *= 0.5; // vx, ax
-        armor_kfs_[id].x[4] *= 0.5; armor_kfs_[id].x[5] *= 0.5; // vy, ay
-        armor_kfs_[id].x[7] *= 0.5; armor_kfs_[id].x[8] *= 0.5; // vz, az
+        // ===== 核心修改 2：速度完美继承 (运动学公式) =====
+        // 利用当前整车线速度、角速度和半径，直接计算出当前装甲板的理论线速度
+        double r = ekf_.x[8];
+        double w = ekf_.x[7]; // vyaw
+        double plate_yaw = tools::limit_rad(ekf_.x[6] + id * 2 * CV_PI / armor_num_);
+        
+        armor_kfs_[id].x[1] = ekf_.x[1] - r * w * std::sin(plate_yaw); // 理论 vx
+        armor_kfs_[id].x[4] = ekf_.x[3] + r * w * std::cos(plate_yaw); // 理论 vy
+        armor_kfs_[id].x[7] = ekf_.x[5];                               // 理论 vz
+        
+        // 3. 加速度清零防毛刺
+        armor_kfs_[id].x[2] = 0; // ax
+        armor_kfs_[id].x[5] = 0; // ay
+        armor_kfs_[id].x[8] = 0; // az
+        // ==============================================
     }
 
     auto h_ca = [](const Eigen::VectorXd & x) -> Eigen::VectorXd {
@@ -383,6 +394,8 @@ void Target::update(const Armor & armor)
     Eigen::VectorXd z_ca = armor.xyz_in_world;
 
     armor_kfs_[id].update(z_ca, H_ca, R_ca, h_ca, z_sub_ca);
+
+    
   }
 }
 
@@ -439,6 +452,14 @@ void Target::update_ypda(const Armor & armor, int id)
   Eigen::MatrixXd H = h_jacobian(ekf_.x, id);
 
   ekf_.update(z, H, R, h, z_subtract);
+
+  if (update_count_ < 15) {
+    double damping = update_count_ / 15.0; // 从 1/15 线性平滑增加到 1.0
+    ekf_.x[1] *= damping; // vx 阻尼
+    ekf_.x[3] *= damping; // vy 阻尼
+    ekf_.x[5] *= damping; // vz 阻尼
+    ekf_.x[7] *= damping; // vyaw (角速度) 阻尼
+  }
 }
 
 // 获取 EKF 状态向量
