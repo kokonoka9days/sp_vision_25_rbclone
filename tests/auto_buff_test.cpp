@@ -10,6 +10,7 @@
 #include "tasks/auto_buff/buff_solver.hpp"
 #include "tasks/auto_buff/buff_target.hpp"
 #include "tasks/auto_buff/buff_type.hpp"
+#include "tasks/auto_buff/rm_buff_detector.hpp"
 #include "tools/exiter.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
@@ -45,6 +46,7 @@ int main(int argc, char * argv[])
   std::ifstream text(text_path);
 
   auto_buff::Buff_Detector detector(config_path);
+  auto_buff::Rm_Buff_Detector rm_detector(config_path);
   auto_buff::Solver solver(config_path);
   auto_buff::SmallTarget target;
   // auto_buff::BigTarget target;
@@ -76,7 +78,7 @@ int main(int argc, char * argv[])
 
     solver.set_R_gimbal2world({w, x, y, z});
 
-    auto power_runes = detector.detect(img);
+    auto power_runes = rm_detector.detect(img);
 
     solver.solve(power_runes);
 

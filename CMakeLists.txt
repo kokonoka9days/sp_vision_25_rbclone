@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16.3)
 
 project(sp_vision)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_BUILD_TYPE Release)
 
 # 设置用户本地库路径(jetson 专属)
@@ -39,6 +39,8 @@ include_directories(${PROJECT_SOURCE_DIR})
 
 include_directories(${PROJECT_SOURCE_DIR}/io/serial/include)
 
+# rm_vision_core 第三方库
+add_subdirectory(third_party/rm_vision_core)
 
 add_subdirectory(tools)
 add_subdirectory(io)

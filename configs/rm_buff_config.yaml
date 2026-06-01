@@ -1,0 +1,8 @@
+# Rm_Buff_Detector 配置文件
+# 基于 rm_vision_core 经典 CV 特征识别的神符检测器参数
+
+# 目标颜色: 0 = 红色 (RED), 1 = 蓝色 (BLUE)
+color: 0
+
+# 二值化阈值 (0~255)，用于提取目标颜色通道
+color_thresh: 80
