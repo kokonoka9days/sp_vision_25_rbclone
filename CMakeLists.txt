@@ -4,6 +4,7 @@ project(sp_vision)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # 设置用户本地库路径(jetson 专属)
 set(USER_LOCAL_DIR $ENV{HOME}/.local)

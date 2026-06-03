@@ -47,6 +47,7 @@ int main(int argc, char * argv[])
 
   auto_buff::Buff_Detector detector(config_path);
   auto_buff::Rm_Buff_Detector rm_detector(config_path);
+  rm_detector.set_debug_draw(true);
   auto_buff::Solver solver(config_path);
   auto_buff::SmallTarget target;
   // auto_buff::BigTarget target;
@@ -80,6 +81,30 @@ int main(int argc, char * argv[])
 
     auto power_runes = rm_detector.detect(img);
 
+    // ===== 诊断 1: 检测是否产出 PowerRune =====
+if (!power_runes.has_value()) {
+    fmt::print("[DETECT] frame {}: 检测失败，无 PowerRune\n", frame_count);
+} else {
+    auto &p = power_runes.value();
+    fmt::print("[DETECT] frame {}: fanblades={} r_center=({:.0f},{:.0f})\n",
+               frame_count, p.fanblades.size(), p.r_center.x, p.r_center.y);
+}
+
+solver.solve(power_runes);
+
+// ===== 诊断 2: PnP 是否算出有效位姿 =====
+if (power_runes.has_value()) {
+    auto &p = power_runes.value();
+    fmt::print("[SOLVER] xyz=({:.3f},{:.3f},{:.3f}) ypr=({:.1f},{:.1f},{:.1f})\n",
+               p.xyz_in_world[0], p.xyz_in_world[1], p.xyz_in_world[2],
+               p.ypr_in_world[0]*57.3, p.ypr_in_world[1]*57.3, p.ypr_in_world[2]*57.3);
+}
+
+target.get_target(power_runes, timestamp);
+
+// ===== 诊断 3: EKF 是否收敛 =====
+fmt::print("[TARGET] is_unsolve={}\n", target.is_unsolve());
+
     solver.solve(power_runes);
 
     target.get_target(power_runes, timestamp);
@@ -108,31 +133,34 @@ int main(int argc, char * argv[])
     }
 
     if (!target.is_unsolve()) {
-      auto & p = power_runes.value();
+      // if (power_runes.has_value()) {
+      //   auto & p = power_runes.value();
 
-      // 显示
-      for (int i = 0; i < 4; i++) tools::draw_point(img, p.target().points[i]);
-      tools::draw_point(img, p.target().center, {0, 0, 255}, 3);
-      tools::draw_point(img, p.r_center, {0, 0, 255}, 3);
+      //   if (rm_detector.is_debug_draw()) {
+      //     // 显示 target 叶片角点+中心
+      //     for (int i = 0; i < 4; i++) tools::draw_point(img, p.target().points[i]);
+      //     tools::draw_point(img, p.target().center, {0, 0, 255}, 3);
+      //     tools::draw_point(img, p.r_center, {0, 0, 255}, 3);
 
-      // 当前帧target更新后buff
-      auto Rxyz_in_world_now = target.point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
-      auto image_points =
-        solver.reproject_buff(Rxyz_in_world_now, target.ekf_x()[4], target.ekf_x()[5]);
-      tools::draw_points(
-        img, std::vector<cv::Point2f>(image_points.begin(), image_points.begin() + 4), {0, 255, 0});
-      tools::draw_points(
-        img, std::vector<cv::Point2f>(image_points.begin() + 4, image_points.end()), {0, 255, 0});
+      //     // 当前帧target更新后buff (绿色)
+      //     auto Rxyz_in_world_now = target.point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
+      //     auto image_points =
+      //       solver.reproject_buff(Rxyz_in_world_now, target.ekf_x()[4], target.ekf_x()[5]);
+      //     tools::draw_points(
+      //       img, std::vector<cv::Point2f>(image_points.begin(), image_points.begin() + 4), {0, 255, 0});
+      //     tools::draw_points(
+      //       img, std::vector<cv::Point2f>(image_points.begin() + 4, image_points.end()), {0, 255, 0});
 
-      // buff瞄准位置(预测)
-      double dangle = target.ekf_x()[5] - target_copy.ekf_x()[5];
-      auto Rxyz_in_world_pre = target.point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
-      image_points =
-        solver.reproject_buff(Rxyz_in_world_pre, target_copy.ekf_x()[4], target_copy.ekf_x()[5]);
-      tools::draw_points(
-        img, std::vector<cv::Point2f>(image_points.begin(), image_points.begin() + 4), {255, 0, 0});
-      tools::draw_points(
-        img, std::vector<cv::Point2f>(image_points.begin() + 4, image_points.end()), {255, 0, 0});
+      //     // buff瞄准位置(预测, 蓝色)
+      //     auto Rxyz_in_world_pre = target.point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
+      //     image_points =
+      //       solver.reproject_buff(Rxyz_in_world_pre, target_copy.ekf_x()[4], target_copy.ekf_x()[5]);
+      //     tools::draw_points(
+      //       img, std::vector<cv::Point2f>(image_points.begin(), image_points.begin() + 4), {255, 0, 0});
+      //     tools::draw_points(
+      //       img, std::vector<cv::Point2f>(image_points.begin() + 4, image_points.end()), {255, 0, 0});
+      //   }
+      // }
 
       // 观测器内部数据
       Eigen::VectorXd x = target.ekf_x();
