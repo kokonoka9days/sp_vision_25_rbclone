@@ -122,8 +122,9 @@ struct Rm_Buff_Detector::Impl
     struct FanData
     {
       cv::Point2f target_center;   // 靶标中心 (kpt[4])
-      cv::Point2f fan_center;      // 悬臂中心 (用于计算 kpt[5])
+      cv::Point2f fan_inner_mid;   // 悬臂内侧边中点 (kpt[5])
       std::vector<cv::Point2f> target_corners;  // 靶标菱形四角 (kpt[0..3])
+      std::vector<cv::Point2f> fan_corners;     // 悬臂矩形四角 (调试绘制)
       RuneType type;
     };
     std::vector<FanData> fan_data_list;
@@ -143,11 +144,30 @@ struct Rm_Buff_Detector::Impl
         center_points.push_back(center_it->second->imageCache().getCenter());
       }
 
-      // 悬臂中心: 来自 RUNE_FAN (用于 kpt[5] 计算)
-      cv::Point2f fan_center(0, 0);
+      // 悬臂: 来自 RUNE_FAN, 内侧边中点 = kpt[5], 四角 = 调试绘制
+      cv::Point2f fan_inner_mid(0, 0);
+      std::vector<cv::Point2f> fan_corners;
       auto fan_it = children.find(FeatureNode::ChildFeatureType::RUNE_FAN);
       if (fan_it != children.end() && fan_it->second) {
-        fan_center = fan_it->second->imageCache().getCenter();
+        fan_corners = fan_it->second->imageCache().getCorners();
+        // 找到距 R 最近的两个角点 → 内侧边 → 中点 = kpt[5]
+        // (R 尚未算出, 用所有 center_points 均值近似, 后面会重新精确算)
+        cv::Point2f approx_r(0, 0);
+        if (!center_points.empty()) {
+          for (auto & cp : center_points) approx_r += cp;
+          approx_r /= static_cast<float>(center_points.size());
+        }
+        if (fan_corners.size() >= 4 && cv::norm(approx_r) > 0) {
+          // 按到 approx_r 的距离排序, 取最近两个
+          std::vector<std::pair<float, int>> dists;
+          for (size_t ci = 0; ci < fan_corners.size(); ci++)
+            dists.emplace_back(cv::norm(fan_corners[ci] - approx_r), ci);
+          std::sort(dists.begin(), dists.end(),
+                    [](auto & a, auto & b) { return a.first < b.first; });
+          fan_inner_mid = (fan_corners[dists[0].second] + fan_corners[dists[1].second]) * 0.5f;
+        } else {
+          fan_inner_mid = fan_it->second->imageCache().getCenter();
+        }
       }
 
       // ★ 靶标角点: 来自 RuneCombo 自身的 imageCache (150mm 菱形)
@@ -157,7 +177,8 @@ struct Rm_Buff_Detector::Impl
         FanData fd;
         fd.target_corners = combo_corners;
         fd.target_center = combo_cache.getCenter();
-        fd.fan_center = fan_center;
+        fd.fan_inner_mid = fan_inner_mid;
+        fd.fan_corners = fan_corners;
         fd.type = combo->getRuneType();
         fan_data_list.push_back(fd);
       }
@@ -191,7 +212,28 @@ struct Rm_Buff_Detector::Impl
     // ====== 调试绘制 (靶标菱形角点+中心+方向, 编号对应 kpt[0..5]) ======
     if (debug_draw) {
       for (auto & fd : fan_data_list) {
-        if (fd.type == RuneType::STRUCK) continue;
+        if (fd.type == RuneType::STRUCK) {
+          // 已打击: 深色绘制
+          bool is_target = false;
+          cv::Scalar draw_color(100, 100, 100);  // 灰色
+          if (fd.target_corners.size() >= 4) {
+            for (size_t i = 0; i < 4; i++) {
+              cv::line(
+                img, fd.target_corners[i], fd.target_corners[(i + 1) % 4],
+                cv::Scalar(80, 80, 80), 1);
+            }
+          }
+          if (fd.fan_corners.size() >= 4) {
+            for (size_t i = 0; i < fd.fan_corners.size(); i++) {
+              cv::line(
+                img, fd.fan_corners[i], fd.fan_corners[(i + 1) % fd.fan_corners.size()],
+                cv::Scalar(80, 80, 80), 1);
+            }
+          }
+          cv::circle(img, fd.target_center, 3, cv::Scalar(100, 100, 100), -1);
+          cv::circle(img, fd.fan_inner_mid, 3, cv::Scalar(100, 100, 100), -1);
+          continue;
+        }
         bool is_target = (fd.type == RuneType::PENDING_STRUCK);
         cv::Scalar draw_color =
           is_target ? cv::Scalar(0, 255, 255) : cv::Scalar(255, 0, 255);
@@ -219,14 +261,20 @@ struct Rm_Buff_Detector::Impl
           img, "5", fd.target_center + cv::Point2f(8, -8),
           cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(0, 255, 0), 1);
 
-        // 点 6: kpt[5] = 从悬臂中心指向 R 方向
-        cv::Point2f dir = r_center - fd.fan_center;
-        float dir_len = cv::norm(dir);
-        cv::Point2f pt6 = (dir_len > 1e-3f) ? fd.fan_center + dir / dir_len * 30.0f
-                                            : fd.fan_center;
-        cv::circle(img, pt6, 4, cv::Scalar(255, 0, 0), -1);
+        // 悬臂矩形轮廓 (灰色)
+        if (fd.fan_corners.size() >= 4) {
+          for (size_t i = 0; i < fd.fan_corners.size(); i++) {
+            cv::line(
+              img, fd.fan_corners[i], fd.fan_corners[(i + 1) % fd.fan_corners.size()],
+              cv::Scalar(150, 150, 150), 1);
+          }
+          // 内侧边 (靠近 R) 高亮为红色
+          cv::line(img, fd.fan_corners[0], fd.fan_corners[1], cv::Scalar(0, 0, 255), 2);
+        }
+        // 点 6: kpt[5] = 悬臂内侧边中点 (靠近 R 标)
+        cv::circle(img, fd.fan_inner_mid, 4, cv::Scalar(255, 0, 0), -1);
         cv::putText(
-          img, "6", pt6 + cv::Point2f(6, -6),
+          img, "6", fd.fan_inner_mid + cv::Point2f(6, -6),
           cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(255, 0, 0), 1);
       }
       // 旋转中心
@@ -261,12 +309,8 @@ struct Rm_Buff_Detector::Impl
       }
       for (size_t i = fd.target_corners.size(); i < 4; i++) kpt[i] = fd.target_center;
 
-      kpt[4] = fd.target_center;  // point5: 扇叶中心
-      // 6号点(kpt[5]): 连接处顶部, 从扇叶中心指向旋转中心方向
-      cv::Point2f dir = r_center - fd.fan_center;  // 指向 R
-      float dir_len = cv::norm(dir);
-      kpt[5] = (dir_len > 1e-3f) ? fd.fan_center + dir / dir_len * 30.0f
-                                 : fd.fan_center;  // point6: 叶尖方向
+      kpt[4] = fd.target_center;  // point5: 靶标中心
+      kpt[5] = fd.fan_inner_mid;  // point6: 悬臂内侧边中点
 
       FanBlade blade(kpt, fd.target_center, fb_type);
       if (fb_type == _target) {

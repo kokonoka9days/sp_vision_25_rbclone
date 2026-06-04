@@ -22,7 +22,7 @@ const std::string keys =
   "{config-path c  | ../configs/demo.yaml    | yaml配置文件的路径}"
   "{start-index s  | 0                      | 视频起始帧下标    }"
   "{end-index e    | 0                      | 视频结束帧下标    }"
-  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/assets/buff/buff guanfang   | avi和txt文件的路径}";
+  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/assets/buff/small_buff  | avi和txt文件的路径}";
 
 int main(int argc, char * argv[])
 {
@@ -195,7 +195,7 @@ fmt::print("[TARGET] is_unsolve={}\n", target.is_unsolve());
 
     cv::imshow("result", img);
 
-    int key = cv::waitKey(5);
+    int key = cv::waitKey(50);
     if (key == 'q') break;
     while (key == ' ') {
       int y = cv::waitKey(30);
