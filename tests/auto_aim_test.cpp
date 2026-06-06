@@ -9,7 +9,7 @@
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/tracker.hpp"
 #include "tasks/auto_aim/yolo.hpp"
-#include "tasks/auto_aim/detector.hpp"
+// #include "tasks/auto_aim/detector.hpp"
 #include "tools/exiter.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
@@ -18,7 +18,7 @@
 
 const std::string keys =
   "{help h usage ? |                   | 输出命令行参数说明 }"
-  "{config-path c  | ../configs/demo.yaml | yaml配置文件的路径}"
+  "{config-path c  | ../configs/drone.yaml | yaml配置文件的路径}"
   "{start-index s  | 0                 | 视频起始帧下标    }"
   "{end-index e    | 0                 | 视频结束帧下标    }"
   "{@input-path    | ../assets/demo/demo  | avi和txt文件的路径}";
@@ -45,7 +45,7 @@ int main(int argc, char * argv[])
   std::ifstream text(text_path);
 
   auto_aim::YOLO yolo(config_path);
-  auto_aim::Detector traditional(config_path, true);
+  // auto_aim::Detector traditional(config_path, true);
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, &solver);
   auto_aim::Aimer aimer(config_path);
@@ -83,7 +83,7 @@ int main(int argc, char * argv[])
     // auto armors = traditional.detect(img, frame_count);
 
     auto tracker_start = std::chrono::steady_clock::now();
-    auto targets = tracker.track(armors, timestamp);
+    auto targets = tracker.test_track(armors, timestamp);
 
     auto aimer_start = std::chrono::steady_clock::now();
     auto command = aimer.aim(targets, timestamp, 27, false);
@@ -97,11 +97,11 @@ int main(int argc, char * argv[])
     /// 调试输出
 
     auto finish = std::chrono::steady_clock::now();
-    tools::logger()->info(
-      "[{}] yolo: {:.1f}ms, tracker: {:.1f}ms, aimer: {:.1f}ms", frame_count,
-      tools::delta_time(tracker_start, yolo_start) * 1e3,
-      tools::delta_time(aimer_start, tracker_start) * 1e3,
-      tools::delta_time(finish, aimer_start) * 1e3);
+    // tools::logger()->info(
+    //   "[{}] yolo: {:.1f}ms, tracker: {:.1f}ms, aimer: {:.1f}ms", frame_count,
+    //   tools::delta_time(tracker_start, yolo_start) * 1e3,
+    //   tools::delta_time(aimer_start, tracker_start) * 1e3,
+    //   tools::delta_time(finish, aimer_start) * 1e3);
 
     tools::draw_text(
       img,

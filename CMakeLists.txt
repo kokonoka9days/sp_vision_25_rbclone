@@ -147,6 +147,9 @@ if(TENSOR_RT_MAKE)
     add_executable(trt_camera_detect_test tests/trt_camera_detect_test.cpp)
     target_link_libraries(trt_camera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools auto_aim io)
 
+    add_executable(auto_aim_test tests/auto_aim_test.cpp)
+    target_link_libraries(auto_aim_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+
     add_executable(rbnx_auto_aim_debug src/rbnx_auto_aim_debug.cpp)
     target_link_libraries(rbnx_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim  tools io)
 
