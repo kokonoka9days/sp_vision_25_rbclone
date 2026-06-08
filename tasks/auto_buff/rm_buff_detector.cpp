@@ -126,6 +126,8 @@ struct Rm_Buff_Detector::Impl
       std::vector<cv::Point2f> target_corners;  // 靶标菱形四角 (kpt[0..3])
       std::vector<cv::Point2f> fan_corners;     // 悬臂矩形四角 (调试绘制)
       RuneType type;
+      int fan_inner_i1 = -1;  // 内侧边两个角点索引 (距 R 中心最近)
+      int fan_inner_i2 = -1;
     };
     std::vector<FanData> fan_data_list;
 
@@ -144,41 +146,22 @@ struct Rm_Buff_Detector::Impl
         center_points.push_back(center_it->second->imageCache().getCenter());
       }
 
-      // 悬臂: 来自 RUNE_FAN, 内侧边中点 = kpt[5], 四角 = 调试绘制
-      cv::Point2f fan_inner_mid(0, 0);
+      // 悬臂: 来自 RUNE_FAN, 仅收集四角, 内侧边中点稍后用精确 r_center 计算
       std::vector<cv::Point2f> fan_corners;
       auto fan_it = children.find(FeatureNode::ChildFeatureType::RUNE_FAN);
       if (fan_it != children.end() && fan_it->second) {
         fan_corners = fan_it->second->imageCache().getCorners();
-        // 找到距 R 最近的两个角点 → 内侧边 → 中点 = kpt[5]
-        // (R 尚未算出, 用所有 center_points 均值近似, 后面会重新精确算)
-        cv::Point2f approx_r(0, 0);
-        if (!center_points.empty()) {
-          for (auto & cp : center_points) approx_r += cp;
-          approx_r /= static_cast<float>(center_points.size());
-        }
-        if (fan_corners.size() >= 4 && cv::norm(approx_r) > 0) {
-          // 按到 approx_r 的距离排序, 取最近两个
-          std::vector<std::pair<float, int>> dists;
-          for (size_t ci = 0; ci < fan_corners.size(); ci++)
-            dists.emplace_back(cv::norm(fan_corners[ci] - approx_r), ci);
-          std::sort(dists.begin(), dists.end(),
-                    [](auto & a, auto & b) { return a.first < b.first; });
-          fan_inner_mid = (fan_corners[dists[0].second] + fan_corners[dists[1].second]) * 0.5f;
-        } else {
-          fan_inner_mid = fan_it->second->imageCache().getCenter();
-        }
       }
 
-      // ★ 靶标角点: 来自 RuneCombo 自身的 imageCache (150mm 菱形)
+      // 靶标角点: 来自 RuneCombo 自身的 imageCache (150mm 菱形)
       auto & combo_cache = combo->imageCache();
       auto combo_corners = combo_cache.getCorners();
       if (combo_corners.size() >= 4) {
         FanData fd;
         fd.target_corners = combo_corners;
         fd.target_center = combo_cache.getCenter();
-        fd.fan_inner_mid = fan_inner_mid;
         fd.fan_corners = fan_corners;
+        fd.fan_inner_mid = cv::Point2f(0, 0);  // 稍后用精确 r_center 计算
         fd.type = combo->getRuneType();
         fan_data_list.push_back(fd);
       }
@@ -202,6 +185,24 @@ struct Rm_Buff_Detector::Impl
       r_center /= static_cast<float>(fan_data_list.size());
     }
 
+    // 使用精确 r_center 计算每个扇叶的悬臂内侧边中点 = kpt[5]
+    for (auto & fd : fan_data_list) {
+      if (fd.fan_corners.size() >= 4 && cv::norm(r_center) > 0) {
+        std::vector<std::pair<float, int>> dists;
+        for (size_t ci = 0; ci < fd.fan_corners.size(); ci++)
+          dists.emplace_back(cv::norm(fd.fan_corners[ci] - r_center), ci);
+        std::sort(dists.begin(), dists.end(),
+                  [](auto & a, auto & b) { return a.first < b.first; });
+        fd.fan_inner_i1 = dists[0].second;
+        fd.fan_inner_i2 = dists[1].second;
+        fd.fan_inner_mid = (fd.fan_corners[fd.fan_inner_i1] +
+                            fd.fan_corners[fd.fan_inner_i2]) * 0.5f;
+      } else if (!fd.fan_corners.empty()) {
+        // 退路: 角点不足 4 个时用靶标中心近似
+        fd.fan_inner_mid = fd.target_center;
+      }
+    }
+
     // ★ 关键: 在绘制和构建 FanBlade 之前统一排序所有靶标角点
     // RuneCombo 的 corners 顺序为 {top, right, bottom, left}
     // 需要重排为 Solver 期望的 {bottom, right, top, left} (0=远,2=近)
@@ -213,14 +214,12 @@ struct Rm_Buff_Detector::Impl
     if (debug_draw) {
       for (auto & fd : fan_data_list) {
         if (fd.type == RuneType::STRUCK) {
-          // 已打击: 深色绘制
-          bool is_target = false;
-          cv::Scalar draw_color(100, 100, 100);  // 灰色
+          // 已打击: 深色绘制 (菱形 + 悬臂矩形 + 内侧边高亮)
           if (fd.target_corners.size() >= 4) {
             for (size_t i = 0; i < 4; i++) {
               cv::line(
                 img, fd.target_corners[i], fd.target_corners[(i + 1) % 4],
-                cv::Scalar(80, 80, 80), 1);
+                cv::Scalar(100, 100, 100), 1);
             }
           }
           if (fd.fan_corners.size() >= 4) {
@@ -228,6 +227,12 @@ struct Rm_Buff_Detector::Impl
               cv::line(
                 img, fd.fan_corners[i], fd.fan_corners[(i + 1) % fd.fan_corners.size()],
                 cv::Scalar(80, 80, 80), 1);
+            }
+            // 内侧边高亮 (暗红)
+            if (fd.fan_inner_i1 >= 0 && fd.fan_inner_i2 >= 0) {
+              cv::line(img, fd.fan_corners[fd.fan_inner_i1],
+                       fd.fan_corners[fd.fan_inner_i2],
+                       cv::Scalar(60, 60, 120), 2);
             }
           }
           cv::circle(img, fd.target_center, 3, cv::Scalar(100, 100, 100), -1);
@@ -268,8 +273,11 @@ struct Rm_Buff_Detector::Impl
               img, fd.fan_corners[i], fd.fan_corners[(i + 1) % fd.fan_corners.size()],
               cv::Scalar(150, 150, 150), 1);
           }
-          // 内侧边 (靠近 R) 高亮为红色
-          cv::line(img, fd.fan_corners[0], fd.fan_corners[1], cv::Scalar(0, 0, 255), 2);
+          // 内侧边 (靠近 R) 高亮 — 使用精确索引
+          if (fd.fan_inner_i1 >= 0 && fd.fan_inner_i2 >= 0) {
+            cv::line(img, fd.fan_corners[fd.fan_inner_i1],
+                     fd.fan_corners[fd.fan_inner_i2], cv::Scalar(0, 0, 255), 2);
+          }
         }
         // 点 6: kpt[5] = 悬臂内侧边中点 (靠近 R 标)
         cv::circle(img, fd.fan_inner_mid, 4, cv::Scalar(255, 0, 0), -1);
