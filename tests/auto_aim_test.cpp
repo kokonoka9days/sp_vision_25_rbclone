@@ -1,6 +1,7 @@
 #include <fmt/core.h>
 
 #include <chrono>
+#include <iomanip>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
@@ -25,6 +26,13 @@ const std::string keys =
 
 int main(int argc, char * argv[])
 {
+  // 诊断输出：CA vs CV
+  std::ofstream diag("ca_cv_diag.csv");
+  diag << "frame,name,"
+       << "cv_x,cv_y,cv_vx,cv_vy,cv_vyaw,"
+       << "ca_x,ca_y,ca_vx,ca_vy,ca_ax,ca_ay,"
+       << "fused_x,fused_y,w_cv\n";
+
   // 读取命令行参数
   cv::CommandLineParser cli(argc, argv, keys);
   if (cli.has("help")) {
@@ -97,11 +105,11 @@ int main(int argc, char * argv[])
     /// 调试输出
 
     auto finish = std::chrono::steady_clock::now();
-    tools::logger()->info(
-      "[{}] yolo: {:.1f}ms, tracker: {:.1f}ms, aimer: {:.1f}ms", frame_count,
-      tools::delta_time(tracker_start, yolo_start) * 1e3,
-      tools::delta_time(aimer_start, tracker_start) * 1e3,
-      tools::delta_time(finish, aimer_start) * 1e3);
+    // tools::logger()->info(
+    //   "[{}] yolo: {:.1f}ms, tracker: {:.1f}ms, aimer: {:.1f}ms", frame_count,
+    //   tools::delta_time(tracker_start, yolo_start) * 1e3,
+    //   tools::delta_time(aimer_start, tracker_start) * 1e3,
+    //   tools::delta_time(finish, aimer_start) * 1e3);
 
     tools::draw_text(
       img,
@@ -188,14 +196,41 @@ int main(int argc, char * argv[])
       data["nis_fail"] = target.ekf().data.at("nis_fail");
       data["nees_fail"] = target.ekf().data.at("nees_fail");
       data["recent_nis_failures"] = target.ekf().data.at("recent_nis_failures");
+
+      // === CA vs CV 融合诊断 ===
+      if (target.ca_ekf_ready()) {
+        Eigen::VectorXd cv_x = target.ekf_x();
+        Eigen::VectorXd ca_x = target.ca_ekf_x();
+        double w_cv = target.get_w_cv();
+        double w_ca = 1.0 - w_cv;
+        Eigen::Vector3d center_CV(cv_x[0], cv_x[2], cv_x[4]);
+        Eigen::Vector3d center_CA(ca_x[0], ca_x[3], ca_x[6]);
+        Eigen::Vector3d center_fused = (w_ca > 0.05)
+          ? (w_cv * center_CV + w_ca * center_CA) : center_CV;
+
+        diag << std::fixed << std::setprecision(4)
+             << frame_count << ","
+             << static_cast<int>(target.name) << ","
+             << center_CV.x() << "," << center_CV.y() << ","
+             << cv_x[1] << "," << cv_x[3] << "," << cv_x[7] << ","
+             << center_CA.x() << "," << center_CA.y() << ","
+             << ca_x[1] << "," << ca_x[4] << ","
+             << ca_x[2] << "," << ca_x[5] << ","
+             << center_fused.x() << "," << center_fused.y() << ","
+             << w_cv << "\n";
+      }
     }
     
     plotter.plot(data);
 
     cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
     cv::imshow("reprojection", img);
-    auto key = cv::waitKey(10);
+    auto key = cv::waitKey(30);
     if (key == 'q') break;
+     while (key == ' ') {
+      int y = cv::waitKey(30);
+      if (y == 'q') break;
+    } 
 
     //  tools::logger()->info(
     //     "imshow : {:.1f}ms",  tools::delta_time(std::chrono::steady_clock::now(), inshow_start) * 1e3);

@@ -7,6 +7,7 @@
 #include <queue>
 #include <string>
 #include <vector>
+#include <cmath>
 
 #include "armor.hpp"
 #include "tools/extended_kalman_filter.hpp"
@@ -52,6 +53,10 @@ public:
     return ekf_.x;
   }
 
+  inline Eigen::VectorXd ca_ekf_x() const { return ca_ekf_.x; }
+  inline bool ca_ekf_ready() const { return ca_ekf_init_; }
+  inline double get_w_cv() const { return w_cv_; }
+
   inline std::chrono::steady_clock::time_point getTimePoint() {
     return t_;
   }
@@ -76,13 +81,13 @@ private:
   
   bool is_switch_, is_converged_;
 
-  // 单一整车 EKF (CV模型)
-  tools::ExtendedKalmanFilter ekf_; 
+ // 单一整车 EKF (CV模型)
+ tools::ExtendedKalmanFilter ekf_; 
 
-  // === 4个单板 CA模型 KF (9维: x,vx,ax, y,vy,ay, z,vz,az) ===
-  tools::ExtendedKalmanFilter armor_kfs_[4]; 
-  bool armor_kf_init_[4] = {false, false, false, false};
-  double w_cv_ = 1.0; // 融合权重，1.0为完全信任整车CV，0.0为完全信任单板CA
+  // 中心级 CA EKF (9维: x,vx,ax, y,vy,ay, z,vz,az)
+  tools::ExtendedKalmanFilter ca_ekf_;
+  bool ca_ekf_init_ = false;
+ double w_cv_ = 1.0; // 融合权重，1.0为完全信任整车CV，0.0为完全信任单板CA
 
   std::chrono::steady_clock::time_point t_;
 

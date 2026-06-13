@@ -135,52 +135,38 @@ void Target::predict(double dt)
     if (std::abs(this->ekf_.x[7]) > 2) this->ekf_.x[7] = this->ekf_.x[7] > 0 ? 2.51 : -2.51;
   }
 
-  ekf_.predict(F, Q, f);
+ ekf_.predict(F, Q, f);
 
-  // ================= 2. 单板 KF (CA模型) 动态自适应预测 =================
-  double vyaw = std::abs(ekf_.x[7]);
-
-  Eigen::MatrixXd F_CA = Eigen::MatrixXd::Identity(9, 9);
-  for(int i = 0; i < 3; i++) {
-    F_CA(i*3, i*3+1) = dt;
-    // 将以下两行修改为 0，切断加速度对位置和速度预测的影响
-    F_CA(i*3, i*3+2) = 0.0; // 原为: 0.5 * dt * dt;
-    F_CA(i*3+1, i*3+2) = 0.0; // 原为: dt;
-  }
-
-  // --- [动态放大Q阵：自旋越快，CA模型的预测噪声越大] ---
-  double base_max_accel = 15.0; 
-  double dynamic_max_accel = base_max_accel * (1.0 + std::pow(vyaw, 2.0)); 
-
-  Eigen::MatrixXd Q_CA = Eigen::MatrixXd::Zero(9, 9);
-  for(int i = 0; i < 3; i++) {
-    Q_CA(i*3, i*3) = 0.05 * dt*dt*dt*dt * dynamic_max_accel;
-    Q_CA(i*3+1, i*3+1) = 0.05 * dt*dt * dynamic_max_accel;
-    Q_CA(i*3+2, i*3+2) = dt * dynamic_max_accel;
-  }
-
-  // --- [状态衰减遗忘：自旋越快，历史加速度清空越快，防急停甩头] ---
-  double accel_decay = std::exp(-std::pow(vyaw / 2.0, 2.0)); 
-
-  auto f_ca = [&](const Eigen::VectorXd & x) -> Eigen::VectorXd {
-    Eigen::VectorXd x_pred = F_CA * x;
-    
-    // 强制按高斯分布衰减加速度项
-    x_pred[2] *= accel_decay; 
-    x_pred[5] *= accel_decay; 
-    x_pred[8] *= accel_decay; 
-    
-    return x_pred;
-  };
-
-  // 执行 CA 预测
-  for(int i = 0; i < 4; i++) {
-    if(armor_kf_init_[i]) {
-      armor_kfs_[i].predict(F_CA, Q_CA, f_ca);
+  // ================= 2. 中心级 CA EKF 预测 =================
+  if (ca_ekf_init_) {
+    // F_CA: 9x9 完整 CA 模型 (位置←速度←加速度)
+    Eigen::MatrixXd F_CA = Eigen::MatrixXd::Identity(9, 9);
+    for (int i = 0; i < 3; i++) {
+      F_CA(i*3, i*3+1) = dt;
+      F_CA(i*3+1, i*3+2) = dt;
+      F_CA(i*3, i*3+2) = 0.5 * dt * dt;
     }
+
+    // Q_CA: Singer 型块对角，q=1.0
+    double q = 1.0;
+    double dt2 = dt * dt;
+    double dt3 = dt2 * dt;
+    double dt4 = dt3 * dt;
+    double dt5 = dt4 * dt;
+    Eigen::MatrixXd Q_CA = Eigen::MatrixXd::Zero(9, 9);
+    for (int i = 0; i < 3; i++) {
+      int j = i * 3;
+      Q_CA(j,   j)   = q * dt5 / 20.0;  Q_CA(j,   j+1) = q * dt4 / 8.0;   Q_CA(j,   j+2) = q * dt3 / 6.0;
+      Q_CA(j+1, j)   = q * dt4 / 8.0;   Q_CA(j+1, j+1) = q * dt3 / 3.0;   Q_CA(j+1, j+2) = q * dt2 / 2.0;
+      Q_CA(j+2, j)   = q * dt3 / 6.0;   Q_CA(j+2, j+1) = q * dt2 / 2.0;   Q_CA(j+2, j+2) = q * dt;
+    }
+
+    ca_ekf_.predict(F_CA, Q_CA);
   }
+
 
   // ================= 3. 计算Singer思想的机动频率权重 =================
+  double vyaw = std::abs(ekf_.x[7]);
   if (this->name == ArmorName::outpost) {
       // 前哨站强制全信任整车CV
       w_cv_ = 1.0; 
@@ -341,61 +327,51 @@ void Target::update(const Armor & armor)
   // ================= 1. EKF 状态更新 =================
   update_ypda(armor, id);
 
-  // ================= 2. CA 单板模型独立更新 =================
-  if (!armor_kf_init_[id]) {
-    // 第一次看到这个装甲板，初始化 9 维状态 [x, vx, ax, y, vy, ay, z, vz, az]
-    Eigen::VectorXd x0_ca = Eigen::VectorXd::Zero(9);
-    x0_ca << armor.xyz_in_world[0], 0, 0,
-             armor.xyz_in_world[1], 0, 0,
-             armor.xyz_in_world[2], 0, 0;
-             
-    Eigen::MatrixXd P0_ca = Eigen::MatrixXd::Identity(9, 9) * 10.0;
-    auto x_add_ca = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) { return a + b; };
-    armor_kfs_[id] = tools::ExtendedKalmanFilter(x0_ca, P0_ca, x_add_ca);
-    armor_kf_init_[id] = true;
-  } else {
-    if (is_switch_) {
-        // 1. 位置完美继承
-        Eigen::Vector3d ekf_xyz = h_armor_xyz(ekf_.x, id);
-        armor_kfs_[id].x[0] = ekf_xyz[0];
-        armor_kfs_[id].x[3] = ekf_xyz[1];
-        armor_kfs_[id].x[6] = ekf_xyz[2];
-        
-        // ===== 核心修改 2：速度完美继承 (运动学公式) =====
-        // 利用当前整车线速度、角速度和半径，直接计算出当前装甲板的理论线速度
-        double r = ekf_.x[8];
-        double w = ekf_.x[7]; // vyaw
-        double plate_yaw = tools::limit_rad(ekf_.x[6] + id * 2 * CV_PI / armor_num_);
-        
-        armor_kfs_[id].x[1] = ekf_.x[1] - r * w * std::sin(plate_yaw); // 理论 vx
-        armor_kfs_[id].x[4] = ekf_.x[3] + r * w * std::cos(plate_yaw); // 理论 vy
-        armor_kfs_[id].x[7] = ekf_.x[5];                               // 理论 vz
-        
-        // 3. 加速度清零防毛刺
-        armor_kfs_[id].x[2] = 0; // ax
-        armor_kfs_[id].x[5] = 0; // ay
-        armor_kfs_[id].x[8] = 0; // az
-        // ==============================================
+  // ================= 2. 中心级 CA EKF 更新 =================
+  {
+    // 从观测板位反算中心 (plate observation -> center)
+    double c = std::cos(armor.ypr_in_world[0]);
+    double s = std::sin(armor.ypr_in_world[0]);
+    Eigen::Vector3d z_ca(
+      armor.xyz_in_world[0] + ekf_.x[8] * c,
+      armor.xyz_in_world[1] + ekf_.x[8] * s,
+      armor.xyz_in_world[2]
+    );
+
+    if (!ca_ekf_init_) {
+      // 惰性初始化: 位置 = 观测中心, 速度 = CV EKF 当前速度, 加速度 = 0
+      Eigen::VectorXd x0_ca = Eigen::VectorXd::Zero(9);
+      x0_ca(0) = z_ca(0);  x0_ca(1) = ekf_.x[1];  x0_ca(2) = 0;
+      x0_ca(3) = z_ca(1);  x0_ca(4) = ekf_.x[3];  x0_ca(5) = 0;
+      x0_ca(6) = z_ca(2);  x0_ca(7) = ekf_.x[5];  x0_ca(8) = 0;
+
+      Eigen::MatrixXd P0_ca = Eigen::MatrixXd::Identity(9, 9) * 10.0;
+      auto x_add_ca = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) { return a + b; };
+      ca_ekf_ = tools::ExtendedKalmanFilter(x0_ca, P0_ca, x_add_ca);
+      ca_ekf_init_ = true;
+    } else {
+      // 6维观测: 位置(从板位反算的中心) + CV速度作为速度观测
+      Eigen::VectorXd z_ca_ext(6);
+      z_ca_ext << z_ca, ekf_.x[1], ekf_.x[3], ekf_.x[5];
+
+      auto h_ca = [](const Eigen::VectorXd & x) -> Eigen::VectorXd {
+        Eigen::VectorXd z_pred(6);
+        z_pred << x[0], x[3], x[6], x[1], x[4], x[7];
+        return z_pred;
+      };
+      auto z_sub_ca = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) { return a - b; };
+
+      Eigen::MatrixXd H_ca = Eigen::MatrixXd::Zero(6, 9);
+      H_ca(0, 0) = 1;  H_ca(1, 3) = 1;  H_ca(2, 6) = 1;   // 位置观测
+      H_ca(3, 1) = 1;  H_ca(4, 4) = 1;  H_ca(5, 7) = 1;   // 速度观测
+
+      // 位置噪声: 0.01·I (σ≈0.1m), 速度噪声: 0.2·I (σ≈0.45m/s, 偏保守)
+      Eigen::MatrixXd R_ca = Eigen::MatrixXd::Zero(6, 6);
+      R_ca(0,0) = R_ca(1,1) = R_ca(2,2) = 0.01;
+      R_ca(3,3) = R_ca(4,4) = R_ca(5,5) = 0.2;
+
+      ca_ekf_.update(z_ca_ext, H_ca, R_ca, h_ca, z_sub_ca);
     }
-
-    auto h_ca = [](const Eigen::VectorXd & x) -> Eigen::VectorXd {
-      Eigen::VectorXd z_pred(3);
-      z_pred << x[0], x[3], x[6];
-      return z_pred;
-    };
-    
-    auto z_sub_ca = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) { return a - b; };
-    
-    Eigen::MatrixXd H_ca = Eigen::MatrixXd::Zero(3, 9);
-    H_ca(0,0) = 1; H_ca(1,3) = 1; H_ca(2,6) = 1;
-
-    Eigen::MatrixXd R_ca = Eigen::MatrixXd::Identity(3, 3) * 0.05;
-
-    Eigen::VectorXd z_ca = armor.xyz_in_world;
-
-    armor_kfs_[id].update(z_ca, H_ca, R_ca, h_ca, z_sub_ca);
-
-    
   }
 }
 
@@ -472,26 +448,44 @@ const tools::ExtendedKalmanFilter & Target::ekf() const { return ekf_; }
 std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
 {
   std::vector<Eigen::Vector4d> _armor_xyza_list;
-  double w_ca = 1.0 - w_cv_; // 单板CA模型的反向权重
+  double w_ca = 1.0 - w_cv_;
+
+  Eigen::Vector3d center_CV(ekf_.x[0], ekf_.x[2], ekf_.x[4]);
+
+  Eigen::Vector3d center_fused;
+  if (ca_ekf_init_ && w_ca > 0.05) {
+    Eigen::Vector3d center_CA(ca_ekf_.x[0], ca_ekf_.x[3], ca_ekf_.x[6]);
+    center_fused = w_cv_ * center_CV + w_ca * center_CA;
+  } else {
+    center_fused = center_CV;
+  }
 
   for (int i = 0; i < armor_num_; i++) {
     auto angle = tools::limit_rad(ekf_.x[6] + i * 2 * CV_PI / armor_num_);
-    
-    // 1. 获取整车 EKF(CV) 算出的位置
-    Eigen::Vector3d ekf_xyz = h_armor_xyz(ekf_.x, i);
+    auto use_l_h = (armor_num_ == 4) && (i == 1 || i == 3);
 
-    // 2. 检查该装甲板对应CA模型是否可以参与融合
-    if (armor_kf_init_[i] && w_ca > 0.05) {
-      Eigen::Vector3d ca_xyz;
-      ca_xyz << armor_kfs_[i].x[0], armor_kfs_[i].x[3], armor_kfs_[i].x[6];
+    double r = (use_l_h) ? ekf_.x[8] + ekf_.x[9] : ekf_.x[8];
+    double plate_x = center_fused.x() - r * std::cos(angle);
+    double plate_y = center_fused.y() - r * std::sin(angle);
 
-      // 3. 线性加权融合
-      Eigen::Vector3d fused_xyz = w_cv_ * ekf_xyz + w_ca * ca_xyz;
-      _armor_xyza_list.push_back({fused_xyz[0], fused_xyz[1], fused_xyz[2], angle});
+    double plate_z;
+    if (name == ArmorName::outpost) {
+      double dz = tower_armor_hs[i].second - tower_armor_hs[0].second;
+      int dz_px = dz > 0 ? 1 : -1;
+      int dz_mu;
+      if (std::abs(dz) > TOWER_ARMOR_DTB) {
+        dz_mu = 2;
+      } else if (std::abs(dz) > TOWER_ARMOR_XTB) {
+        dz_mu = 1;
+      } else {
+        dz_mu = 0;
+      }
+      plate_z = center_fused.z() + ekf_.x[10] * dz_px * dz_mu;
     } else {
-      // 纯小陀螺时，直接使用中心 EKF
-      _armor_xyza_list.push_back({ekf_xyz[0], ekf_xyz[1], ekf_xyz[2], angle});
+      plate_z = (use_l_h) ? center_fused.z() + ekf_.x[10] : center_fused.z();
     }
+
+    _armor_xyza_list.push_back({plate_x, plate_y, plate_z, angle});
   }
   return _armor_xyza_list;
 }

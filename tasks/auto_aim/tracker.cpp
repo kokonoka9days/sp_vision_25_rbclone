@@ -113,12 +113,12 @@ std::list<Target> Tracker::track(
 {
   auto dt = tools::delta_time(t, last_timestamp_);
   last_timestamp_ = t;
-  if(gimbal_ == nullptr) {
-    tools::logger()->error("[Tracker] gimbal_不能为空指针，请先调用set_gimbal()设置云台指针");
-    return {};
-  }
-  io::GimbalState g = gimbal_->state();
-  if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ?   Color::red :Color::blue;
+  // if(gimbal_ == nullptr) {
+  //   tools::logger()->error("[Tracker] gimbal_不能为空指针，请先调用set_gimbal()设置云台指针");
+  //   return {};
+  // }
+  // io::GimbalState g = gimbal_->state();
+  // if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ?   Color::red :Color::blue;
 
   target_.cam_is_short = cam_is_short;
 
@@ -151,8 +151,8 @@ std::list<Target> Tracker::track(
 
   bool found = 0;
 
-  static uint8_t last_mode = g.mode;
-  bool mode_switch_0to1 = (last_mode == 0 && g.mode == 1);
+  static uint8_t last_mode = 1;
+  bool mode_switch_0to1 = (last_mode == 1);
   //按下右键时，mouse为1则跟随上一次的目标，不按则瞄准最近的装甲板
   if(!mode_switch_0to1)
   {
@@ -182,7 +182,7 @@ std::list<Target> Tracker::track(
      
     }
   }
-  last_mode = g.mode;
+  // last_mode = g.mode;
   // found = set_target(armors, t);
 
   state_machine(found);
