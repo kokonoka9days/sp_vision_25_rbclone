@@ -28,7 +28,6 @@ Target::Target(
   is_switch_(false),
   is_converged_(false),
   switch_count_(0)
-  switch_count_(0)
 {
   auto r = radius;
   priority = armor.priority;
@@ -76,7 +75,6 @@ Target::Target(
 // 供手动初始化使用的构造函数
 Target::Target(double x, double vyaw, double radius, double h) 
 : armor_num_(4)
-: armor_num_(4)
 {
   Eigen::VectorXd x0 = Eigen::VectorXd::Zero(11);
   x0 << x, 0, 0, 0, 0, 0, 0, vyaw, radius, 0, h;
@@ -121,10 +119,10 @@ void Target::predict(double dt)
   auto c_ = dt * dt;
 
   Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(11, 11);
-  Q(0,0) = a * v1; Q(0,1) = b * v1; Q(1,0) = b * v1; Q(1,1) = c * v1; // X
-  Q(2,2) = a * v1; Q(2,3) = b * v1; Q(3,2) = b * v1; Q(3,3) = c * v1; // Y
-  Q(4,4) = a * v1; Q(4,5) = b * v1; Q(5,4) = b * v1; Q(5,5) = c * v1; // Z
-  Q(6,6) = a * v2; Q(6,7) = b * v2; Q(7,6) = b * v2; Q(7,7) = c * v2; // Yaw
+  Q(0,0) = a_ * v1; Q(0,1) = b_ * v1; Q(1,0) = b_ * v1; Q(1,1) = c_ * v1; // X
+  Q(2,2) = a_ * v1; Q(2,3) = b_ * v1; Q(3,2) = b_ * v1; Q(3,3) = c_ * v1; // Y
+  Q(4,4) = a_ * v1; Q(4,5) = b_ * v1; Q(5,4) = b_ * v1; Q(5,5) = c_ * v1; // Z
+  Q(6,6) = a_ * v2; Q(6,7) = b_ * v2; Q(7,6) = b_ * v2; Q(7,7) = c_ * v2; // Yaw
 
   auto f = [&](const Eigen::VectorXd & x) -> Eigen::VectorXd {
     Eigen::VectorXd x_prior = F * x;
@@ -141,12 +139,19 @@ void Target::predict(double dt)
 
   // ================= 2. 中心级 CA EKF 预测 =================
   if (ca_ekf_init_) {
+    constexpr double CA_SINGER_ALPHA = 2.0;  // Singer 机动时间常数 (τ=0.5s)
+
     // F_CA: 9x9 完整 CA 模型 (位置←速度←加速度)
     Eigen::MatrixXd F_CA = Eigen::MatrixXd::Identity(9, 9);
+    const double ea     = std::exp(-CA_SINGER_ALPHA * dt);
+    const double a2     = CA_SINGER_ALPHA * CA_SINGER_ALPHA;
+    const double fac_pa = (CA_SINGER_ALPHA * dt - 1.0 + ea) / a2;
+    const double fac_va = (1.0 - ea) / CA_SINGER_ALPHA;
     for (int i = 0; i < 3; i++) {
-      F_CA(i*3, i*3+1) = dt;
-      F_CA(i*3+1, i*3+2) = dt;
-      F_CA(i*3, i*3+2) = 0.5 * dt * dt;
+      F_CA(i*3,     i*3+1) = dt;       // pos ← vel 不变
+      F_CA(i*3,     i*3+2) = fac_pa;   // pos ← acc: Singer
+      F_CA(i*3+1,   i*3+2) = fac_va;   // vel ← acc: Singer
+      F_CA(i*3+2,   i*3+2) = ea;       // acc self-decay: e^(−α·dt)
     }
 
     // Q_CA: Singer 型块对角，q=1.0
@@ -371,10 +376,10 @@ void Target::update(const Armor & armor)
       H_ca(0, 0) = 1;  H_ca(1, 3) = 1;  H_ca(2, 6) = 1;   // 位置观测
       H_ca(3, 1) = 1;  H_ca(4, 4) = 1;  H_ca(5, 7) = 1;   // 速度观测
 
-      // 位置噪声: 0.01·I (σ≈0.1m), 速度噪声: 0.2·I (σ≈0.45m/s, 偏保守)
+      // 位置噪声: 0.01·I (σ≈0.1m), 速度噪声: 0.08·I (σ≈0.28m/s, 配合 Singer α=2)
       Eigen::MatrixXd R_ca = Eigen::MatrixXd::Zero(6, 6);
       R_ca(0,0) = R_ca(1,1) = R_ca(2,2) = 0.01;
-      R_ca(3,3) = R_ca(4,4) = R_ca(5,5) = 0.2;
+      R_ca(3,3) = R_ca(4,4) = R_ca(5,5) = 0.08;
 
       ca_ekf_.update(z_ca_ext, H_ca, R_ca, h_ca, z_sub_ca);
     }

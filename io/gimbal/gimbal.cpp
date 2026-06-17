@@ -74,7 +74,6 @@ Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t)
   while (true) {
     auto [q_a, t_a] = queue_.pop();
     auto [q_b, t_b] = queue_.front();
-    auto [q_b, t_b] = queue_.front();
     auto t_ab = tools::delta_time(t_a, t_b);
     auto t_ac = tools::delta_time(t_a, t);
     auto k = t_ac / t_ab;
@@ -309,10 +308,14 @@ void Gimbal::read_thread()
         tools::logger()->warn("[Gimbal] Invalid mode: {}", rx_data_.mode);
         break;
     }
+      }
+    }
   }
 
   tools::logger()->info("[Gimbal] read_thread stopped.");
-}
+  }
+
+
 
 void Gimbal::reconnect()
 {
