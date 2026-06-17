@@ -17,9 +17,9 @@ if(OPENVINO_MAKE)
         rv_detector.cpp
         rv_number.cpp
         yolo.cpp
-        yolos/yolov5.cpp
-        yolos/yolov8.cpp
-        yolos/yolo11.cpp
+        ov_yolos/yolov5.cpp
+        ov_yolos/yolov8.cpp
+        ov_yolos/yolo11.cpp
         multithread/commandgener.cpp
         multithread/mt_detector.cpp
         planner/planner.cpp

@@ -10,6 +10,7 @@
 #include <fmt/format.h>
 #include "tools/logger.hpp"
 #include "tools/img_tools.hpp"
+#include "tools/math_tools.hpp"
 
 namespace auto_aim
 {
@@ -108,7 +109,7 @@ TensorrtInferEngine::~TensorrtInferEngine() {
 
 
 void TensorrtInferEngine::infer(Mat img, int detect_color) {
-    auto t0 = std::chrono::high_resolution_clock::now();
+    auto t0 = std::chrono::steady_clock::now();
     objects.clear();
     tmp_objects.clear();
 
@@ -135,7 +136,7 @@ void TensorrtInferEngine::infer(Mat img, int detect_color) {
     // 注意：删除了此处的 cudaFree(d_img); 将其留到下一次或析构时处理
 
     // 推理
-    auto t1 = std::chrono::high_resolution_clock::now();
+    auto t1 = std::chrono::steady_clock::now();
     context->setTensorAddress(input_name.c_str(), input_device);
     context->setTensorAddress(output_name.c_str(), output_device);
     context->enqueueV3(stream);
@@ -147,7 +148,7 @@ void TensorrtInferEngine::infer(Mat img, int detect_color) {
     cudaEventRecord(copy_done, stream);         // 记录拷贝完成事件
     cudaStreamSynchronize(stream);
 
-    auto t2 = std::chrono::high_resolution_clock::now();
+    auto t2 = std::chrono::steady_clock::now();
     
     // 注意：此处解析逻辑强依赖于导出的 ONNX 模型末端是否有 transpose。
     // 如果模型输出shape真的是 [1, 25200, 22] 这样是没问题的。
@@ -228,14 +229,157 @@ void TensorrtInferEngine::infer(Mat img, int detect_color) {
         confidences.push_back(final_conf);
     }
 
-    auto t3 = std::chrono::high_resolution_clock::now();
+    auto t3 = std::chrono::steady_clock::now();
 
     vector<int> indices;
     cv::dnn::NMSBoxes(boxes, confidences, conf_threshold, nms_threshold, indices);
     for (int idx : indices) {
         if (idx < (int)objects.size()) tmp_objects.push_back(objects[idx]);
     }
-    auto t4 = std::chrono::high_resolution_clock::now();
+    auto t4 = std::chrono::steady_clock::now();
+
+    // tools::logger()->info("耗时   预处理: {:.3f}ms,    推理: {:.3f}ms,     后处理: {:.3f}ms,    nms: {:.3f}ms", 
+    //     tools::delta_time(t1, t0)*1000, 
+    //     tools::delta_time(t2, t1)*1000,
+    //     tools::delta_time(t3, t2)*1000,
+    //     tools::delta_time(t4, t3)*1000);
+}
+
+void TensorrtInferEngine::async_enabled_infer(Mat img, int detect_color) {
+    auto t0 = std::chrono::steady_clock::now();
+    objects.clear();
+    tmp_objects.clear();
+
+    // 计算当前图像需要的显存大小
+    size_t needed_size = img.total() * img.elemSize();
+    
+    // 如果之前分配的显存不够大，才重新分配（避免每帧 cudaMalloc 带来的严重性能开销）
+    if (d_img_size < needed_size) {
+        if (d_img) cudaFree(d_img);
+        cudaMalloc(&d_img, needed_size);
+        d_img_size = needed_size;
+    }
+
+    cudaMemcpyAsync(d_img, img.data, needed_size, cudaMemcpyHostToDevice, stream);
+
+    // 启动 CUDA 核函数，直接输出到 input_device
+    launch_preprocess(d_img, img.cols, img.rows,
+                      (float*)input_device, IMAGE_WIDTH, IMAGE_HEIGHT,
+                      stream); 
+    
+    cudaEventRecord(preprocess_done, stream);   // 记录预处理完成事件
+    cudaEventSynchronize(preprocess_done);
+    
+    // 注意：删除了此处的 cudaFree(d_img); 将其留到下一次或析构时处理
+
+    // 推理
+    auto t1 = std::chrono::steady_clock::now();
+    context->setTensorAddress(input_name.c_str(), input_device);
+    context->setTensorAddress(output_name.c_str(), output_device);
+    context->enqueueV3(stream);
+
+    cudaEventRecord(inference_done, stream);    // 记录推理完成事件
+
+    // 直接拷贝到页锁定内存
+    cudaMemcpyAsync(d_output_host, output_device, output_size, cudaMemcpyDeviceToHost, stream);
+    cudaEventRecord(copy_done, stream);         // 记录拷贝完成事件
+    cudaStreamSynchronize(stream);
+
+    auto t2 = std::chrono::steady_clock::now();
+    
+    // 注意：此处解析逻辑强依赖于导出的 ONNX 模型末端是否有 transpose。
+    // 如果模型输出shape真的是 [1, 25200, 22] 这样是没问题的。
+    const int rows = 25200;
+    const int cols = 22;
+    const float conf_threshold = 0.65f;
+    const float nms_threshold = 0.45f;
+
+    vector<cv::Rect> boxes;
+    vector<float> confidences;
+    boxes.reserve(rows);
+    confidences.reserve(rows);
+
+    float color_probs[4], class_probs[9];
+    for (int i = 0; i < rows; ++i) {
+        const float* ptr = d_output_host + i * cols;
+
+        float obj_conf = sigmoid(ptr[8]);
+        if (obj_conf < conf_threshold) continue;
+
+        softmax(ptr + 9, color_probs, 4);
+        int color_id = 0;
+        float max_color = color_probs[0];
+        for (int k = 1; k < 4; ++k) {
+            if (color_probs[k] > max_color) {
+                max_color = color_probs[k];
+                color_id = k;
+            }
+        }
+
+        softmax(ptr + 13, class_probs, 9);
+        int class_id = 0;
+        float max_class = class_probs[0];
+        for (int k = 1; k < 9; ++k) {
+            if (class_probs[k] > max_class) {
+                max_class = class_probs[k];
+                class_id = k;
+            }
+        }
+
+        if (color_id == 2 || color_id == 3) continue;
+        if (detect_color == 0 && color_id == 1) continue;
+        if (detect_color == 1 && color_id == 0) continue;
+
+        float final_conf = obj_conf * max_class;
+        if (final_conf < conf_threshold) continue;
+
+        Object obj;
+        obj.prob = final_conf;
+        obj.color = !color_id;
+        obj.label = class_id;
+
+        for (int j = 0; j < 8; ++j) {
+            float val = ptr[j];
+            obj.landmarks[j] = std::max(0.0f, std::min(640.0f, val));
+        }
+
+        // 边界框
+        float min_x = obj.landmarks[0], max_x = obj.landmarks[0];
+        float min_y = obj.landmarks[1], max_y = obj.landmarks[1];
+        for (int j = 2; j < 8; j += 2) {
+            min_x = std::min(min_x, obj.landmarks[j]);
+            max_x = std::max(max_x, obj.landmarks[j]);
+            min_y = std::min(min_y, obj.landmarks[j+1]);
+            max_y = std::max(max_y, obj.landmarks[j+1]);
+        }
+        obj.rect = cv::Rect(min_x, min_y, max_x - min_x, max_y - min_y);
+
+        cv::Point2f p0(obj.landmarks[0], obj.landmarks[1]);
+        cv::Point2f p2(obj.landmarks[2], obj.landmarks[3]);
+        cv::Point2f p6(obj.landmarks[6], obj.landmarks[7]);
+        obj.length = cv::norm(p0 - p6);
+        obj.width = cv::norm(p0 - p2);
+        obj.ratio = obj.length / (obj.width + 1e-6f);
+
+        objects.push_back(obj);
+        boxes.push_back(obj.rect);
+        confidences.push_back(final_conf);
+    }
+
+    auto t3 = std::chrono::steady_clock::now();
+
+    vector<int> indices;
+    cv::dnn::NMSBoxes(boxes, confidences, conf_threshold, nms_threshold, indices);
+    for (int idx : indices) {
+        if (idx < (int)objects.size()) tmp_objects.push_back(objects[idx]);
+    }
+    auto t4 = std::chrono::steady_clock::now();
+
+    // tools::logger()->info("耗时   预处理: {:.3f}ms,    推理: {:.3f}ms,     后处理: {:.3f}ms,    nms: {:.3f}ms", 
+    //     tools::delta_time(t1, t0)*1000, 
+    //     tools::delta_time(t2, t1)*1000,
+    //     tools::delta_time(t3, t2)*1000,
+    //     tools::delta_time(t4, t3)*1000);
 }
 
 TensorRTYolo::TensorRTYolo(const std::string& config_path, bool debug)
@@ -290,6 +434,35 @@ std::list<Armor> TensorRTYolo::detect(const cv::Mat& raw_img, int frame_count)
     // 转换为 Armor 列表
     return convertToArmors(bgr_img, frame_count);
 }
+
+YOLOFrameData TensorRTYolo::detect(YOLOFrameData frame_data, int frame_count){
+    cv::Mat raw_img = frame_data.frame;
+    if (raw_img.empty()) {
+        tools::logger()->warn("Empty image in TensorRTYolo::detect");
+        return {};
+    }
+
+    cv::Mat bgr_img;
+    if (use_roi_) {
+        // 处理 -1 表示不裁剪
+        cv::Rect valid_roi = roi_;
+        if (valid_roi.width == -1) valid_roi.width = raw_img.cols - valid_roi.x;
+        if (valid_roi.height == -1) valid_roi.height = raw_img.rows - valid_roi.y;
+        // 边界检查
+        valid_roi.x = std::max(0, valid_roi.x);
+        valid_roi.y = std::max(0, valid_roi.y);
+        valid_roi.width = std::min(valid_roi.width, raw_img.cols - valid_roi.x);
+        valid_roi.height = std::min(valid_roi.height, raw_img.rows - valid_roi.y);
+        bgr_img = raw_img(valid_roi);
+    } else {
+        bgr_img = raw_img;
+    }
+
+    // 调用 TensorRT 推理
+    engine_->infer(bgr_img, detect_color_);
+    // 转换为 Armor 列表
+    return convertToArmors(bgr_img, frame_count);
+} 
 
 std::list<Armor> TensorRTYolo::convertToArmors(const cv::Mat& bgr_img, int frame_count)
 {

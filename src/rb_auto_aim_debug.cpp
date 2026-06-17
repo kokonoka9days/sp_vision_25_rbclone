@@ -159,6 +159,11 @@ int main(int argc, char * argv[])
     camera.read(img, t);
     auto q = gimbal.q(t - 3ms);
 
+    solver.set_R_gimbal2world(q);
+    auto armors = detector.detect(img);
+    auto targets = tracker.track(armors, t);
+    // recor.record(img, q, t);
+
     auto now = std::chrono::steady_clock::now();
     double fps = 1./tools::delta_time(now, last_t);
     // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
@@ -170,13 +175,6 @@ int main(int argc, char * argv[])
     float yaw_deg = ypr[0] * 180.0 / M_PI;
     float pitch_deg = ypr[1] * 180.0 / M_PI;
     float roll_deg = ypr[2] * 180.0 / M_PI;
-        
-    solver.set_R_gimbal2world(q);
-    auto armors = detector.detect(img);
-    auto targets = tracker.track(armors, t);
-    // recor.record(img, q, t);
-
-
     // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
     // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
     if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;

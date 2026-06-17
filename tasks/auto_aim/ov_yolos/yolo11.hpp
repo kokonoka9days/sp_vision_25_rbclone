@@ -20,6 +20,9 @@ public:
 
   std::list<Armor> detect(const cv::Mat & bgr_img, int frame_count) override;
 
+  // TUDO:推理线程
+  YOLOFrameData detect(YOLOFrameData frame_data, int frame_count) {}
+
   std::list<Armor> postprocess(
     double scale, cv::Mat & output, const cv::Mat & bgr_img, int frame_count) override;
 

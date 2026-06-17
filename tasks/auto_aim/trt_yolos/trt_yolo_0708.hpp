@@ -45,6 +45,7 @@ public:
     TensorrtInferEngine(const string& engine_path, const string& device = "cuda:0");
     ~TensorrtInferEngine();
     void infer(Mat img, int detect_color);
+    void async_enabled_infer(Mat img, int detect_color);
 
 private:
     nvinfer1::ICudaEngine* engine = nullptr;
@@ -76,6 +77,10 @@ public:
     ~TensorRTYolo() = default;
 
     std::list<Armor> detect(const cv::Mat& img, int frame_count = -1) override;
+
+    // TUDO:推理线程
+    YOLOFrameData detect(YOLOFrameData frame_data, int frame_count = -1) override;
+
     std::list<Armor> postprocess(double scale, cv::Mat& output,
                                  const cv::Mat& bgr_img, int frame_count) override;
 
