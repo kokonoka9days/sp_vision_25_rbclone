@@ -7,6 +7,7 @@
 
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
+#include "tools/img_tools.hpp"
 #include "tasks/auto_aim/armor.hpp"
 
 namespace omniperception
@@ -59,11 +60,20 @@ io::VisionToGimbal Decider::decide_g(
   }
   if(!read_full && !cams[count_]->try_read(omn_img, timestamp)){
     count_ = (count_ + 1) % camera_num;
+    tools::logger()->info("[omniperception::Decider] 感知相机均无img");
     return vision_cmd;
   }
 
+
   auto armors = yolo.detect(omn_img);
   auto empty = armor_filter(armors);
+
+  for(auto armor : armors){
+    auto image_points = armor.points;
+    tools::draw_points(omn_img, image_points, {235, 206, 135});    
+  }
+
+  // tools::logger()->info("[omniperception::Decider] 1111");
 
   if(!empty){
     delta_angle = this->delta_angle_3d(armors, cams[count_]->main_and_secondary, left_solver, right_solver);
@@ -290,7 +300,7 @@ Eigen::Vector2d Decider::delta_angle_3d(
     right_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0, -(105. * CV_PI / 180.0)), Eigen::Vector3d(-0.127611, 0.136932, 0.16) );
     auto xyz = armors.front().xyz_in_gimbal;
     tools::logger()->info("omn_xyz :x{}, y{} ,z{}", xyz(0), xyz(1), xyz(2));
-    auto ypd_angle = -140/57.3 - std::atan2(xyz(0), xyz(1));
+    auto ypd_angle = -120/57.3 - std::atan2(xyz(0), xyz(1));
     delta_angle[0] = ypd_angle;
     delta_angle[1] = std::atan2(xyz(2), std::sqrt(xyz(0) * xyz(0) + xyz(1) * xyz(1))); 
     return delta_angle; 
@@ -340,11 +350,38 @@ bool Decider::armor_filter(std::list<auto_aim::Armor> & armors)
   return armors.empty();
 }
 
+bool Decider::not_base_armor_filter(std::list<auto_aim::Armor> & armors)
+{
+  if (armors.empty()) return true;
+
+
+  if(gimbal_ == nullptr) {
+    tools::logger()->error("[omniperception::Decider] gimbal_不能为空指针，请先调用set_gimbal()设置云台指针");
+    return {};
+  }
+  io::GimbalState g = gimbal_->state();
+  if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ?   auto_aim::Color::red : auto_aim::Color::blue;
+
+  // 过滤非基地装甲的装甲板
+  armors.remove_if([&](const auto_aim::Armor & a) { return a.name != auto_aim::ArmorName::base; });
+
+  return armors.empty();
+}
+
+
 void Decider::set_priority(std::list<auto_aim::Armor> & armors)
 {
   if (armors.empty()) return;
 
-  const PriorityMap & priority_map = (mode_ == MODE_ONE) ? mode1 : mode2;
+  // const= (mode_ == MODE_ONE) ? mode1 : mode2;
+  PriorityMap  priority_map ;
+  switch(mode_){
+    case MODE_ONE: priority_map = mode1;
+    break;
+    case MODE_TWO: priority_map = mode2;
+    break;
+    case MODE_THREE: priority_map = mode3;
+  }
 
   if (!armors.empty()) {
     for (auto & armor : armors) {
@@ -429,4 +466,4 @@ void Decider::get_auto_aim_target(
   });
 }
 
-}  // namespace omniperception
+}  // namespace omniperceptionADFSafsdL

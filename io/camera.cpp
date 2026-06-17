@@ -9,6 +9,9 @@
 
 namespace io
 {
+void Camera::initSDK(){
+  DahengCamera::initSDK();
+}
 Camera::Camera(const std::string & config_path)
 {
   auto yaml = tools::load(config_path);
@@ -19,6 +22,14 @@ Camera::Camera(const std::string & config_path)
 
   bool flip = tools::read<bool>(yaml, "flip");
   bool mirror = tools::read<bool>(yaml, "mirror");
+
+  img_gamma = tools::read<double>(yaml, "img_gamma");
+
+  int lut_size = 1 << 8;
+  this->img_gamma_lut = cv::Mat(lut_size, 1, CV_8U);
+  for(int i = 0; i < lut_size; i++){
+    img_gamma_lut.data[i] = cv::saturate_cast<uchar>(pow(i/255.0, img_gamma) * 255.0);
+  }
 
   if (camera_name == "mindvision") {
     auto gamma = tools::read<double>(yaml, "gamma");
@@ -49,6 +60,9 @@ Camera::Camera(const std::string & config_path)
 void Camera::read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp)
 {
   camera_->read(img, timestamp);
+  if(img_gamma == 1.0){
+    cv::LUT(img, img_gamma_lut, img);
+  }
 }
 bool Camera::try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp)
 {

@@ -180,7 +180,7 @@ int main(int argc, char * argv[])
     }
 
 
-    auto q = gimbal.q(t - 1ms);
+    auto q = gimbal.q(t);
 
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
     // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));

@@ -42,10 +42,11 @@ int main(int argc, char * argv[])
   auto long_camera_config_path = cli.get<std::string>("long_camera");
 
 
-  
+  io::Camera::initSDK();
+
   // 主相机（工业相机）
   io::Camera short_camera(short_camera_config_path);
-  // io::Camera long_camera(long_camera_config_path);
+  io::Camera long_camera(long_camera_config_path);  
   
   // 串口通信
   io::Gimbal gimbal(short_camera_config_path);
@@ -64,9 +65,9 @@ int main(int argc, char * argv[])
   auto_aim::Planner long_camera_planner(long_camera_config_path);
 
   //双目切换
-  // BinocularAim bincameras(short_camera, long_camera, 
-  //                         short_camera_solver, long_camera_solver, 
-  //                         short_camera_planner, long_camera_planner );
+  BinocularAim bincameras(short_camera, long_camera, 
+                          short_camera_solver, long_camera_solver, 
+                          short_camera_planner, long_camera_planner );
   
   
   // 线程安全队列（用于MPC规划线程）
@@ -97,8 +98,8 @@ int main(int argc, char * argv[])
         // plan = bincameras.planners.aim_ptr->plan(*target, 22);
           
         //MPC预测以及+自家火控
-        // auto_aim::Planner * plan_short_or_long = target->cam_is_short ? &bincameras.planners.short_aim : &bincameras.planners.long_aim;
-        auto_aim::Planner * plan_short_or_long = &short_camera_planner;
+        auto_aim::Planner * plan_short_or_long = target->cam_is_short ? &bincameras.planners.short_aim : &bincameras.planners.long_aim;
+        // auto_aim::Planner * plan_short_or_long = &short_camera_planner;
         auto plan =  plan_short_or_long->plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
         gimbal.send(
           plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
@@ -163,26 +164,26 @@ int main(int argc, char * argv[])
   while (!exiter.exit()) {
 
     // 读取主相机图像
-    // bincameras.cameras.aim_ptr->read(img, timestamp);
-    short_camera.read(img, timestamp);
+    bincameras.cameras.aim_ptr->read(img, timestamp);
+    // short_camera.read(img, timestamp);
 
     // auto q = gimbal.q(timestamp - bincameras.cameras.aim_ptr->timestamp_offset);
-    auto q = gimbal.q(timestamp - short_camera.timestamp_offset);
+    auto q = gimbal.q(timestamp - 3ms);
 
 
     // tools::logger()->info("当前使用 {} 焦镜头", bincameras.is_short ? "短" : "长");
     
     
     // 获取云台欧拉角
-    gimbal_euler = tools::eulers(short_camera_solver.R_gimbal2world(), 2, 1, 0);
+    gimbal_euler = tools::eulers(q, 2, 1, 0);
 
     float yaw_deg = gimbal_euler[0] * 180.0 / M_PI;
     float pitch_deg = gimbal_euler[1] * 180.0 / M_PI;
     float roll_deg = gimbal_euler[2] * 180.0 / M_PI;
 
 
-    // bincameras.solvers.aim_ptr->set_R_gimbal2world(q);short_camera
-    short_camera_solver.set_R_gimbal2world(q);
+    bincameras.solvers.aim_ptr->set_R_gimbal2world(q);
+    // short_camera_solver.set_R_gimbal2world(q);
     // 主相机检测
     auto armors = yolo.detect(img);
 
@@ -243,9 +244,9 @@ int main(int argc, char * argv[])
         
         // 方法2: 使用reproject_armor函数（需要一个虚拟的装甲板）
         // 这里假设我们有一个虚拟装甲板用于投影
-        auto center_img = short_camera_solver.reproject_armor(center_world, 0.0, target.armor_type, target.name);
-        auto pred_point_img = short_camera_solver.reproject_armor(pred_center, 0.0, target.armor_type, target.name);
-        auto v_yaw_axis_point_img = short_camera_solver.reproject_armor(v_yaw_axis_tvec, 0.0, target.armor_type, target.name);
+        auto center_img = bincameras.solvers.aim_ptr->reproject_armor(center_world, 0.0, target.armor_type, target.name);
+        auto pred_point_img = bincameras.solvers.aim_ptr->reproject_armor(pred_center, 0.0, target.armor_type, target.name);
+        auto v_yaw_axis_point_img = bincameras.solvers.aim_ptr->reproject_armor(v_yaw_axis_tvec, 0.0, target.armor_type, target.name);
         
         // 5. 绘制速度和角速度方向
         if (!center_img.empty() && !pred_point_img.empty()) {
@@ -264,7 +265,7 @@ int main(int argc, char * argv[])
             }
         }
         // 自动长短焦切换
-        // bincameras.ChangeTheScope(targets.front(), tracker);
+        bincameras.ChangeTheScope(targets.front(), tracker);
     } else {
         target_queue.push(std::nullopt);
     }
@@ -277,13 +278,13 @@ int main(int argc, char * argv[])
       std::vector<Eigen::Vector4d> armor_xyza_list = target.armor_xyza_list();
       for (const Eigen::Vector4d & xyza : armor_xyza_list) {
         auto image_points =
-          short_camera_solver.reproject_armor(xyza.head(3), xyza[3], target.armor_type, target.name);
+          bincameras.solvers.aim_ptr->reproject_armor(xyza.head(3), xyza[3], target.armor_type, target.name);
         tools::draw_points(img, image_points, {0, 255, 0});
       }
 
       Eigen::Vector4d aim_xyza = short_camera_planner.debug_xyza;
       auto image_points =
-        short_camera_solver.reproject_armor(aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
+        bincameras.solvers.aim_ptr->reproject_armor(aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
       tools::draw_points(img, image_points, {0, 0, 255});
     }
 
@@ -292,9 +293,9 @@ int main(int argc, char * argv[])
     cv::imshow("reprojection", img);
     auto key = cv::waitKey(1);
     if (key == 'q') break;
-    // if (key == 'c'){// 强制切换长短焦
-    //     bincameras.Switch(tracker);
-    // }
+    if (key == 'c'){// 强制切换长短焦
+        bincameras.Switch(tracker);
+    }
   }
   
   // 清理

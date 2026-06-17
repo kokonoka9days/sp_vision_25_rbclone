@@ -20,6 +20,7 @@ public:
   ~HikRobot() override;
   void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) override;
   bool try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) override;
+  void clear_camera_frame_buffer() { MV_CC_ClearImageBuffer(handle_);}
 
 private:
   struct CameraData
@@ -27,7 +28,7 @@ private:
     cv::Mat img;
     std::chrono::steady_clock::time_point timestamp;
   };
-  std::string camera_sn_;
+  
   size_t nDeviceNum = 0;//当前设备数量
   double exposure_us_;
   double gain_;

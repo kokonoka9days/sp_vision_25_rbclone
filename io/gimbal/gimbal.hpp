@@ -25,7 +25,7 @@ enum class WorkMode : uint8_t
 struct __attribute__((packed)) GimbalToVision
 {
   uint8_t head[2] = {0x5a,0x53};
-  uint8_t mode;  // 0: 空闲, 1: 自瞄, 2: 小符, 3: 大符  电控控制右键0，1
+  uint8_t mode;  // 0: 空闲, 1: 自瞄, 2: 小符, 3: 大符, 4:开长焦  电控控制右键0，1
   uint16_t color; // 0: 红色, 1: 蓝色
   float q[4];    // wxyz顺序
   float bullet_speed;
@@ -54,15 +54,16 @@ struct __attribute__((packed)) VisionToGimbal
 struct __attribute__((packed)) sb_VisionToGimbal
 {
   uint8_t head = {0x66};
-  uint8_t mode;  // 0: 不控制, 1: 控制(小)云台但不开火，2:控制(小)云台开火，3.控制大云台
-  uint8_t work_mode;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
-  float yaw;
-  float yaw_vel;
-  float yaw_acc;
-  float pitch;
-  float pitch_vel;
-  float pitch_acc;
-  uint16_t crc16;
+  uint8_t mode = 0;  // 0: 不控制, 1: 控制云台但不开火，2:控制云台开火                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+  float yaw = 0;
+  float yaw_vel = 0;
+  float yaw_acc = 0;
+  float pitch = 0;
+  float pitch_vel = 0;
+  float pitch_acc = 0;
+  float target_x = 0;
+  float target_y = 0;
+  uint8_t target_name = 0;
   uint8_t end = {0x11};
 };
 
@@ -73,7 +74,8 @@ enum class GimbalMode
   IDLE,        // 空闲
   AUTO_AIM,    // 自瞄
   SMALL_BUFF,  // 小符
-  BIG_BUFF     // 大符
+  BIG_BUFF,     // 大符
+  LONG_FOCAL_LENGTH //长焦
 };
 
 struct GimbalState
@@ -106,9 +108,9 @@ public:
     bool control,bool fire, float yaw, float yaw_vel, float yaw_acc, float pitch, float pitch_vel,
     float pitch_acc);
   
-  // void sb_send(
-  //   bool control, WorkMode work_mode,bool fire, float yaw, float yaw_vel, float yaw_acc, float pitch, float pitch_vel,
-  //   float pitch_acc);
+  void sb_send(
+  bool control, bool fire, float yaw, float yaw_vel, float yaw_acc,
+  float pitch, float pitch_vel, float pitch_acc, float target_x, float target_y, uint8_t target_name);
 
   void send(io::VisionToGimbal VisionToGimbal);
 

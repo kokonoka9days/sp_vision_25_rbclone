@@ -33,6 +33,7 @@ int main(int argc, char * argv[])
   auto_aim::YOLO yolo(config_path, true);
 
   std::chrono::steady_clock::time_point timestamp;
+  auto last = std::chrono::steady_clock::now();
 
   while (!exiter.exit()) {
     cv::Mat img;
@@ -42,19 +43,19 @@ int main(int argc, char * argv[])
 
     if (img.empty()) break;
 
-    auto last = std::chrono::steady_clock::now();
+    //  last = std::chrono::steady_clock::now();
 
-    if (use_tradition)
-      armors = detector.detect(img);
-    else
+    // if (use_tradition)
+      // armors = detector.detect(img);
+    // else
       armors = yolo.detect(img);
 
     auto now = std::chrono::steady_clock::now();
     auto dt = tools::delta_time(now, last);
     tools::logger()->info("{:.2f} fps", 1 / dt);
-
-    // auto key = cv::waitKey(33);
-    // if (key == 'q') break;
+    last = std::chrono::steady_clock::now();
+    auto key = cv::waitKey(1);
+    if (key == 'q') break;
   }
 
   return 0;

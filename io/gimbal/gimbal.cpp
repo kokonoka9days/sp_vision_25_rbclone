@@ -74,6 +74,7 @@ Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t)
   while (true) {
     auto [q_a, t_a] = queue_.pop();
     auto [q_b, t_b] = queue_.front();
+    auto [q_b, t_b] = queue_.front();
     auto t_ab = tools::delta_time(t_a, t_b);
     auto t_ac = tools::delta_time(t_a, t);
     auto k = t_ac / t_ab;
@@ -88,19 +89,19 @@ Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t)
 void Gimbal::sb_send(io::sb_VisionToGimbal VisionToGimbal)
 {
   sb_tx_data_.mode = VisionToGimbal.mode;
-  sb_tx_data_.work_mode = VisionToGimbal.work_mode;
   sb_tx_data_.yaw = VisionToGimbal.yaw;
   sb_tx_data_.yaw_vel = VisionToGimbal.yaw_vel;
   sb_tx_data_.yaw_acc = VisionToGimbal.yaw_acc;
   sb_tx_data_.pitch = VisionToGimbal.pitch;
   sb_tx_data_.pitch_vel = VisionToGimbal.pitch_vel;
   sb_tx_data_.pitch_acc = VisionToGimbal.pitch_acc;
-      reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
-  sb_tx_data_.crc16 = tools::get_crc16(
-    reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
+  sb_tx_data_.target_x = VisionToGimbal.target_x;
+  sb_tx_data_.target_y = VisionToGimbal.target_y;
+  sb_tx_data_.target_name = VisionToGimbal.target_name;
 
   try {
-    serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
+    // 2. 这里的底层缓冲必须是 sb_tx_data_，不能是 tx_data_ ！
+    serial_.write(reinterpret_cast<uint8_t *>(&sb_tx_data_), sizeof(sb_tx_data_));
   } catch (const std::exception & e) {
     tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
   }
@@ -116,8 +117,6 @@ void Gimbal::send(io::VisionToGimbal VisionToGimbal)
   tx_data_.pitch_vel = VisionToGimbal.pitch_vel;
   tx_data_.pitch_acc = VisionToGimbal.pitch_acc;
       reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
-  tx_data_.crc16 = tools::get_crc16(
-    reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
 
   try {
     serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
@@ -138,12 +137,32 @@ void Gimbal::send(
   tx_data_.pitch_vel = pitch_vel;
   tx_data_.pitch_acc = pitch_acc;
       reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
-  tx_data_.crc16 = tools::get_crc16(
-    reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
 
   // tools::logger()->info("[Gimbal] mod: {}",tx_data_.mode);
   try {
     serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
+  } catch (const std::exception & e) {
+    tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
+  }
+}
+
+void Gimbal::sb_send(
+  bool control, bool fire, float yaw, float yaw_vel, float yaw_acc,
+  float pitch, float pitch_vel, float pitch_acc, float target_x, float target_y, uint8_t target_name)
+{
+  sb_tx_data_.mode = control ? (fire ? 2 : 1) : 0;
+  sb_tx_data_.yaw = yaw;
+  sb_tx_data_.yaw_vel = yaw_vel;
+  sb_tx_data_.yaw_acc = yaw_acc;
+  sb_tx_data_.pitch = pitch;
+  sb_tx_data_.pitch_vel = pitch_vel;
+  sb_tx_data_.pitch_acc = pitch_acc;
+  sb_tx_data_.target_x = target_x;
+  sb_tx_data_.target_y = target_y;
+  sb_tx_data_.target_name = target_name;
+
+  try {
+    serial_.write(reinterpret_cast<const uint8_t *>(&sb_tx_data_), sizeof(sb_tx_data_)); 
   } catch (const std::exception & e) {
     tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
   }
@@ -269,21 +288,26 @@ void Gimbal::read_thread()
         state_.bullet_speed = rx_data_.bullet_speed;
         state_.bullet_count = rx_data_.bullet_count;
 
-        switch (rx_data_.mode) {
-          case 0: mode_ = GimbalMode::IDLE; break;
-          case 1: mode_ = GimbalMode::AUTO_AIM; break;
-          case 2: mode_ = GimbalMode::SMALL_BUFF; break;
-          case 3: mode_ = GimbalMode::BIG_BUFF; break;
-          default:
-            mode_ = GimbalMode::IDLE;
-            tools::logger()->warn("[Gimbal] Invalid mode: {}", rx_data_.mode);
-            break;
-        }
-      } else {
-        // 帧头不匹配：弹出最前面的一个字节，窗口向后滑动
-        rx_buffer.erase(rx_buffer.begin());
-        error_count++;
-      }
+    switch (rx_data_.mode) {
+      case 0:
+        mode_ = GimbalMode::IDLE;
+        break;
+      case 1:
+        mode_ = GimbalMode::AUTO_AIM;
+        break;
+      case 2:
+        mode_ = GimbalMode::SMALL_BUFF;
+        break;
+      case 3:
+        mode_ = GimbalMode::BIG_BUFF;
+        break;
+      case 4:
+        mode_ = GimbalMode::LONG_FOCAL_LENGTH;
+        break;
+      default:
+        mode_ = GimbalMode::IDLE;
+        tools::logger()->warn("[Gimbal] Invalid mode: {}", rx_data_.mode);
+        break;
     }
   }
 

@@ -19,7 +19,7 @@
 
 const std::string keys =
   "{help h usage ? |                                             | 输出命令行参数说明}"
-  "{short_camera   | ../configs/sb_short.yaml                          | 短焦相机配置文件路径 }"
+  "{short_camera   | ../configs/sb_long.yaml                          | 短焦相机配置文件路径 }"
   "{long_camera    | ../configs/sb_long.yaml                     | 长焦相机配置文件路径 }"
   "{l_cam          | ../configs/omn_camera_left.yaml | 左感知相机 }"
   "{r_cam          | ../configs/omn_camera_right.yaml  | 右感知相机 }";
@@ -39,16 +39,12 @@ int main(int argc, char * argv[])
     cli.printMessage();
     return 0;
   }
+
+  io::Camera::initSDK();
+  
   auto short_camera_config_path = cli.get<std::string>("short_camera");
   auto long_camera_config_path = cli.get<std::string>("long_camera");
-
-
-  // 主相机（工业相机）
-  io::Camera short_camera(short_camera_config_path);
-  // io::Camera long_camera(long_camera_config_path);
-  
-  
-  // 全向感知相机（工业相机）
+ // 全向感知相机（工业相机）
   std::string omnl_yaml_name = cli.get<std::string>("l_cam");
   std::string omnr_yaml_name = cli.get<std::string>("r_cam");
   io::Camera omn_cam1(omnl_yaml_name);
@@ -57,6 +53,13 @@ int main(int argc, char * argv[])
   auto omn_r_yaml = tools::load(omnr_yaml_name);
   omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
   omn_cam2.main_and_secondary = tools::read<std::string>(omn_r_yaml, "main_and_secondary");
+
+  // 主相机（工业相机）
+  io::Camera short_camera(short_camera_config_path);
+  // io::Camera long_camera(long_camera_config_path);
+  
+  
+ 
   // io::Camera back_camera("configs/camera.yaml");
   
   // 改为使用Gimbal串口通信（替代CBoard）
@@ -119,10 +122,28 @@ int main(int argc, char * argv[])
         //MPC预测以及+自家火控
         // auto_aim::Planner * plan_short_or_long = target->cam_is_short ? &bincameras.planners.short_aim : &bincameras.planners.long_aim;
         auto_aim::Planner * plan_short_or_long = &short_camera_planner;
-        auto plan =  plan_short_or_long->plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
-        gimbal.send(
-          plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
-          plan.pitch_acc);
+        auto plan =  plan_short_or_long->plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::SB);
+        // 1. 设置默认值
+        uint8_t name = 0;
+        float tx = 0.0f;
+        float ty = 0.0f;
+
+        // 2. 只有在 target 有值时才去提取数据
+        if (target.has_value()) {
+          name = static_cast<uint8_t>(target->name) + 1;
+          tx = target->ekf_x()[0]; 
+          ty = target->ekf_x()[2]; 
+
+          // tools::logger()->info("{},{},{}", name,tx,ty);
+
+        }
+
+        gimbal.sb_send(
+        plan.control, plan.fire,
+        plan.yaw, plan.yaw_vel, plan.yaw_acc,
+        plan.pitch, plan.pitch_vel, plan.pitch_acc,
+        tx,ty,name);
+
 
         auto fired = gs.bullet_count > last_bullet_count;
         last_bullet_count = gs.bullet_count;
@@ -245,10 +266,34 @@ int main(int argc, char * argv[])
         if (tracker.state() == "lost" 
           // && omn_detect_num == 3
         ) {
-          omn_detect_num = 0;
-          gimbal.send(vision_cmd);
+          io::sb_VisionToGimbal sb_cmd;
+          sb_cmd.mode = vision_cmd.mode;         
+          sb_cmd.yaw = vision_cmd.yaw;
+          sb_cmd.yaw_vel = vision_cmd.yaw_vel;
+          sb_cmd.yaw_acc = vision_cmd.yaw_acc;
+          sb_cmd.pitch = vision_cmd.pitch;
+          sb_cmd.pitch_vel = vision_cmd.pitch_vel;
+          sb_cmd.pitch_acc = vision_cmd.pitch_acc;
+
+          // 全向感知暂时不输出特定目标的坐标和名称，赋 0 即可
+          sb_cmd.target_x = 0.0f;
+          sb_cmd.target_y = 0.0f;
+          sb_cmd.target_name = 0;
+
+          gimbal.sb_send(sb_cmd);
         }
     } 
+
+    if(tracker.state() != "lost"){
+      omn_cam1.pause();
+      omn_cam2.pause();      
+    }
+    else
+    {
+      omn_cam1.resume();
+      omn_cam2.resume();
+    }
+
 
     
 
@@ -342,10 +387,10 @@ int main(int argc, char * argv[])
     }
 
 
-    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    cv::imshow("reprojection", img);
-    auto key = cv::waitKey(1);
-    if (key == 'q') break;
+    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    // cv::imshow("reprojection", img);
+    // auto key = cv::waitKey(1);
+    // if (key == 'q') break;
 
 
 

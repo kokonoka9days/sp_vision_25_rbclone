@@ -29,20 +29,20 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/xiaohuang.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/sb_short.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
   tools::Exiter exiter;
   tools::Plotter plotter;
 
-  cv::CommandLineParser cli(argc, argv, keys);
+  cv::CommandLineParser cli(argc, argv, keys);  
   auto config_path = cli.get<std::string>(0);
   if (cli.has("help") || config_path.empty()) {
     cli.printMessage();
     return 0;
   }
-
+  io::Camera::initSDK();
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
 
@@ -67,14 +67,29 @@ int main(int argc, char * argv[])
       auto target = target_queue.front(); 
       auto gs = gimbal.state();
 
-
-
       //MPC预测以及+自家火控
       auto plan = planner.plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
 
-        gimbal.send(
-      plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
-      plan.pitch_acc);      
+     // 1. 设置默认值
+      uint8_t name = 0;
+      float tx = 0.0f;
+      float ty = 0.0f;
+
+      // 2. 只有在 target 有值时才去提取数据
+      if (target.has_value()) {
+        name = static_cast<uint8_t>(target->name) + 1;
+        tx = target->ekf_x()[0]; 
+        ty = target->ekf_x()[2]; 
+        // tools::logger()->info("{},{},{}", name,tx,ty);
+
+      }
+
+      gimbal.sb_send(
+      plan.control, plan.fire,
+      plan.yaw, plan.yaw_vel, plan.yaw_acc,
+      plan.pitch, plan.pitch_vel, plan.pitch_acc,
+      tx,ty,name
+    );    
      
 
       auto fired = gs.bullet_count > last_bullet_count;
@@ -112,7 +127,7 @@ int main(int argc, char * argv[])
         data["tower_h2"] = target->tower_armor_hs[1];
         data["tower_h3"] = target->tower_armor_hs[2];
         data["tower_armor_h"] = target->tower_armor_h;
-
+                                              
         const auto ekf_satic = target->ekf_x();
         data["ekf_x"] = ekf_satic(0);
         data["ekf_vx"] = ekf_satic(1);
@@ -139,13 +154,13 @@ int main(int argc, char * argv[])
 
   while (!exiter.exit()) {
     camera.read(img, t);
-    auto q = gimbal.q(t - 3ms);
+    auto q = gimbal.q(t);
 
-
-    double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
+    auto now = std::chrono::steady_clock::now();
+    double fps = 1./tools::delta_time(now, last_t);
     // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
-    last_t = t;
-    // tools::logger()->info("fps:: {:.2f}", fps);
+    last_t = now;
+    tools::logger()->info("fps:: {:.2f}", fps);
 
     auto ypr = tools::eulers(q, 2, 1, 0);
 
@@ -256,14 +271,14 @@ int main(int argc, char * argv[])
     }
 
 
-    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    cv::imshow("reprojection", img);
-    auto key = cv::waitKey(1);
-    if (key == 'q') break;
-    if(key == 'r') {//TUDO :右键手动更改
-      io::GimbalState* g_demo = gimbal.set_state_();
-      g_demo->mode = !g_demo->mode;
-    }
+    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    // cv::imshow("reprojection", img);
+    // auto key = cv::waitKey(1);
+    // if (key == 'q') break;
+    // if(key == 'r') {//TUDO :右键手动更改
+    //   io::GimbalState* g_demo = gimbal.set_state_();
+    //   g_demo->mode = !g_demo->mode;
+    // }
     // if(key == 's') {
     //   stopkey = !stopkey;
     // }
@@ -276,7 +291,7 @@ int main(int argc, char * argv[])
   
   // 发送当前数据（注意：由于 gimbal.cpp 中接收时乘了 57.3 转成了角度，发回下位机时需要除以 57.3 转回弧度）
   // 因为下位机没有发来速度和加速度数据，所以 vel 和 acc 继续填 0 即可
-  gimbal.send(
+  gimbal.sb_send(
       false, 
       false, 
       current_state.yaw / 57.3f, 
@@ -284,7 +299,10 @@ int main(int argc, char * argv[])
       0.0f, 
       current_state.pitch / 57.3f, 
       0.0f, 
-      0.0f
+      0.0f,
+      0,
+      0,
+      0
   );
 
   return 0;

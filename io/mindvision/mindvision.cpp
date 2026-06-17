@@ -11,7 +11,8 @@ using namespace std::chrono_literals;
 namespace io
 {
 MindVision::MindVision(double exposure_us, double gamma, const std::string & vid_pid)
-: exposure_us_(exposure_us),
+: CameraBase("nan"),
+  exposure_us_(exposure_us),
   gamma_(gamma),
   handle_(-1),
   quit_(false),

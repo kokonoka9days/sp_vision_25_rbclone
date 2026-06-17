@@ -23,6 +23,15 @@ namespace io
 
 class DahengCamera  : public CameraBase{
 public:
+
+    static void initSDK(){
+        // 初始化SDK
+        GX_STATUS status = GXInitLib();
+        if (status != GX_STATUS_SUCCESS) {
+            tools::logger()->error("[Daheng] 大恒相机初始化失败，错误码: {:#x}", status);
+            return;
+        }
+    }
     /**
      * @brief 构造函数
      * @param exposure_us 曝光时间(微秒)
@@ -40,7 +49,6 @@ public:
     
     ~DahengCamera();
 
-
     bool capture_stop();
     
     /**
@@ -50,7 +58,7 @@ public:
      */
     void read(cv::Mat& img, std::chrono::steady_clock::time_point& timestamp) override;
     bool try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) override;
-
+    void clear_camera_frame_buffer() { }
 private:
 
     struct CameraData {
@@ -67,8 +75,9 @@ private:
     void ProcessData(void *pImageBuf, void *pImageRaw8Buf, void *pImageRGBBuf, int nImageWidth, int nImageHeight,
                         int nPixelFormat, int nPixelColorFilter, bool flip , bool mirror ) ;
 private:
+
     // 相机参数
-    std::string camera_sn_;
+    // std::string camera_sn_;
     double exposure_us_;
     double gain_;
     double gamma_;
@@ -103,7 +112,7 @@ private:
     tools::ThreadSafeQueue<CameraData> queue_;
     
     // SDK状态
-    bool sdk_initialized_ = false;
+    bool sdk_initialized_ ;//= false;
     
     // 图像参数缓存
     size_t image_width_ = 0;

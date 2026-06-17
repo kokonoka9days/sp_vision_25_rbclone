@@ -28,6 +28,7 @@ Target::Target(
   is_switch_(false),
   is_converged_(false),
   switch_count_(0)
+  switch_count_(0)
 {
   auto r = radius;
   priority = armor.priority;
@@ -75,6 +76,7 @@ Target::Target(
 // 供手动初始化使用的构造函数
 Target::Target(double x, double vyaw, double radius, double h) 
 : armor_num_(4)
+: armor_num_(4)
 {
   Eigen::VectorXd x0 = Eigen::VectorXd::Zero(11);
   x0 << x, 0, 0, 0, 0, 0, 0, vyaw, radius, 0, h;
@@ -119,10 +121,10 @@ void Target::predict(double dt)
   auto c_ = dt * dt;
 
   Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(11, 11);
-  Q(0,0) = a_ * v1; Q(0,1) = b_ * v1; Q(1,0) = b_ * v1; Q(1,1) = c_ * v1; // X
-  Q(2,2) = a_ * v1; Q(2,3) = b_ * v1; Q(3,2) = b_ * v1; Q(3,3) = c_ * v1; // Y
-  Q(4,4) = a_ * v1; Q(4,5) = b_ * v1; Q(5,4) = b_ * v1; Q(5,5) = c_ * v1; // Z
-  Q(6,6) = a_ * v2; Q(6,7) = b_ * v2; Q(7,6) = b_ * v2; Q(7,7) = c_ * v2; // Yaw
+  Q(0,0) = a * v1; Q(0,1) = b * v1; Q(1,0) = b * v1; Q(1,1) = c * v1; // X
+  Q(2,2) = a * v1; Q(2,3) = b * v1; Q(3,2) = b * v1; Q(3,3) = c * v1; // Y
+  Q(4,4) = a * v1; Q(4,5) = b * v1; Q(5,4) = b * v1; Q(5,5) = c * v1; // Z
+  Q(6,6) = a * v2; Q(6,7) = b * v2; Q(7,6) = b * v2; Q(7,7) = c * v2; // Yaw
 
   auto f = [&](const Eigen::VectorXd & x) -> Eigen::VectorXd {
     Eigen::VectorXd x_prior = F * x;
@@ -231,6 +233,10 @@ void Target::update(const Armor & armor)
     if (last_cam_is_short != cam_is_short) {
       cam_is_switch_time_point = std::chrono::steady_clock::now();
       last_cam_is_short = cam_is_short;
+    }
+    if(last_cam_is_short){
+      // tools::logger()->info("[Target] last_cam_is_short");
+      
     }
     auto now = std::chrono::steady_clock::now();
     double cam_is_switch_lter_dt = tools::delta_time(now, cam_is_switch_time_point);
@@ -380,14 +386,10 @@ void Target::update_ypda(const Armor & armor, int id)
   auto center_yaw = std::atan2(armor.xyz_in_world[1], armor.xyz_in_world[0]);
   auto delta_angle = tools::limit_rad(armor.ypr_in_world[0] - center_yaw);
 
-  // 用距离判断观测数据，距离越远观测越不可信
-  double distance = std::abs(armor.ypd_in_world[2]);
-  double dist_penalty = distance * distance * 0.05;
-
-  auto r2_azimuth = 4e-3 + distance * 1e-3;
-  auto r2_pitch   = 4e-3 + distance * 1e-3;
-  auto r2_angle   = log(distance + 1) / 200 + 9e-2 + dist_penalty * 0.1;
-  auto r2_d       = log(std::abs(delta_angle) + 1) + 1 + dist_penalty;
+  auto r2_azimuth = 4e-3;
+  auto r2_pitch = 4e-3;
+  auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2;
+  auto r2_d = log(std::abs(delta_angle) + 1) + 1;
   
   if(last_cam_is_short != cam_is_short){
     cam_is_switch_time_point = std::chrono::steady_clock::now();
