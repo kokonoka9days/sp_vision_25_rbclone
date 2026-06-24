@@ -63,6 +63,7 @@ DahengCamera::DahengCamera(std::string camera_sn,
     // tools::logger()->info("[Daheng] 初始化大恒相机SDk...");
     
 
+    Camera::initSDK();
     sdk_initialized_ = true;
     
 

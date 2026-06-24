@@ -60,7 +60,12 @@ Camera::Camera(const std::string & config_path)
 void Camera::read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp)
 {
   camera_->read(img, timestamp);
-  if(img_gamma == 1.0){
+  // if(img_gamma == 1.0){
+  //   cv::LUT(img, img_gamma_lut, img);
+  // }
+
+  if (std::abs(img_gamma - 1.0) > 1e-6)
+  {
     cv::LUT(img, img_gamma_lut, img);
   }
 }
