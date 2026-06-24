@@ -133,7 +133,8 @@ sp_vision_25rbclone
 - 2. 
     添加统一的 OpenVINO APT 源（Ubuntu 22.04 Jammy）：
 ```bash
-    echo "deb [signed-by=/usr/share/keyrings/intel-openvino-archive-keyring.gpg] https://apt.repos.intel.com/openvino      ubuntu22 main" | sudo tee /etc/apt/sources.list.d/intel-openvino.list
+    echo "deb [signed-by=/usr/share/keyrings/intel-openvino-archive-keyring.gpg] https://apt.repos.intel.com/openvino      ubuntu22 main" | 
+    sudo tee /etc/apt/sources.list.d/intel-openvino.list
 ```
 - 3. 
 ```bash
