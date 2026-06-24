@@ -119,19 +119,17 @@ sp_vision_25rbclone
 - [HikRobot SDK](https://www.hikrobotics.com/cn2/source/support/software/MVS_STD_GML_V2.1.2_231116.zip)
 
 - [daheng SDK](https://www.daheng-imaging.com/)
-- 位置：下载中心 -> 软件下载 -> Galaxy_Linux_CN-EN_32bits/64bits
-- 解压tar.gz后，用终端cd到文件夹路径，运行安装脚本 ./Galaxy_camera.run
+位置：下载中心 -> 软件下载 -> Galaxy_Linux_CN-EN_32bits/64bits
+解压tar.gz后，用终端cd到文件夹路径，运行安装脚本 ./Galaxy_camera.run
 
 - [OpenVINO](https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html)
-- 命令行安装（对网络环境有要求）：
-- 1. 
-    导入Intel官方GPG公钥：
+##### 命令行安装（对网络环境有要求）：
+- 1. 导入Intel官方GPG公钥：
 ```bash
     curl -fsSL https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | 
     sudo  gpg --dearmor -o /usr/share/keyrings/intel-openvino-archive-keyring.gpg
 ```
-- 2. 
-    添加统一的 OpenVINO APT 源（Ubuntu 22.04 Jammy）：
+- 2. 添加统一的 OpenVINO APT 源（Ubuntu 22.04 Jammy）：
 ```bash
     echo "deb [signed-by=/usr/share/keyrings/intel-openvino-archive-keyring.gpg] https://apt.repos.intel.com/openvino      ubuntu22 main" | 
     sudo tee /etc/apt/sources.list.d/intel-openvino.list
