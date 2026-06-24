@@ -126,16 +126,22 @@ sp_vision_25rbclone
 - 命令行安装（对网络环境有要求）：
 - 1. 
     导入Intel官方GPG公钥：
+```bash
     curl -fsSL https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | 
     sudo  gpg --dearmor -o /usr/share/keyrings/intel-openvino-archive-keyring.gpg
+```
 - 2. 
     添加统一的 OpenVINO APT 源（Ubuntu 22.04 Jammy）：
+```bash
     echo "deb [signed-by=/usr/share/keyrings/intel-openvino-archive-keyring.gpg] https://apt.repos.intel.com/openvino      ubuntu22 main" | sudo tee /etc/apt/sources.list.d/intel-openvino.list
+```
 - 3. 
+```bash
     sudo apt update
     sudo apt install -y openvino-2024.6.0
     export OpenVINO_DIR=/usr/lib/cmake/openvino2024.6.0
     export LD_LIBRARY_PATH=/usr/lib/openvino-2024.6.0:$LD_LIBRARY_PATH
+```
 
 
 - 其余：
