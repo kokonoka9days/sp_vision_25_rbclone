@@ -41,8 +41,11 @@ YOLO::YOLO(const std::string & config_path, bool debug)
 
   #ifdef TENSOR_RT_MAKE
   if (yolo_name == "trt_0708") {
-      yolo_ = std::make_unique<TensorRTYolo>(config_path, debug);
+      yolo_ = std::make_unique<TensorRTYolo0708>(config_path, debug);
   }
+  // else if (yolo_name == "trt_0526") {          // 新增分支
+  //     yolo_ = std::make_unique<TensorRTYolo0526>(config_path, debug);
+  // }
 
   else {
     throw std::runtime_error("Unknown yolo name: " + yolo_name + "!");
