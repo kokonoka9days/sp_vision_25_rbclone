@@ -476,7 +476,7 @@ TensorRTYolo0708::TensorRTYolo0708(const std::string& config_path, bool debug)
 {
     auto yaml = YAML::LoadFile(config_path);
 
-    std::string engine_path = yaml["tensorrt_engine_path"].as<std::string>();
+    std::string engine_path = yaml["trt_engine_path_0708"].as<std::string>();
     std::string device = yaml["device"].as<std::string>("cuda:0");
     min_confidence_ = yaml["min_confidence"].as<double>(0.5);
     detect_color_ = yaml["detect_color"].as<int>(-1);

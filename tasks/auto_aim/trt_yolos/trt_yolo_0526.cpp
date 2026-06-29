@@ -276,7 +276,7 @@ void TensorrtInferEngine0526::softmax(const float* input, float* output, int len
 TensorRTYolo0526::TensorRTYolo0526(const std::string& config_path, bool debug)
     : debug_(debug) {
     auto yaml = YAML::LoadFile(config_path);
-    auto engine_path = yaml["tensorrt_engine_path_0526"].as<std::string>();
+    auto engine_path = yaml["trt_engine_path_0526"].as<std::string>();
     detect_color_ = yaml["detect_color"].as<int>(-1);
     min_confidence_ = yaml["min_confidence"].as<double>(0.65);
     engine_ = std::make_unique<TensorrtInferEngine0526>(engine_path);

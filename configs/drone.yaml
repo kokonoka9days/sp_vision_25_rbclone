@@ -4,13 +4,13 @@ enemy_color: "blue"
 
 
 #####-----神经网络参数-----#####
-yolo_name: trt_0526
+yolo_name: trt_0708
 classify_model: ../assets/tiny_resnet.onnx
 yolo11_model_path: ../assets/yolo11.xml
 yolov8_model_path: ../assets/yolov8.xml
 yolov5_model_path: ../assets/yolov5.xml
-tensorrt_engine_path: ../assets/0708_fp16_super.engine
-tensorrt_engine_path_0526: ../assets/0526.engine
+trt_engine_path_0708: ../assets/0708_fp16_super.engine
+trt_engine_path_0526: ../assets/0526.engine
 device: CPU
 min_confidence: 0.8
 use_traditional: true
