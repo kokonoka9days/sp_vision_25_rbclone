@@ -18,7 +18,7 @@ struct YOLOFrameData
 
   YOLOFrameData():is_empty(true){};
 
-  YOLOFrameData(cv::Mat frame_, Eigen::Quaterniond gimbal_q_): frame(frame_),gimbal_q(gimbal_q_), is_empty(false){};
+  YOLOFrameData(cv::Mat frame_, Eigen::Quaterniond gimbal_q_ = Eigen::Quaterniond(1,1,1,1)): frame(frame_),gimbal_q(gimbal_q_), is_empty(false){};
 };
 
 class YOLOBase

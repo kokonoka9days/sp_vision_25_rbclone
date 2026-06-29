@@ -4,6 +4,7 @@
 
 #ifdef TENSOR_RT_MAKE
 #include "trt_yolos/trt_yolo_0708.hpp"
+#include "trt_yolos/trt_yolo_0526.hpp"
 #endif
 
 #ifdef OPENVINO_MAKE
@@ -43,9 +44,9 @@ YOLO::YOLO(const std::string & config_path, bool debug)
   if (yolo_name == "trt_0708") {
       yolo_ = std::make_unique<TensorRTYolo0708>(config_path, debug);
   }
-  // else if (yolo_name == "trt_0526") {          // 新增分支
-  //     yolo_ = std::make_unique<TensorRTYolo0526>(config_path, debug);
-  // }
+  else if (yolo_name == "trt_0526") {          // 新增分支
+      yolo_ = std::make_unique<TensorRTYolo0526>(config_path, debug);
+  }
 
   else {
     throw std::runtime_error("Unknown yolo name: " + yolo_name + "!");

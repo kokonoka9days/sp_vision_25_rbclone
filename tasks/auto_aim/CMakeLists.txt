@@ -59,6 +59,8 @@ if(TENSOR_RT_MAKE)
         yolo.cpp
         trt_yolos/trt_yolo_0708.cpp
         trt_yolos/trt_0708_kernel.cu
+        trt_yolos/trt_yolo_0526.cpp
+        trt_yolos/trt_0526_kernel.cu
         planner/planner.cpp
     )
     add_subdirectory(planner/tinympc)

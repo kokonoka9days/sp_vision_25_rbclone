@@ -17,13 +17,14 @@
 namespace auto_aim
 {
 
+namespace {
 class Logger : public nvinfer1::ILogger {
     void log(Severity severity, const char* msg) noexcept override {
         if (severity <= Severity::kWARNING)
             std::cout << "[TensorRT] " << msg << std::endl;
     }
 } gLogger;
-
+} // namespace
 void TensorrtInferEngine::softmax(const float* input, float* output, int len) {
     float max_val = *std::max_element(input, input + len);
     float sum = 0.0f;
@@ -444,10 +445,10 @@ std::vector<Object> TensorrtInferEngine::decode_outputs(const float* output_ptr,
 
 
 void TensorrtInferEngine::infer_workerLoop(){
-    std::cout << "[Worker] Thread started" << std::endl;
+    // std::cout << "[Worker] Thread started" << std::endl;
     while(infer_work_thread_is_running){
         TRTFrameData task = task_queue.pop();
-        std::cout << "[Worker] Got task " << task.frame_id << std::endl;
+        // std::cout << "[Worker] Got task " << task.frame_id << std::endl;
         if(task.frame_id == -1) break; // 毒丸机制：安全退出线程
 
         context->setTensorAddress(input_name.c_str(), task.input_device);
@@ -462,7 +463,7 @@ void TensorrtInferEngine::infer_workerLoop(){
         // 等待当前 Stream 的所有任务（拷贝+预处理+推理+回传）全部做完
         cudaStreamSynchronize(task.stream);
 
-                std::cout << "[Worker] Finished task " << task.frame_id << std::endl;
+        // std::cout << "[Worker] Finished task " << task.frame_id << std::endl;
 
         // 推送到结果队列供主线程做 NMS
         result_queue.push(task);
