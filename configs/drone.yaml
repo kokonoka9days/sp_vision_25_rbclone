@@ -1,13 +1,16 @@
-enemy_color: "red"
-# enemy_color: "blue"
+# enemy_color: "auto"
+enemy_color: "blue"
+# enemy_color: "red"
 
 
 #####-----神经网络参数-----#####
-yolo_name: yolov5
+yolo_name: trt_0708
 classify_model: ../assets/tiny_resnet.onnx
 yolo11_model_path: ../assets/yolo11.xml
 yolov8_model_path: ../assets/yolov8.xml
 yolov5_model_path: ../assets/yolov5.xml
+trt_engine_path_0708: ../assets/0708_fp16_super.engine
+trt_engine_path_0526: ../assets/0526.engine
 device: CPU
 min_confidence: 0.8
 use_traditional: true
@@ -45,10 +48,10 @@ usb_gain: 10 #0-96
 # mirror: false
 
 camera_name: "hikrobot"
-camera_sn: "DA9492714"
-exposure_us: 8000
-gain: 0.5
-gamma: 0.5
+camera_sn: "DA7188471"
+exposure_us: 6000
+gain: 0.7
+gamma: 0.7
 vid_pid: "2bdf:0001"
 flip: false
 mirror: false
@@ -84,8 +87,8 @@ max_temp_lost_count: 25
 outpost_max_temp_lost_count: 75
 
 #####-----aimer参数-----#####
-yaw_offset: -0.8 # degree -2.5
-pitch_offset: -1  # degree 2
+yaw_offset: 2.2 # degree -2.5
+pitch_offset: -1.8  # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 left_yaw_offset: -1
@@ -102,18 +105,41 @@ second_tolerance: 2 # 远距离射击容差，degree
 judge_distance: 3 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
+#####-----planner-----#####
+fire_thresh: 3 # 
+target_dist_error: 0
+target_h_error: -0.20
+small_armor_tolerance: 0.12
+big_armor_tolerance: 0.22
+gimbal_control_delay: 0.012
+tower_pitch_prediction_time: 0.05
+
+max_yaw_acc: 50
+Q_yaw: [9e6, 0]
+R_yaw: [1]
+
+max_pitch_acc: 100
+Q_pitch: [9e6,0]
+R_pitch: [1]
+
 #####-----decider参数-----#####
 mode: 1
 
 #####-----工业相机标定参数-----#####
-R_gimbal2imubody: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 
-# 重投影误差: 0.1833px
-camera_matrix: [2414.9359264386621, 0, 717.26243105567414, 0, 2418.0489262208148, 582.68540529942845, 0, 0, 1]
-distort_coeffs: [-0.0209453389287673, 0.15028138841073832, -0.0006517722113234505, -0.0016861906197686788, 0]
+# 重投影误差: 0.0600px
+camera_matrix: [3629.2604024723614, 0, 615.76296028559454, 0, 3617.5424611963276, 537.28249377915051, 0, 0, 1]
+distort_coeffs: [-0.0064563365740047977, 0.26597520888340187, -0.00091608724392189006, -0.0084950810347407466, -0.87748546654082848]
 
-# 相机同理想情况的偏角: yaw-1.11 pitch0.01 roll-0.06 degree
-# 标定板到世界坐标系原点的水平距离: 1.20 m
-# 标定板同竖直摆放时的偏角: yaw123.89 pitch14.05 roll-0.86 degree
-R_camera2gimbal: [0.01928451708725664, 0.00012696140743255463, 0.99981402834802846, -0.99981344688553653, -0.0010834913551969569, 0.019284643459122196, 0.0010857382619952124, -0.99999940496346484, 0.00010604311483339372]
-t_camera2gimbal: [0.13089617453251859, 0.0038468007459533785, 0.094139945222010288]
+# 相机同理想情况的偏角: yaw0.37 pitch1.64 roll-2.29 degree
+R_camera2gimbal: [-0.0075966848382389429, 0.028332439342095388, 0.99956968904643917, -0.99917500836468665, -0.040094976336004562, -0.0064572077590568473, 0.039894774581351655, -0.99879410578634353, 0.028613654215451589]
+t_camera2gimbal: [-0.0064300910580854069, 0.037276498186262115, -0.055090648902732367]
+
+
+com_port: "/dev/ttyUSB0"
+# 陀螺仪是否装错, 编号012分别代表电控坐标系ypr，想换旋转轴只需要对编号进行互换即可，负号就是对当前值取负，交换完再取负
+# 上车前记得对齐电控坐标系和济瞄惯性系
+gimbal_y1: 1
+gimbal_p2: 2
+gimbal_r3: 3

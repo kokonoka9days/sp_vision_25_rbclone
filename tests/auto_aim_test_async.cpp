@@ -75,10 +75,19 @@ int main(int argc, char * argv[])
 
     /// 自瞄核心逻辑
 
-    solver.set_R_gimbal2world({w, x, y, z});
+    
 
     auto yolo_start = std::chrono::steady_clock::now();
-    auto armors = yolo.detect(img, frame_count);
+
+    auto yolo_frame = yolo.detect(auto_aim::YOLOFrameData(img, {w, x, y, z}), frame_count);
+    img = yolo_frame.frame;
+    auto armors = yolo_frame.armors;
+    if(yolo_frame.is_empty){
+      std::cout<<"跳过"<<std::endl;
+      continue;
+    } 
+    solver.set_R_gimbal2world(yolo_frame.gimbal_q);
+
     // auto traditional_start = std::chrono::steady_clock::now();
     // auto armors = traditional.detect(img, frame_count);
 

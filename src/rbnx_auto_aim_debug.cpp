@@ -14,7 +14,6 @@
 #include "tasks/auto_aim/aimer.hpp"
 #include "tasks/auto_aim/shooter.hpp"
 #include "tasks/auto_aim/yolo.hpp"
-#include "tasks/auto_aim/detector.hpp"
 #include "tools/exiter.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
@@ -29,30 +28,31 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/sb_short.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/drone.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
   tools::Exiter exiter;
   tools::Plotter plotter;
 
-  cv::CommandLineParser cli(argc, argv, keys);  
+  cv::CommandLineParser cli(argc, argv, keys);
   auto config_path = cli.get<std::string>(0);
   if (cli.has("help") || config_path.empty()) {
     cli.printMessage();
     return 0;
   }
-  io::Camera::initSDK();
+
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
 
   auto_aim::YOLO yolo(config_path, true);
-  auto_aim::Detector detector(config_path, true);
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, &solver);
   tracker.set_gimbal(&gimbal);
-
+  auto_aim::Aimer aimer(config_path);
+  auto_aim::Shooter shooter(config_path);
   auto_aim::Planner planner(config_path);
+  // tools::Recorder recor(90);
   bool stopkey = false;
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
@@ -67,29 +67,14 @@ int main(int argc, char * argv[])
       auto target = target_queue.front(); 
       auto gs = gimbal.state();
 
+
+
       //MPC预测以及+自家火控
       auto plan = planner.plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
 
-     // 1. 设置默认值
-      uint8_t name = 0;
-      float tx = 0.0f;
-      float ty = 0.0f;
-
-      // 2. 只有在 target 有值时才去提取数据
-      if (target.has_value()) {
-        name = static_cast<uint8_t>(target->name) + 1;
-        tx = target->ekf_x()[0]; 
-        ty = target->ekf_x()[2]; 
-        // tools::logger()->info("{},{},{}", name,tx,ty);
-
-      }
-
-      gimbal.sb_send(
-      plan.control, plan.fire,
-      plan.yaw, plan.yaw_vel, plan.yaw_acc,
-      plan.pitch, plan.pitch_vel, plan.pitch_acc,
-      tx,ty,name
-    );    
+        gimbal.send(
+      plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
+      plan.pitch_acc);      
      
 
       auto fired = gs.bullet_count > last_bullet_count;
@@ -103,31 +88,31 @@ int main(int argc, char * argv[])
       data["gimbal_pitch"] = gs.pitch;
       data["gimbal_pitch_vel"] = gs.pitch_vel;
       data["q2yaw"] = gs.q2yaw;
-      data["q2pitch"] = gs.pitch;
+      data["q2pitch"] = gs.q2pitch;
 
+      data["target_yaw"] = plan.target_yaw;
+      data["target_pitch"] = plan.target_pitch;
+
+      data["plan_mode"] = plan.control ? (plan.fire ? 2 : 1) : 0;
+      data["plan_yaw"] = plan.yaw / CV_PI * 180. ;
+      data["plan_yaw_vel"] = plan.yaw_vel;
+      data["plan_yaw_acc"] = plan.yaw_acc;
+
+      data["plan_pitch"] = plan.pitch * 57.3;
+      data["plan_pitch_vel"] = plan.pitch_vel;
+      data["plan_pitch_acc"] = plan.pitch_acc;
+
+      data["fire"] = plan.fire ? 1 : 0;
+      data["fired"] = fired ? 1 : 0;
 
       if (target.has_value()) {
-        data["plan_mode"] = plan.control ? (plan.fire ? 2 : 1) : 0;
-        data["plan_yaw"] = plan.yaw / CV_PI * 180. ;
-        data["plan_yaw_vel"] = plan.yaw_vel;
-        data["plan_yaw_acc"] = plan.yaw_acc;
-
-        data["plan_pitch"] = plan.pitch * 57.3;
-        data["plan_pitch_vel"] = plan.pitch_vel;
-        data["plan_pitch_acc"] = plan.pitch_acc;
-
-        data["fire"] = plan.fire ? 1 : 0;
-        data["fired"] = fired ? 1 : 0;
-
-        data["target_yaw"] = plan.target_yaw;
-        data["target_pitch"] = plan.target_pitch;
         data["target_z"] = target->ekf_x()[4];   //z
         data["target_vz"] = target->ekf_x()[5];  //vz
         data["tower_h1"] = target->tower_armor_hs[0];
         data["tower_h2"] = target->tower_armor_hs[1];
         data["tower_h3"] = target->tower_armor_hs[2];
         data["tower_armor_h"] = target->tower_armor_h;
-                                              
+
         const auto ekf_satic = target->ekf_x();
         data["ekf_x"] = ekf_satic(0);
         data["ekf_vx"] = ekf_satic(1);
@@ -137,14 +122,12 @@ int main(int argc, char * argv[])
         data["ekf_vz"] = ekf_satic(5);
         data["ekf_yaw"] = ekf_satic(6) * 57.3;
         data["ekf_vyaw"] = ekf_satic(7) * 57.3;
-        data["ekf_r"] = ekf_satic(8);   
-        
-               
+        data["ekf_r"] = ekf_satic(8);        
       }
 
-      plotter.plot(data);  
+      plotter.plot(data);
 
-      std::this_thread::sleep_for(5ms);
+      std::this_thread::sleep_for(10ms);
     }
   });
 
@@ -154,17 +137,12 @@ int main(int argc, char * argv[])
 
   while (!exiter.exit()) {
     camera.read(img, t);
-    auto q = gimbal.q(t - 3ms);
+    auto q = gimbal.q(t -3ms);
 
-    solver.set_R_gimbal2world(q);
-    auto armors = detector.detect(img);
-    auto targets = tracker.track(armors, t);
-    // recor.record(img, q, t);
 
-    auto now = std::chrono::steady_clock::now();
-    double fps = 1./tools::delta_time(now, last_t);
+    double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
     // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
-    last_t = now;
+    last_t = t;
     tools::logger()->info("fps:: {:.2f}", fps);
 
     auto ypr = tools::eulers(q, 2, 1, 0);
@@ -172,13 +150,19 @@ int main(int argc, char * argv[])
     float yaw_deg = ypr[0] * 180.0 / M_PI;
     float pitch_deg = ypr[1] * 180.0 / M_PI;
     float roll_deg = ypr[2] * 180.0 / M_PI;
+        
     // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
     // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
-    if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
-     tools::draw_text(img, fmt::format("rb_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 128, 255});
-      tools::draw_text(img, fmt::format("rb_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 255, 255});
+  
     // std::cout << "Roll: " << roll_deg << std::endl;
 
+    solver.set_R_gimbal2world(q);
+    auto armors = yolo.detect(img);
+    auto targets = tracker.track(armors, t);
+    // recor.record(img, q, t);
+  if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
+     tools::draw_text(img, fmt::format("rb_Yaw {:.2f}", yaw_deg), {40, 40}, {0, 128, 255});
+      tools::draw_text(img, fmt::format("rb_Pitch {:.2f}", pitch_deg), {40, 80}, {0, 255, 255});
 
     if (!targets.empty()){
       target_queue.push(targets.front());
@@ -265,8 +249,7 @@ int main(int argc, char * argv[])
       auto image_points =
         solver.reproject_armor(aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
       tools::draw_points(img, image_points, {0, 0, 255});
-    }
-
+    } 
 
     // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
     // cv::imshow("reprojection", img);
@@ -288,7 +271,7 @@ int main(int argc, char * argv[])
   
   // 发送当前数据（注意：由于 gimbal.cpp 中接收时乘了 57.3 转成了角度，发回下位机时需要除以 57.3 转回弧度）
   // 因为下位机没有发来速度和加速度数据，所以 vel 和 acc 继续填 0 即可
-  gimbal.sb_send(
+  gimbal.send(
       false, 
       false, 
       current_state.yaw / 57.3f, 
@@ -296,10 +279,7 @@ int main(int argc, char * argv[])
       0.0f, 
       current_state.pitch / 57.3f, 
       0.0f, 
-      0.0f,
-      0,
-      0,
-      0
+      0.0f
   );
 
   return 0;

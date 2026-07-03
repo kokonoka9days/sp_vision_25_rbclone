@@ -12,7 +12,7 @@
 const std::string keys =
   "{help h usage ? | | 输出命令行参数说明}"                
   "{f              | | 是否开火}"
-  "{@config-path   | ../configs/sb_short.yaml | yaml配置文件路径 }";
+  "{@config-path   | ../configs/drone.yaml | yaml配置文件路径 }";
 
 using namespace std::chrono_literals;
 
@@ -68,10 +68,10 @@ int main(int argc, char * argv[])
     std::cout << "Pitch: " << pitch_deg << "°, ";
     std::cout << "Roll: " << roll_deg << "°, "<<std::endl;
     std::cout<<"Data: ";
-    std::cout << " mode "<<(int)mode;
-    // std::cout << "enemy_color: " << (int)enemy_color  << std::endl;
+    std::cout << "mode "<<(int)mode;
+    std::cout << "  enemy_color: " << (int)enemy_color  ;
     // std::cout << "mode: " <<(int) mode << std::endl;
-    std::cout << "  bullet_speed: " <<(float) bullet_speed;
+    std::cout << "   bullet_speed: " <<(float) bullet_speed;
     std::cout << "  bullet_count: " <<(float) state.bullet_count << std::endl;
 
     // std::cout<<q<<std::endl;

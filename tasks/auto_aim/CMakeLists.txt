@@ -17,9 +17,9 @@ if(OPENVINO_MAKE)
         rv_detector.cpp
         rv_number.cpp
         yolo.cpp
-        yolos/yolov5.cpp
-        yolos/yolov8.cpp
-        yolos/yolo11.cpp
+        ov_yolos/yolov5.cpp
+        ov_yolos/yolov8.cpp
+        ov_yolos/yolo11.cpp
         multithread/commandgener.cpp
         multithread/mt_detector.cpp
         planner/planner.cpp
@@ -58,7 +58,9 @@ if(TENSOR_RT_MAKE)
         rv_number.cpp
         yolo.cpp
         trt_yolos/trt_yolo_0708.cpp
-        trt_yolos/preprocess_kernel.cu
+        trt_yolos/trt_0708_kernel.cu
+        trt_yolos/trt_yolo_0526.cpp
+        trt_yolos/trt_0526_kernel.cu
         planner/planner.cpp
     )
     add_subdirectory(planner/tinympc)
