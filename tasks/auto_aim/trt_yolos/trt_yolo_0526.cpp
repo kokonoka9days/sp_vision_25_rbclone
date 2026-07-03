@@ -9,7 +9,8 @@
 
 extern "C" void launchPreprocess(const unsigned char* src, half* dst,
                                  int src_width, int src_height, int src_step,
-                                 int dst_width, int dst_height);
+                                 int dst_width, int dst_height,
+                                 cudaStream_t stream);
 
 namespace auto_aim {
 
@@ -132,7 +133,7 @@ void TensorrtInferEngine0526::infer(const cv::Mat& bgr_img,
                     cudaMemcpyHostToDevice, task.stream);
     launchPreprocess(task.d_img, task.input_device,
                      bgr_img.cols, bgr_img.rows, bgr_img.step,
-                     IMAGE_WIDTH, IMAGE_HEIGHT);
+                     IMAGE_WIDTH, IMAGE_HEIGHT, task.stream);
 
     context_->setTensorAddress(input_name_.c_str(), task.input_device);
     context_->setTensorAddress(output_name_.c_str(), task.output_device);
@@ -169,7 +170,7 @@ bool TensorrtInferEngine0526::async_enabled_infer(const cv::Mat& bgr_img,
                     cudaMemcpyHostToDevice, task.stream);
     launchPreprocess(task.d_img, task.input_device,
                      bgr_img.cols, bgr_img.rows, bgr_img.step,
-                     IMAGE_WIDTH, IMAGE_HEIGHT);
+                     IMAGE_WIDTH, IMAGE_HEIGHT, task.stream);
 
     task_queue_.push(task);
     in_flight_count_++;
@@ -181,7 +182,7 @@ bool TensorrtInferEngine0526::async_enabled_infer(const cv::Mat& bgr_img,
 
         out_objects = decode_outputs(finished.output_host, finished.detect_color);
         out_frame_data = finished;
-        out_frame_data.is_empty = out_objects.empty();
+        out_frame_data.is_empty = false;
 
         free_buffer_queue_.push(finished);
         return true;
@@ -306,7 +307,7 @@ YOLOFrameData TensorRTYolo0526::detect(YOLOFrameData frame_data, int frame_count
     if (!has) return YOLOFrameData();  // is_empty = true
 
     result.armors = convertToArmors(objects, result.frame, frame_count);
-    result.is_empty = result.armors.empty();
+    result.is_empty = false;
     return result;
 }
 
