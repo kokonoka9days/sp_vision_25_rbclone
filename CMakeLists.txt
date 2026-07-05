@@ -13,10 +13,10 @@ message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}-------
 
 
 # openvino依赖
-set(OPENVINO_MAKE OFF)
+set(OPENVINO_MAKE ON)
 
 # tensorRT依赖
-set(TENSOR_RT_MAKE ON)
+set(TENSOR_RT_MAKE OFF)
 
 find_package(OpenCV REQUIRED)
 find_package(fmt REQUIRED)
@@ -55,12 +55,14 @@ if(OPENVINO_MAKE)
 add_executable(rb_auto_aim_debug  src/rb_auto_aim_debug.cpp)
 add_executable(rb_binocular_aim_debug  src/rb_binocular_aim_debug.cpp)
 add_executable(sb_omn_aim_mpc src/sb_omn_aim_mpc.cpp)
+add_executable(omni_perception src/omni_perception.cpp)
 add_executable(hero  src/hero.cpp)
 add_executable(rb_auto_standard_debug  src/rb_auto_standard_debug.cpp)
 add_executable(rb_auto_standard  src/rb_auto_standard.cpp)
 
 target_link_libraries(rb_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(sb_omn_aim_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io omniperception)
+target_link_libraries(omni_perception ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io omniperception)
 target_link_libraries(rb_binocular_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(hero ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(rb_auto_standard_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
@@ -139,7 +141,9 @@ target_link_libraries(camera_thread_test ${OpenCV_LIBS} fmt::fmt auto_aim tools 
 add_executable(time_calibrator tests/time_calibrator.cpp)
 add_executable(auto_label tests/auto_label.cpp)
 add_executable(cameras_test tests/cameras_test.cpp)
-target_link_libraries(time_calibrator ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+target_link_libraries(time_calibrator ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim ${CERES_LIBRARIES})
+target_link_libraries(auto_label ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io auto_aim)
+target_link_libraries(cameras_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
 add_executable(planner_test_offline tests/planner_test_offline.cpp)
 target_link_libraries(planner_test_offline ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io omniperception)

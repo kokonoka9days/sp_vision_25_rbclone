@@ -67,7 +67,16 @@ struct __attribute__((packed)) sb_VisionToGimbal
   uint8_t end = {0x11};
 };
 
+struct __attribute__((packed)) OmniVisionToGimbal
+{
+  uint8_t head = {0x66};
+  uint8_t mode = 0;
+  float yaw = 0;
+  uint8_t end = {0x11};
+};
+
 static_assert(sizeof(VisionToGimbal) <= 64);
+static_assert(sizeof(OmniVisionToGimbal) <= 64);
 
 enum class GimbalMode
 {
@@ -116,6 +125,10 @@ public:
 
   void sb_send(io::sb_VisionToGimbal VisionToGimbal);
 
+  void omni_send(uint8_t mode, float yaw);
+
+  void omni_send(const io::OmniVisionToGimbal & VisionToGimbal);
+
   GimbalState* set_state_(){
     return &state_;
   }
@@ -130,6 +143,7 @@ private:
   GimbalToVision rx_data_;
   VisionToGimbal tx_data_;
   sb_VisionToGimbal sb_tx_data_;
+  OmniVisionToGimbal omni_tx_data_;
 
   GimbalMode mode_ = GimbalMode::IDLE;
   GimbalState state_;

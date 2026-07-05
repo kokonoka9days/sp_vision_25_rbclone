@@ -8,9 +8,9 @@
 #endif
 
 #ifdef OPENVINO_MAKE
-#include "yolos/yolo11.hpp"
-#include "yolos/yolov5.hpp"
-#include "yolos/yolov8.hpp"
+#include "ov_yolos/yolo11.hpp"
+#include "ov_yolos/yolov5.hpp"
+#include "ov_yolos/yolov8.hpp"
 #endif
 
 

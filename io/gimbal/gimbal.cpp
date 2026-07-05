@@ -106,6 +106,23 @@ void Gimbal::sb_send(io::sb_VisionToGimbal VisionToGimbal)
   }
 }
 
+void Gimbal::omni_send(const io::OmniVisionToGimbal & VisionToGimbal)
+{
+  omni_send(VisionToGimbal.mode, VisionToGimbal.yaw);
+}
+
+void Gimbal::omni_send(uint8_t mode, float yaw)
+{
+  omni_tx_data_.mode = mode;
+  omni_tx_data_.yaw = yaw;
+
+  try {
+    serial_.write(reinterpret_cast<const uint8_t *>(&omni_tx_data_), sizeof(omni_tx_data_));
+  } catch (const std::exception & e) {
+    tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
+  }
+}
+
 void Gimbal::send(io::VisionToGimbal VisionToGimbal)
 {
   tx_data_.mode = VisionToGimbal.mode;
