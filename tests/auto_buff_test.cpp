@@ -117,7 +117,7 @@ const std::string keys =
   "{print-debug p | true                   | 是否在终端输出误差 }"
   "{print-step    | 1                      | 每隔多少帧输出一次 }"
   "{debug-predict-time | -1                | 蓝色调试框预测时间, 负数使用配置 }"
-  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/yolo_buff/123/2026-05-12_20-46-14   | avi和txt文件的路径}";
+  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/yolo_buff/123/9   | avi和txt文件的路径}";
 
 int main(int argc, char * argv[])
 {
@@ -179,6 +179,7 @@ int main(int argc, char * argv[])
 
   io::Command last_command;
   double last_t = -1;
+  int last_roll_img_dir = 0;
 
   video.set(cv::CAP_PROP_POS_FRAMES, start_index);
   for (int i = 0; use_imu_text && i < start_index; i++) {
@@ -218,6 +219,10 @@ int main(int argc, char * argv[])
 
     target->get_target(power_runes, timestamp);
 
+    if (power_runes.has_value() && power_runes->positive_roll_image_direction != 0) {
+      last_roll_img_dir = power_runes->positive_roll_image_direction;
+    }
+
     auto aim_target_copy = target->clone();
 
     auto command = aimer.aim(*aim_target_copy, timestamp, 22, false);
@@ -242,39 +247,42 @@ int main(int argc, char * argv[])
     }
 
     if (!target->is_unsolve()) {
-      auto & p = power_runes.value();
+      auto * p = power_runes.has_value() ? &power_runes.value() : nullptr;
       std::optional<std::vector<cv::Point2f>> pnp_points;
       std::optional<PixelCompare> obs_compare;
       std::optional<PixelCompare> green_compare;
       std::optional<PixelCompare> blue_compare;
 
-      // 显示
-      for (int i = 0; i < 4; i++) tools::draw_point(img, p.target().points[i]);
-      for (int i = 0; i < 4; i++) tools::draw_point(img, p.target().fan_points[i], {0, 128, 255});
-      tools::draw_point(img, p.target().center, {0, 0, 255}, 3);
-      tools::draw_point(img, p.r_center, {0, 0, 255}, 3);
+      if (p != nullptr) {
+        // 显示
+        for (int i = 0; i < 4; i++) tools::draw_point(img, p->target().points[i]);
+        for (int i = 0; i < 4; i++)
+          tools::draw_point(img, p->target().fan_points[i], {0, 128, 255});
+        tools::draw_point(img, p->target().center, {0, 0, 255}, 3);
+        tools::draw_point(img, p->r_center, {0, 0, 255}, 3);
 
-      // raw PNP重投影: 只检查8个关键点PNP本身，不经过EKF和预测
-      pnp_points = solver.reproject_pnp_points();
-      if (pnp_points.has_value()) {
-        tools::draw_points(
-          img, std::vector<cv::Point2f>(pnp_points->begin(), pnp_points->begin() + 4),
-          {0, 255, 255});
-        tools::draw_points(
-          img, std::vector<cv::Point2f>(pnp_points->begin() + 4, pnp_points->end()),
-          {0, 255, 255});
-      }
+        // raw PNP重投影: 只检查8个关键点PNP本身，不经过EKF和预测
+        pnp_points = solver.reproject_pnp_points();
+        if (pnp_points.has_value()) {
+          tools::draw_points(
+            img, std::vector<cv::Point2f>(pnp_points->begin(), pnp_points->begin() + 4),
+            {0, 255, 255});
+          tools::draw_points(
+            img, std::vector<cv::Point2f>(pnp_points->begin() + 4, pnp_points->end()),
+            {0, 255, 255});
+        }
 
-      // 当前PNP观测转成旧buff坐标系后的重投影: 不经过EKF，用来定位solver/坐标系误差
-      auto obs_points = solver.reproject_buff(p.xyz_in_world, p.ypr_in_world[0], p.ypr_in_world[2]);
-      tools::draw_points(
-        img, std::vector<cv::Point2f>(obs_points.begin(), obs_points.begin() + 4),
-        {255, 0, 255});
-      tools::draw_points(
-        img, std::vector<cv::Point2f>(obs_points.begin() + 4, obs_points.end()), {255, 0, 255});
-      if (pnp_points.has_value()) {
-        obs_compare = compare_points(*pnp_points, obs_points);
-        if (obs_compare.has_value()) add_compare_data(data, "obs_vs_raw", obs_compare.value());
+        // 当前PNP观测转成旧buff坐标系后的重投影: 不经过EKF，用来定位solver/坐标系误差
+        auto obs_points = solver.reproject_buff(p->xyz_in_world, p->ypr_in_world[0], p->ypr_in_world[2]);
+        tools::draw_points(
+          img, std::vector<cv::Point2f>(obs_points.begin(), obs_points.begin() + 4),
+          {255, 0, 255});
+        tools::draw_points(
+          img, std::vector<cv::Point2f>(obs_points.begin() + 4, obs_points.end()), {255, 0, 255});
+        if (pnp_points.has_value()) {
+          obs_compare = compare_points(*pnp_points, obs_points);
+          if (obs_compare.has_value()) add_compare_data(data, "obs_vs_raw", obs_compare.value());
+        }
       }
 
       // 当前帧target更新后buff
@@ -333,10 +341,17 @@ int main(int argc, char * argv[])
                                    ? compare_terminal_text("green", green_compare.value())
                                    : "green:NA";
         std::string blue_text =
-          blue_compare.has_value() ? compare_terminal_text("blue", blue_compare.value()) : "blue:NA";
+          blue_compare.has_value() ? compare_terminal_text("blue", blue_compare.value())
+                                   : (p == nullptr ? "blue:blind" : "blue:NA");
+        if (!green_compare.has_value() && p == nullptr) green_text = "green:blind";
+        const double debug_spd_deg = target->ekf_x().size() > 6 ? target->ekf_x()[6] * 57.3 : 0.0;
+        const int debug_spd_sign = debug_spd_deg > 1e-3 ? 1 : (debug_spd_deg < -1e-3 ? -1 : 0);
+        const int debug_roll_img_dir = p != nullptr ? p->positive_roll_image_direction : last_roll_img_dir;
+        const int debug_pred_image_direction = debug_spd_sign * debug_roll_img_dir;
         fmt::print(
-          "frame={} t={:.3f} mode={} imu={} {} | {} | {}\n", frame_count, t, buff_mode,
-          use_imu_text ? "txt" : "identity", obs_text, green_text, blue_text);
+          "frame={} t={:.3f} mode={} imu={} spd={:.1f}deg/s roll_img_dir={} pred_img_dir={} {} | {} | {}\n",
+          frame_count, t, buff_mode, use_imu_text ? "txt" : "identity", debug_spd_deg,
+          debug_roll_img_dir, debug_pred_image_direction, obs_text, green_text, blue_text);
       }
 
       // 观测器内部数据

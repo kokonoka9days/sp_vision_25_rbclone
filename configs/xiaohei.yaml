@@ -157,6 +157,7 @@ model: "/home/cyn/Desktop/sp_vision_25_rbclone/yolo_buff/runs/pose/runs/rune_pos
 buff_confidence_threshold: 0.7
 buff_keypoint_threshold: 0.3
 buff_rune_radius_m: 0.700
+buff_small_direction: 0 # 0:auto, 1/-1: force small buff prediction direction
 buff_locked_gate_deg: 25
 buff_switch_gate_deg: 10
 buff_switch_confirm_frames: 3

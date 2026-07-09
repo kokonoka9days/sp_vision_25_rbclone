@@ -14,6 +14,7 @@ Aimer::Aimer(const std::string & config_path)
   fire_gap_time_ = yaml["fire_gap_time"].as<double>();
   predict_time_ = yaml["predict_time"].as<double>();
   if (yaml["buff_rune_radius_m"]) RUNE_RADIUS_M = yaml["buff_rune_radius_m"].as<double>();
+  if (yaml["buff_small_direction"]) SMALL_BUFF_DIRECTION = yaml["buff_small_direction"].as<int>();
 
   last_fire_t_ = std::chrono::steady_clock::now();
 }

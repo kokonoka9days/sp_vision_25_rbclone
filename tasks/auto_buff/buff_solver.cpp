@@ -46,6 +46,18 @@ Eigen::Vector3d no_pitch_ypr_from_radial(
 
   return {tools::limit_rad(yaw), 0.0, tools::limit_rad(roll)};
 }
+
+cv::Point2f mean_point(const std::vector<cv::Point2f> & points, size_t begin, size_t end)
+{
+  cv::Point2f sum(0.0f, 0.0f);
+  for (size_t i = begin; i < end; ++i) sum += points[i];
+  return sum * (1.0f / static_cast<float>(end - begin));
+}
+
+double image_angle_around_center(const cv::Point2f & point, const cv::Point2f & center)
+{
+  return std::atan2(point.y - center.y, point.x - center.x);
+}
 }  // namespace
 
 cv::Matx33f Solver::rotation_matrix(double angle) const
@@ -74,6 +86,7 @@ Solver::Solver(const std::string & config_path) : R_gimbal2world_(Eigen::Matrix3
 {
   auto yaml = YAML::LoadFile(config_path);
   if (yaml["buff_rune_radius_m"]) RUNE_RADIUS_M = yaml["buff_rune_radius_m"].as<double>();
+  if (yaml["buff_small_direction"]) SMALL_BUFF_DIRECTION = yaml["buff_small_direction"].as<int>();
 
   auto R_gimbal2imubody_data = yaml["R_gimbal2imubody"].as<std::vector<double>>();
   auto R_camera2gimbal_data = yaml["R_camera2gimbal"].as<std::vector<double>>();
@@ -181,6 +194,22 @@ void Solver::solve(std::optional<PowerRune> & ps) const
   p.blade_xyz_in_world = target_in_world;
   p.blade_ypd_in_world = tools::xyz2ypd(p.blade_xyz_in_world);
   p.ypr_in_world = ypr_no_pitch;
+
+  const double roll_probe = 0.02;
+  const auto current_points =
+    reproject_buff(p.xyz_in_world, p.ypr_in_world[0], p.ypr_in_world[2]);
+  const auto positive_roll_points = reproject_buff(
+    p.xyz_in_world, p.ypr_in_world[0], tools::limit_rad(p.ypr_in_world[2] + roll_probe));
+  if (current_points.size() >= 4 && positive_roll_points.size() >= 4) {
+    const double current_angle =
+      image_angle_around_center(mean_point(current_points, 0, 4), p.r_center);
+    const double positive_roll_angle =
+      image_angle_around_center(mean_point(positive_roll_points, 0, 4), p.r_center);
+    const double image_delta = tools::limit_rad(positive_roll_angle - current_angle);
+    p.positive_roll_image_direction = image_delta >= 0.0 ? 1 : -1;
+  } else {
+    p.positive_roll_image_direction = 0;
+  }
 }
 
 cv::Point2f Solver::point_buff2pixel(cv::Point3f x)

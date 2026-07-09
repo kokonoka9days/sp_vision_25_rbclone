@@ -118,6 +118,7 @@ Buff_Detector::Buff_Detector(const std::string & config) : status_(LOSE), lose_(
   if (yaml["buff_locked_lost_max"]) locked_lost_max_ = yaml["buff_locked_lost_max"].as<int>();
   if (yaml["buff_center_lost_max"]) center_lost_max_ = yaml["buff_center_lost_max"].as<int>();
   if (yaml["buff_rune_radius_m"]) RUNE_RADIUS_M = yaml["buff_rune_radius_m"].as<double>();
+  if (yaml["buff_small_direction"]) SMALL_BUFF_DIRECTION = yaml["buff_small_direction"].as<int>();
 }
 
 void Buff_Detector::handle_img(const cv::Mat & bgr_img, cv::Mat & dilated_img)

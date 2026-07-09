@@ -15,6 +15,7 @@ namespace auto_buff
 {
 const int INF = 1000000;
 inline double RUNE_RADIUS_M = 0.700;
+inline int SMALL_BUFF_DIRECTION = 0;  // 0: auto, 1/-1: force small buff prediction direction
 inline constexpr double RUNE_SLOT_ANGLE = 2.0 * CV_PI / 5.0;
 
 enum PowerRune_type { SMALL, BIG };
@@ -57,6 +58,7 @@ public:
   int light_num;
   int target_slot_id = -1;
   double target_angle = 0.0;
+  int positive_roll_image_direction = 0;
 
   Eigen::Vector3d xyz_in_world;  // 单位：m
   Eigen::Vector3d ypr_in_world;  // 单位：rad

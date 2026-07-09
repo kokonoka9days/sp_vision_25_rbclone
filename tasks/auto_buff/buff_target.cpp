@@ -1,5 +1,6 @@
 #include "buff_target.hpp"
 
+#include <algorithm>
 #include <fmt/core.h>
 
 namespace auto_buff
@@ -41,6 +42,37 @@ bool should_reset_track(
   }
 
   return false;
+}
+
+int configured_small_buff_direction()
+{
+  if (SMALL_BUFF_DIRECTION > 0) return 1;
+  if (SMALL_BUFF_DIRECTION < 0) return -1;
+  return 0;
+}
+
+int small_buff_direction(int auto_direction)
+{
+  const int configured_direction = configured_small_buff_direction();
+  if (configured_direction != 0) return configured_direction;
+  if (auto_direction > 0) return 1;
+  if (auto_direction < 0) return -1;
+  return 0;
+}
+
+int small_roll_direction(int image_direction, int positive_roll_image_direction)
+{
+  const int direction = small_buff_direction(image_direction);
+  if (direction == 0) return 0;
+  const int roll_image_direction = positive_roll_image_direction == 0 ? 1 : positive_roll_image_direction;
+  return direction * roll_image_direction;
+}
+
+int signum(int value)
+{
+  if (value > 0) return 1;
+  if (value < 0) return -1;
+  return 0;
 }
 }  // namespace
 
@@ -128,16 +160,25 @@ SmallTarget::SmallTarget() : Target() {}
 void SmallTarget::get_target(
   const std::optional<PowerRune> & p, std::chrono::steady_clock::time_point & timestamp)
 {
-  // 如果没有识别，退出函数
   static int lost_cn = 0;
+  static std::chrono::steady_clock::time_point start_timestamp = timestamp;
+  auto time_gap = tools::delta_time(timestamp, start_timestamp);
+
   if (!p.has_value()) {
-    unsolvable_ = true;
     lost_cn++;
+    if (first_in_ || lost_cn > 6 || small_buff_direction(small_auto_direction_) == 0) {
+      if (!first_in_ && lost_cn == 7) tools::logger()->debug("[Target] 小符丢失buff");
+      if (lost_cn > 6) first_in_ = true;
+      unsolvable_ = true;
+      return;
+    }
+
+    predict(std::max(0.0, time_gap - lasttime_));
+    lasttime_ = time_gap;
+    unsolvable_ = false;
     return;
   }
 
-  static std::chrono::steady_clock::time_point start_timestamp = timestamp;
-  auto time_gap = tools::delta_time(timestamp, start_timestamp);
   const auto & obs = p.value();
 
   // init
@@ -148,17 +189,10 @@ void SmallTarget::get_target(
     last_target_slot_id_ = obs.target_slot_id;
   }
 
-  // 处理识别时间间隔过大
-  if (lost_cn > 6) {
-    unsolvable_ = true;
-    tools::logger()->debug("[Target] 丢失buff");
-    lost_cn = 0;
-    first_in_ = true;
-    return;
-  }
+  lost_cn = 0;
 
   std::string reset_reason;
-  if (should_reset_track(ekf_.x, obs, last_target_slot_id_, 0.20, CV_PI / 9.0, reset_reason)) {
+  if (should_reset_track(ekf_.x, obs, last_target_slot_id_, 0.80, CV_PI / 9.0, reset_reason)) {
     tools::logger()->debug("[Target] 小符重置EKF: {}", reset_reason);
     init(time_gap, obs);
     first_in_ = false;
@@ -174,7 +208,10 @@ void SmallTarget::get_target(
   last_target_slot_id_ = obs.target_slot_id;
 
   // 处理发散
-  if (std::abs(ekf_.x[6]) > SMALL_W + CV_PI / 18 || std::abs(ekf_.x[6]) < SMALL_W - CV_PI / 18) {
+  if (
+    std::abs(ekf_.x[6]) > 1e-6 &&
+    (std::abs(ekf_.x[6]) > SMALL_W + CV_PI / 18 ||
+     std::abs(ekf_.x[6]) < SMALL_W - CV_PI / 18)) {
     unsolvable_ = true;
     tools::logger()->debug("[Target] 小符角度发散spd: {:.2f}", ekf_.x[6] * 180 / CV_PI);
     first_in_ = true;
@@ -184,7 +221,7 @@ void SmallTarget::get_target(
 
 void SmallTarget::predict(double dt)
 {
-  ekf_.x[6] = (ekf_.x[6] >= 0.0 ? 1.0 : -1.0) * SMALL_W;
+  ekf_.x[6] = small_roll_direction(small_auto_direction_, last_positive_roll_image_direction_) * SMALL_W;
 
   // 预测下一个状态
   // clang-format off
@@ -218,7 +255,7 @@ void SmallTarget::predict(double dt)
     return x_prior;
   };
   ekf_.predict(A_, Q_, f);
-  ekf_.x[6] = (ekf_.x[6] >= 0.0 ? 1.0 : -1.0) * SMALL_W;
+  ekf_.x[6] = small_roll_direction(small_auto_direction_, last_positive_roll_image_direction_) * SMALL_W;
 }
 
 void SmallTarget::init(double nowtime, const PowerRune & p)
@@ -241,11 +278,15 @@ void SmallTarget::init(double nowtime, const PowerRune & p)
   // [angle/row]
   // [spd]   w=CV_PI/6
 
+  if (p.positive_roll_image_direction != 0) {
+    last_positive_roll_image_direction_ = p.positive_roll_image_direction;
+  }
+
   // clang-format off
   // 初始状态
   x0_ << p.ypd_in_world[0], 0.0, p.ypd_in_world[1], p.ypd_in_world[2],
          p.ypr_in_world[0], p.ypr_in_world[2], 
-         SMALL_W * voter.clockwise();
+         SMALL_W * small_roll_direction(small_auto_direction_, last_positive_roll_image_direction_);
   // 初始状态协方差矩阵
   P0_ << 10.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
           0.0, 10.0,  0.0,  0.0,  0.0,  0.0,  0.0,
@@ -276,8 +317,8 @@ void SmallTarget::init(double nowtime, const PowerRune & p)
   };
   // 创建扩展卡尔曼滤波器对象
   ekf_ = tools::ExtendedKalmanFilter(x0_, P0_, x_add);
-  has_last_observed_roll_ = true;
-  last_observed_roll_ = p.ypr_in_world[2];
+  has_last_observed_target_angle_ = true;
+  last_observed_target_angle_ = p.target_angle;
 }
 
 void SmallTarget::update(double nowtime, const PowerRune & p)
@@ -293,16 +334,58 @@ void SmallTarget::update(double nowtime, const PowerRune & p)
   const Eigen::VectorXd & ypr = p.ypr_in_world;
   const Eigen::VectorXd & B_ypd = p.blade_ypd_in_world;  // center of blade
 
-  if (has_last_observed_roll_) {
-    const double observed_delta = tools::limit_rad(ypr[2] - last_observed_roll_);
-    if (std::abs(observed_delta) > 1e-4 && std::abs(observed_delta) < CV_PI / 5.0) {
-      voter.vote(0.0, observed_delta);
+  if (p.positive_roll_image_direction != 0) {
+    last_positive_roll_image_direction_ = p.positive_roll_image_direction;
+  }
+
+  if (configured_small_buff_direction() == 0 && has_last_observed_target_angle_) {
+    const double observed_delta = tools::limit_rad(p.target_angle - last_observed_target_angle_);
+    constexpr double min_direction_delta = CV_PI / 900.0;  // 0.2 deg, reject jitter
+    constexpr int confirm_score = 4;
+    constexpr int score_limit = 8;
+    constexpr int reverse_confirm_frames = 12;
+    if (std::abs(observed_delta) > min_direction_delta && std::abs(observed_delta) < CV_PI / 5.0) {
+      const int image_direction = observed_delta > 0.0 ? 1 : -1;
+      if (small_auto_direction_ == 0 || image_direction == small_auto_direction_) {
+        small_reverse_candidate_direction_ = 0;
+        small_reverse_confirm_count_ = 0;
+        small_direction_score_ =
+          std::clamp(small_direction_score_ + image_direction, -score_limit, score_limit);
+        if (std::abs(small_direction_score_) >= confirm_score) {
+          const int confirmed_direction = signum(small_direction_score_);
+          if (confirmed_direction != 0 && confirmed_direction != small_auto_direction_) {
+            tools::logger()->debug(
+              "[Target] 小符图像方向确认: dir {}, score {}, img_dir {}, roll_img_dir {}",
+              confirmed_direction, small_direction_score_, image_direction,
+              last_positive_roll_image_direction_);
+          }
+          small_auto_direction_ = confirmed_direction;
+        }
+      } else {
+        if (small_reverse_candidate_direction_ != image_direction) {
+          small_reverse_candidate_direction_ = image_direction;
+          small_reverse_confirm_count_ = 0;
+        }
+        small_reverse_confirm_count_++;
+        small_direction_score_ =
+          std::clamp(small_direction_score_ + image_direction, -score_limit, score_limit);
+        if (small_reverse_confirm_count_ >= reverse_confirm_frames) {
+          small_auto_direction_ = image_direction;
+          small_direction_score_ = image_direction * confirm_score;
+          small_reverse_candidate_direction_ = 0;
+          small_reverse_confirm_count_ = 0;
+          tools::logger()->debug(
+            "[Target] 小符图像方向翻转确认: dir {}, score {}, img_dir {}, roll_img_dir {}",
+            small_auto_direction_, small_direction_score_, image_direction,
+            last_positive_roll_image_direction_);
+        }
+      }
     }
   }
-  has_last_observed_roll_ = true;
-  last_observed_roll_ = ypr[2];
+  has_last_observed_target_angle_ = true;
+  last_observed_target_angle_ = p.target_angle;
 
-  ekf_.x[6] = SMALL_W * voter.clockwise();
+  ekf_.x[6] = SMALL_W * small_roll_direction(small_auto_direction_, last_positive_roll_image_direction_);
 
   // 预测下一个状态
   predict(nowtime - lasttime_);
@@ -392,7 +475,7 @@ void SmallTarget::update(double nowtime, const PowerRune & p)
   ekf_.x[3] = R_ypd[2];
   ekf_.x[4] = ypr[0];
   ekf_.x[5] = ypr[2];
-  ekf_.x[6] = SMALL_W * voter.clockwise();
+  ekf_.x[6] = SMALL_W * small_roll_direction(small_auto_direction_, last_positive_roll_image_direction_);
 
   // 更新lasttime
   lasttime_ = nowtime;

@@ -68,8 +68,8 @@ protected:
   bool first_in_;
   bool unsolvable_;
   int last_target_slot_id_ = -1;
-  bool has_last_observed_roll_ = false;
-  double last_observed_roll_ = 0.0;
+  bool has_last_observed_target_angle_ = false;
+  double last_observed_target_angle_ = 0.0;
 };
 
 /// SmallTarget子类
@@ -95,6 +95,11 @@ private:
 
   const double SMALL_W = CV_PI / 3;
   // const double SMALL_W = 0;
+  int small_auto_direction_ = 0;
+  int small_direction_score_ = 0;
+  int small_reverse_candidate_direction_ = 0;
+  int small_reverse_confirm_count_ = 0;
+  int last_positive_roll_image_direction_ = 1;
 };
 
 /// BigTarget子类
