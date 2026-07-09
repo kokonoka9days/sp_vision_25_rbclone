@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "async_pipeline.hpp"
 #include "tasks/auto_aim/armor.hpp"
 #include "tasks/auto_aim/detector.hpp"
 #include "tasks/auto_aim/yolo.hpp"
@@ -20,8 +21,7 @@ public:
 
   std::list<Armor> detect(const cv::Mat & bgr_img, int frame_count) override;
 
-  // TUDO:推理线程
-  YOLOFrameData detect(YOLOFrameData frame_data, int frame_count) {}
+  YOLOFrameData detect(YOLOFrameData frame_data, int frame_count) override;
 
   std::list<Armor> postprocess(
     double scale, cv::Mat & output, const cv::Mat & bgr_img, int frame_count) override;
@@ -38,6 +38,7 @@ private:
 
   ov::Core core_;
   ov::CompiledModel compiled_model_;
+  OpenVINOAsyncPipeline async_pipeline_;
 
   cv::Rect roi_;
   cv::Point2f offset_;

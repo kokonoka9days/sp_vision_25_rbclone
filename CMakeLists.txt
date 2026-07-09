@@ -59,6 +59,7 @@ add_executable(omni_perception src/omni_perception.cpp)
 add_executable(hero  src/hero.cpp)
 add_executable(rb_auto_standard_debug  src/rb_auto_standard_debug.cpp)
 add_executable(rb_auto_standard  src/rb_auto_standard.cpp)
+add_executable(rb_auto_aim_debug_async src/rbnx_auto_aim_debug_async.cpp)
 
 target_link_libraries(rb_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(sb_omn_aim_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io omniperception)
@@ -67,6 +68,7 @@ target_link_libraries(rb_binocular_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp au
 target_link_libraries(hero ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(rb_auto_standard_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(rb_auto_standard ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
+target_link_libraries(rb_auto_aim_debug_async ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
 endif()
 # rv
 add_executable(rb_rv_aim_debug src/rb_rv_aim_debug.cpp)
@@ -163,6 +165,10 @@ if(TENSOR_RT_MAKE)
 
     add_executable(rbnx_auto_aim_debug src/rbnx_auto_aim_debug.cpp)
     target_link_libraries(rbnx_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim  tools io)
+
+    add_executable(rbnx_auto_aim_debug_async src/rbnx_auto_aim_debug_async.cpp)
+    target_link_libraries(rbnx_auto_aim_debug_async ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
+
 
 endif()
 
