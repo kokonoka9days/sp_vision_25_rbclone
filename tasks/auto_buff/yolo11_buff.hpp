@@ -1,4 +1,4 @@
-﻿#ifndef AUTO_BUFF__YOLO11_BUFF_HPP
+#ifndef AUTO_BUFF__YOLO11_BUFF_HPP
 #define AUTO_BUFF__YOLO11_BUFF_HPP
 #include <yaml-cpp/yaml.h>
 
@@ -10,7 +10,15 @@
 
 namespace auto_buff
 {
-const std::vector<std::string> class_names = {"buff", "r"};
+inline const std::vector<std::string> class_names = {
+  "inactive_target", "inactive_fan", "rune_center"};
+
+enum RuneClass : int
+{
+  INACTIVE_TARGET = 0,
+  INACTIVE_FAN = 1,
+  RUNE_CENTER = 2
+};
 
 class YOLO11_BUFF
 {
@@ -21,6 +29,7 @@ public:
     int label;
     float prob;
     std::vector<cv::Point2f> kpt;
+    std::vector<float> kpt_conf;
   };
 
   YOLO11_BUFF(const std::string & config);
@@ -37,7 +46,13 @@ private:
   ov::CompiledModel compiled_model;
   ov::InferRequest infer_request;
   ov::Tensor input_tensor;
-  const int NUM_POINTS = 6;
+  static constexpr int NUM_CLASSES = 3;
+  static constexpr int NUM_POINTS = 4;
+  static constexpr int KPT_DIMS = 3;
+
+  float confidence_threshold_ = 0.7f;
+  float keypoint_threshold_ = 0.3f;
+  float iou_threshold_ = 0.4f;
 
   // 转换图像数据: 先转换元素类型, (可选)然后归一化到[0, 1], (可选)然后交换RB通道
   void convert(

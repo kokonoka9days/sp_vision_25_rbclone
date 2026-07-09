@@ -67,6 +67,9 @@ protected:
   Voter voter;  // 逆时针-1 顺时针1
   bool first_in_;
   bool unsolvable_;
+  int last_target_slot_id_ = -1;
+  bool has_last_observed_roll_ = false;
+  double last_observed_roll_ = 0.0;
 };
 
 /// SmallTarget子类

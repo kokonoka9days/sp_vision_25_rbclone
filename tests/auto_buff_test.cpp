@@ -2,8 +2,10 @@
 
 #include <chrono>
 #include <fstream>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
+#include <yaml-cpp/yaml.h>
 
 #include "tasks/auto_buff/buff_aimer.hpp"
 #include "tasks/auto_buff/buff_detector.hpp"
@@ -16,12 +18,106 @@
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
 
+namespace
+{
+cv::Point2f mean_point(const std::vector<cv::Point2f> & points, size_t begin, size_t end)
+{
+  cv::Point2f sum(0.0f, 0.0f);
+  for (size_t i = begin; i < end; ++i) sum += points[i];
+  return sum * (1.0f / static_cast<float>(end - begin));
+}
+
+double mean_error(
+  const std::vector<cv::Point2f> & reference, const std::vector<cv::Point2f> & candidate,
+  size_t begin, size_t end)
+{
+  double sum = 0.0;
+  for (size_t i = begin; i < end; ++i) sum += cv::norm(candidate[i] - reference[i]);
+  return sum / static_cast<double>(end - begin);
+}
+
+double vector_angle_error_deg(
+  const cv::Point2f & reference_from, const cv::Point2f & reference_to,
+  const cv::Point2f & candidate_from, const cv::Point2f & candidate_to)
+{
+  const auto reference = reference_to - reference_from;
+  const auto candidate = candidate_to - candidate_from;
+  const double reference_angle = std::atan2(reference.y, reference.x);
+  const double candidate_angle = std::atan2(candidate.y, candidate.x);
+  return tools::limit_rad(candidate_angle - reference_angle) * 57.3;
+}
+
+struct PixelCompare
+{
+  cv::Point2f raw_target_center;
+  cv::Point2f raw_fan_center;
+  cv::Point2f target_center;
+  cv::Point2f fan_center;
+  double target_error = 0.0;
+  double fan_error = 0.0;
+  double mean_error_8 = 0.0;
+  double angle_error_deg = 0.0;
+};
+
+std::optional<PixelCompare> compare_points(
+  const std::vector<cv::Point2f> & raw, const std::vector<cv::Point2f> & candidate)
+{
+  if (raw.size() < 8 || candidate.size() < 8) return std::nullopt;
+
+  PixelCompare result;
+  result.raw_target_center = mean_point(raw, 0, 4);
+  result.raw_fan_center = mean_point(raw, 4, 8);
+  result.target_center = mean_point(candidate, 0, 4);
+  result.fan_center = mean_point(candidate, 4, 8);
+  result.target_error = cv::norm(result.target_center - result.raw_target_center);
+  result.fan_error = cv::norm(result.fan_center - result.raw_fan_center);
+  result.mean_error_8 = mean_error(raw, candidate, 0, 8);
+  result.angle_error_deg = vector_angle_error_deg(
+    result.raw_target_center, result.raw_fan_center, result.target_center, result.fan_center);
+  return result;
+}
+
+void add_compare_data(
+  nlohmann::json & data, const std::string & prefix, const PixelCompare & compare)
+{
+  data[prefix + "_target_dx"] = compare.target_center.x - compare.raw_target_center.x;
+  data[prefix + "_target_dy"] = compare.target_center.y - compare.raw_target_center.y;
+  data[prefix + "_fan_dx"] = compare.fan_center.x - compare.raw_fan_center.x;
+  data[prefix + "_fan_dy"] = compare.fan_center.y - compare.raw_fan_center.y;
+  data[prefix + "_target_err_px"] = compare.target_error;
+  data[prefix + "_fan_err_px"] = compare.fan_error;
+  data[prefix + "_mean8_err_px"] = compare.mean_error_8;
+  data[prefix + "_angle_err_deg"] = compare.angle_error_deg;
+}
+
+std::string compare_text(const std::string & name, const PixelCompare & compare)
+{
+  return fmt::format(
+    "{} T:{:.1f}px F:{:.1f}px mean:{:.1f}px ang:{:.1f}deg", name, compare.target_error,
+    compare.fan_error, compare.mean_error_8, compare.angle_error_deg);
+}
+
+std::string compare_terminal_text(const std::string & name, const PixelCompare & compare)
+{
+  return fmt::format(
+    "{}:T={:.1f},F={:.1f},M={:.1f},A={:.1f},Tdx={:.1f},Tdy={:.1f},Fdx={:.1f},Fdy={:.1f}",
+    name, compare.target_error, compare.fan_error, compare.mean_error_8, compare.angle_error_deg,
+    compare.target_center.x - compare.raw_target_center.x,
+    compare.target_center.y - compare.raw_target_center.y,
+    compare.fan_center.x - compare.raw_fan_center.x, compare.fan_center.y - compare.raw_fan_center.y);
+}
+}  // namespace
+
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明 }"
   "{config-path c  | ../configs/demo.yaml    | yaml配置文件的路径}"
   "{start-index s  | 0                      | 视频起始帧下标    }"
   "{end-index e    | 0                      | 视频结束帧下标    }"
-  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/assets/buff/buff guanfang   | avi和txt文件的路径}";
+  "{buff-mode m   | small                  | small 或 big      }"
+  "{print-debug p | true                   | 是否在终端输出误差 }"
+  "{print-step    | 1                      | 每隔多少帧输出一次 }"
+  "{debug-predict-time | -1                | 蓝色调试框预测时间, 负数使用配置 }"
+  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/yolo_buff/123/2026-05-12_20-46-14   | avi和txt文件的路径}";
 
 int main(int argc, char * argv[])
 {
@@ -35,6 +131,10 @@ int main(int argc, char * argv[])
   auto config_path = cli.get<std::string>("config-path");
   auto start_index = cli.get<int>("start-index");
   auto end_index = cli.get<int>("end-index");
+  auto buff_mode = cli.get<std::string>("buff-mode");
+  auto print_debug = cli.get<bool>("print-debug");
+  auto print_step = std::max(1, cli.get<int>("print-step"));
+  auto debug_predict_time_cli = cli.get<double>("debug-predict-time");
 
   tools::Plotter plotter;
   tools::Exiter exiter;
@@ -43,11 +143,35 @@ int main(int argc, char * argv[])
   auto text_path = fmt::format("{}.txt", input_path);
   cv::VideoCapture video(video_path);
   std::ifstream text(text_path);
+  bool use_imu_text = text.is_open();
+  if (!video.isOpened()) {
+    tools::logger()->error("[auto_buff_test] failed to open video: {}", video_path);
+    return 1;
+  }
+  if (!use_imu_text) {
+    tools::logger()->warn(
+      "[auto_buff_test] imu text not found: {}, using identity gimbal quaternion", text_path);
+  }
+  const double fps = video.get(cv::CAP_PROP_FPS);
+  const double frame_dt = fps > 1e-3 ? 1.0 / fps : 1.0 / 60.0;
+  auto yaml = YAML::LoadFile(config_path);
+  const double debug_predict_time = debug_predict_time_cli >= 0.0
+                                      ? debug_predict_time_cli
+                                      : 0.1 + (yaml["predict_time"]
+                                                 ? yaml["predict_time"].as<double>()
+                                                 : 0.0);
 
   auto_buff::Buff_Detector detector(config_path);
   auto_buff::Solver solver(config_path);
-  auto_buff::SmallTarget target;
-  // auto_buff::BigTarget target;
+  std::unique_ptr<auto_buff::Target> target;
+  if (buff_mode == "big") {
+    target = std::make_unique<auto_buff::BigTarget>();
+  } else {
+    if (buff_mode != "small") {
+      tools::logger()->warn("[auto_buff_test] unknown buff-mode: {}, using small", buff_mode);
+    }
+    target = std::make_unique<auto_buff::SmallTarget>();
+  }
   auto_buff::Aimer aimer(config_path);
 
   cv::Mat img, drawing;
@@ -57,9 +181,13 @@ int main(int argc, char * argv[])
   double last_t = -1;
 
   video.set(cv::CAP_PROP_POS_FRAMES, start_index);
-  for (int i = 0; i < start_index; i++) {
+  for (int i = 0; use_imu_text && i < start_index; i++) {
     double t, w, x, y, z;
-    text >> t >> w >> x >> y >> z;
+    if (!(text >> t >> w >> x >> y >> z)) {
+      use_imu_text = false;
+      tools::logger()->warn(
+        "[auto_buff_test] imu text ended before start-index, using identity gimbal quaternion");
+    }
   }
 
   for (int frame_count = start_index; !exiter.exit(); frame_count++) {
@@ -68,8 +196,16 @@ int main(int argc, char * argv[])
     video.read(img);
     if (img.empty()) break;
 
-    double t, w, x, y, z;
-    text >> t >> w >> x >> y >> z;
+    double t = frame_count * frame_dt;
+    double w = 1.0, x = 0.0, y = 0.0, z = 0.0;
+    if (use_imu_text && !(text >> t >> w >> x >> y >> z)) {
+      use_imu_text = false;
+      t = frame_count * frame_dt;
+      w = 1.0;
+      x = y = z = 0.0;
+      tools::logger()->warn(
+        "[auto_buff_test] failed to read imu text, using identity gimbal quaternion");
+    }
     auto timestamp = t0 + std::chrono::microseconds(int(t * 1e6));
 
     /// 自瞄核心逻辑
@@ -80,11 +216,11 @@ int main(int argc, char * argv[])
 
     solver.solve(power_runes);
 
-    target.get_target(power_runes, timestamp);
+    target->get_target(power_runes, timestamp);
 
-    auto target_copy = target;
+    auto aim_target_copy = target->clone();
 
-    auto command = aimer.aim(target_copy, timestamp, 22, false);
+    auto command = aimer.aim(*aim_target_copy, timestamp, 22, false);
 
     // cboard.send(command);
 
@@ -105,35 +241,106 @@ int main(int argc, char * argv[])
       data["buff_roll"] = p.ypr_in_world[2] * 57.3;
     }
 
-    if (!target.is_unsolve()) {
+    if (!target->is_unsolve()) {
       auto & p = power_runes.value();
+      std::optional<std::vector<cv::Point2f>> pnp_points;
+      std::optional<PixelCompare> obs_compare;
+      std::optional<PixelCompare> green_compare;
+      std::optional<PixelCompare> blue_compare;
 
       // 显示
       for (int i = 0; i < 4; i++) tools::draw_point(img, p.target().points[i]);
+      for (int i = 0; i < 4; i++) tools::draw_point(img, p.target().fan_points[i], {0, 128, 255});
       tools::draw_point(img, p.target().center, {0, 0, 255}, 3);
       tools::draw_point(img, p.r_center, {0, 0, 255}, 3);
 
+      // raw PNP重投影: 只检查8个关键点PNP本身，不经过EKF和预测
+      pnp_points = solver.reproject_pnp_points();
+      if (pnp_points.has_value()) {
+        tools::draw_points(
+          img, std::vector<cv::Point2f>(pnp_points->begin(), pnp_points->begin() + 4),
+          {0, 255, 255});
+        tools::draw_points(
+          img, std::vector<cv::Point2f>(pnp_points->begin() + 4, pnp_points->end()),
+          {0, 255, 255});
+      }
+
+      // 当前PNP观测转成旧buff坐标系后的重投影: 不经过EKF，用来定位solver/坐标系误差
+      auto obs_points = solver.reproject_buff(p.xyz_in_world, p.ypr_in_world[0], p.ypr_in_world[2]);
+      tools::draw_points(
+        img, std::vector<cv::Point2f>(obs_points.begin(), obs_points.begin() + 4),
+        {255, 0, 255});
+      tools::draw_points(
+        img, std::vector<cv::Point2f>(obs_points.begin() + 4, obs_points.end()), {255, 0, 255});
+      if (pnp_points.has_value()) {
+        obs_compare = compare_points(*pnp_points, obs_points);
+        if (obs_compare.has_value()) add_compare_data(data, "obs_vs_raw", obs_compare.value());
+      }
+
       // 当前帧target更新后buff
-      auto Rxyz_in_world_now = target.point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
-      auto image_points =
-        solver.reproject_buff(Rxyz_in_world_now, target.ekf_x()[4], target.ekf_x()[5]);
+      auto Rxyz_in_world_now = target->point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
+      auto green_points =
+        solver.reproject_buff(Rxyz_in_world_now, target->ekf_x()[4], target->ekf_x()[5]);
       tools::draw_points(
-        img, std::vector<cv::Point2f>(image_points.begin(), image_points.begin() + 4), {0, 255, 0});
+        img, std::vector<cv::Point2f>(green_points.begin(), green_points.begin() + 4),
+        {0, 255, 0});
       tools::draw_points(
-        img, std::vector<cv::Point2f>(image_points.begin() + 4, image_points.end()), {0, 255, 0});
+        img, std::vector<cv::Point2f>(green_points.begin() + 4, green_points.end()),
+        {0, 255, 0});
+      if (pnp_points.has_value()) {
+        green_compare = compare_points(*pnp_points, green_points);
+        if (green_compare.has_value()) add_compare_data(data, "green_vs_raw", green_compare.value());
+      }
 
       // buff瞄准位置(预测)
-      double dangle = target.ekf_x()[5] - target_copy.ekf_x()[5];
-      auto Rxyz_in_world_pre = target.point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
-      image_points =
-        solver.reproject_buff(Rxyz_in_world_pre, target_copy.ekf_x()[4], target_copy.ekf_x()[5]);
+      auto debug_target_copy = target->clone();
+      debug_target_copy->predict(debug_predict_time);
+      double dangle = target->ekf_x()[5] - debug_target_copy->ekf_x()[5];
+      auto Rxyz_in_world_pre =
+        debug_target_copy->point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
+      auto blue_points =
+        solver.reproject_buff(Rxyz_in_world_pre, debug_target_copy->ekf_x()[4],
+          debug_target_copy->ekf_x()[5]);
       tools::draw_points(
-        img, std::vector<cv::Point2f>(image_points.begin(), image_points.begin() + 4), {255, 0, 0});
+        img, std::vector<cv::Point2f>(blue_points.begin(), blue_points.begin() + 4), {255, 0, 0});
       tools::draw_points(
-        img, std::vector<cv::Point2f>(image_points.begin() + 4, image_points.end()), {255, 0, 0});
+        img, std::vector<cv::Point2f>(blue_points.begin() + 4, blue_points.end()), {255, 0, 0});
+      if (pnp_points.has_value()) {
+        blue_compare = compare_points(*pnp_points, blue_points);
+        if (blue_compare.has_value()) add_compare_data(data, "blue_vs_raw", blue_compare.value());
+      }
+
+      int debug_y = 130;
+      if (obs_compare.has_value()) {
+        tools::draw_text(img, compare_text("purple obs", obs_compare.value()), {20, debug_y},
+          {255, 0, 255}, 0.55, 1);
+        debug_y += 22;
+      }
+      if (green_compare.has_value()) {
+        tools::draw_text(img, compare_text("green ekf", green_compare.value()), {20, debug_y},
+          {0, 255, 0}, 0.55, 1);
+        debug_y += 22;
+      }
+      if (blue_compare.has_value()) {
+        tools::draw_text(img, compare_text("blue pred", blue_compare.value()), {20, debug_y},
+          {255, 0, 0}, 0.55, 1);
+      }
+
+      if (print_debug && frame_count % print_step == 0) {
+        std::string obs_text =
+          obs_compare.has_value() ? compare_terminal_text("obs", obs_compare.value()) : "obs:NA";
+        std::string green_text = green_compare.has_value()
+                                   ? compare_terminal_text("green", green_compare.value())
+                                   : "green:NA";
+        std::string blue_text =
+          blue_compare.has_value() ? compare_terminal_text("blue", blue_compare.value()) : "blue:NA";
+        fmt::print(
+          "frame={} t={:.3f} mode={} imu={} {} | {} | {}\n", frame_count, t, buff_mode,
+          use_imu_text ? "txt" : "identity", obs_text, green_text, blue_text);
+      }
 
       // 观测器内部数据
-      Eigen::VectorXd x = target.ekf_x();
+      Eigen::VectorXd x = target->ekf_x();
       data["R_yaw"] = x[0];
       data["R_V_yaw"] = x[1];
       data["R_pitch"] = x[2];
@@ -147,9 +354,20 @@ int main(int argc, char * argv[])
         data["a"] = x[7];
         data["w"] = x[8];
         data["fi"] = x[9];
-        data["spd0"] = target.spd;
+        data["spd0"] = target->spd;
       }
     }
+
+    tools::draw_text(
+      img, "yellow: raw PNP  green: EKF now  blue: prediction", {20, 30}, {0, 255, 255},
+      0.6, 1);
+    tools::draw_text(
+      img, use_imu_text ? "imu: txt" : "imu: identity fallback", {20, 55}, {0, 255, 255}, 0.6,
+      1);
+    tools::draw_text(img, fmt::format("mode: {}", buff_mode), {20, 80}, {0, 255, 255}, 0.6, 1);
+    tools::draw_text(
+      img, fmt::format("debug predict: {:.3f}s", debug_predict_time), {20, 105}, {0, 255, 255},
+      0.6, 1);
 
     // 云台响应情况
     Eigen::Vector3d ypr = tools::eulers(solver.R_gimbal2world(), 2, 1, 0);

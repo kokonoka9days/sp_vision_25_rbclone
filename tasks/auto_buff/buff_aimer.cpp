@@ -13,6 +13,7 @@ Aimer::Aimer(const std::string & config_path)
   pitch_offset_ = yaml["pitch_offset"].as<double>() / 57.3;  // degree to rad
   fire_gap_time_ = yaml["fire_gap_time"].as<double>();
   predict_time_ = yaml["predict_time"].as<double>();
+  if (yaml["buff_rune_radius_m"]) RUNE_RADIUS_M = yaml["buff_rune_radius_m"].as<double>();
 
   last_fire_t_ = std::chrono::steady_clock::now();
 }
@@ -156,7 +157,7 @@ bool Aimer::get_send_angle(
   angle = target.ekf_x()[5];
 
   // 计算目标点的空间坐标
-  auto aim_in_world = target.point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.7));
+  auto aim_in_world = target.point_buff2world(Eigen::Vector3d(0.0, 0.0, RUNE_RADIUS_M));
   double d = std::sqrt(aim_in_world[0] * aim_in_world[0] + aim_in_world[1] * aim_in_world[1]);
   double h = aim_in_world[2];
 
@@ -179,7 +180,7 @@ bool Aimer::get_send_angle(
   angle = target.ekf_x()[5];
 
   // 计算新的目标点的空间坐标
-  aim_in_world = target.point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.7));
+  aim_in_world = target.point_buff2world(Eigen::Vector3d(0.0, 0.0, RUNE_RADIUS_M));
   d = fsqrt(aim_in_world[0] * aim_in_world[0] + aim_in_world[1] * aim_in_world[1]);
   h = aim_in_world[2];
   tools::Trajectory trajectory1(bullet_speed, d, h);

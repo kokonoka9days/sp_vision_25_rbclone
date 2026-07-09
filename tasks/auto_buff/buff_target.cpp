@@ -1,7 +1,49 @@
 #include "buff_target.hpp"
 
+#include <fmt/core.h>
+
 namespace auto_buff
 {
+namespace
+{
+Eigen::Vector3d point_buff2world_from_state(
+  const Eigen::VectorXd & x, const Eigen::Vector3d & point_in_buff)
+{
+  Eigen::Matrix3d R_buff2world =
+    tools::rotation_matrix(Eigen::Vector3d(x[4], 0.0, x[5]));  // pitch = 0
+  Eigen::Vector3d center_in_world = tools::ypd2xyz(Eigen::Vector3d(x[0], x[2], x[3]));
+  return R_buff2world * point_in_buff + center_in_world;
+}
+
+bool should_reset_track(
+  const Eigen::VectorXd & x, const PowerRune & p, int last_target_slot_id,
+  double blade_error_gate_m, double roll_error_gate_rad, std::string & reason)
+{
+  if (p.target_slot_id >= 0 && last_target_slot_id >= 0 && p.target_slot_id != last_target_slot_id) {
+    reason = fmt::format("slot {}->{}", last_target_slot_id, p.target_slot_id);
+    return true;
+  }
+
+  if (x.size() < 6) return false;
+
+  const auto predicted_blade =
+    point_buff2world_from_state(x, Eigen::Vector3d(0.0, 0.0, RUNE_RADIUS_M));
+  const double blade_error = (predicted_blade - p.blade_xyz_in_world).norm();
+  if (blade_error > blade_error_gate_m) {
+    reason = fmt::format("blade_err {:.3f}m", blade_error);
+    return true;
+  }
+
+  const double roll_error = std::abs(tools::limit_rad(p.ypr_in_world[2] - x[5]));
+  if (roll_error > roll_error_gate_rad) {
+    reason = fmt::format("roll_err {:.1f}deg", roll_error * 57.3);
+    return true;
+  }
+
+  return false;
+}
+}  // namespace
+
 ///voter
 
 Voter::Voter() : clockwise_(0) {}
@@ -24,18 +66,7 @@ Target::Target() : first_in_(true), unsolvable_(true) {};
 Eigen::Vector3d Target::point_buff2world(const Eigen::Vector3d & point_in_buff) const
 {
   if (unsolvable_) return Eigen::Vector3d(0, 0, 0);
-  Eigen::Matrix3d R_buff2world =
-    tools::rotation_matrix(Eigen::Vector3d(ekf_.x[4], 0.0, ekf_.x[5]));  // pitch = 0
-
-  auto R_yaw = ekf_.x[0];
-  auto R_pitch = ekf_.x[2];
-  auto R_dis = ekf_.x[3];
-  Eigen::Vector3d point_in_world =
-    R_buff2world * point_in_buff + Eigen::Vector3d(
-                                     R_dis * std::cos(R_pitch) * std::cos(R_yaw),
-                                     R_dis * std::cos(R_pitch) * std::sin(R_yaw),
-                                     R_dis * std::sin(R_pitch));
-  return point_in_world;
+  return point_buff2world_from_state(ekf_.x, point_in_buff);
 }
 
 bool Target::is_unsolve() const { return unsolvable_; }
@@ -107,12 +138,14 @@ void SmallTarget::get_target(
 
   static std::chrono::steady_clock::time_point start_timestamp = timestamp;
   auto time_gap = tools::delta_time(timestamp, start_timestamp);
+  const auto & obs = p.value();
 
   // init
   if (first_in_) {
     unsolvable_ = true;
-    init(time_gap, p.value());
+    init(time_gap, obs);
     first_in_ = false;
+    last_target_slot_id_ = obs.target_slot_id;
   }
 
   // 处理识别时间间隔过大
@@ -124,9 +157,21 @@ void SmallTarget::get_target(
     return;
   }
 
+  std::string reset_reason;
+  if (should_reset_track(ekf_.x, obs, last_target_slot_id_, 0.20, CV_PI / 9.0, reset_reason)) {
+    tools::logger()->debug("[Target] 小符重置EKF: {}", reset_reason);
+    init(time_gap, obs);
+    first_in_ = false;
+    unsolvable_ = false;
+    lost_cn = 0;
+    last_target_slot_id_ = obs.target_slot_id;
+    return;
+  }
+
   // kalman update
   unsolvable_ = false;
-  update(time_gap, p.value());
+  update(time_gap, obs);
+  last_target_slot_id_ = obs.target_slot_id;
 
   // 处理发散
   if (std::abs(ekf_.x[6]) > SMALL_W + CV_PI / 18 || std::abs(ekf_.x[6]) < SMALL_W - CV_PI / 18) {
@@ -139,6 +184,8 @@ void SmallTarget::get_target(
 
 void SmallTarget::predict(double dt)
 {
+  ekf_.x[6] = (ekf_.x[6] >= 0.0 ? 1.0 : -1.0) * SMALL_W;
+
   // 预测下一个状态
   // clang-format off
   A_ << 1.0,  dt, 0.0, 0.0, 0.0, 0.0, 0.0, // R_yaw
@@ -149,8 +196,8 @@ void SmallTarget::predict(double dt)
         0.0, 0.0, 0.0, 0.0, 0.0, 1.0,  dt, // roll
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0; // spd
 
-  // 过程噪声协方差矩阵                            //// 调整
-  auto v1 = 0.001;  // 角加速度方差
+  // 过程噪声协方差矩阵。小符角速度是固定值，不让 spd 随滤波漂移。
+  auto v1 = 0.001;  // R中心yaw角加速度方差
   auto a = dt * dt * dt * dt / 4;
   auto b = dt * dt * dt / 2;
   auto c = dt * dt;
@@ -171,6 +218,7 @@ void SmallTarget::predict(double dt)
     return x_prior;
   };
   ekf_.predict(A_, Q_, f);
+  ekf_.x[6] = (ekf_.x[6] >= 0.0 ? 1.0 : -1.0) * SMALL_W;
 }
 
 void SmallTarget::init(double nowtime, const PowerRune & p)
@@ -228,6 +276,8 @@ void SmallTarget::init(double nowtime, const PowerRune & p)
   };
   // 创建扩展卡尔曼滤波器对象
   ekf_ = tools::ExtendedKalmanFilter(x0_, P0_, x_add);
+  has_last_observed_roll_ = true;
+  last_observed_roll_ = p.ypr_in_world[2];
 }
 
 void SmallTarget::update(double nowtime, const PowerRune & p)
@@ -243,26 +293,16 @@ void SmallTarget::update(double nowtime, const PowerRune & p)
   const Eigen::VectorXd & ypr = p.ypr_in_world;
   const Eigen::VectorXd & B_ypd = p.blade_ypd_in_world;  // center of blade
 
-  bool is_jumped = false; // 新增：标记当前帧是否发生了目标跳变
-
-  // 处理扇叶跳变 angle/row
-  if (abs(ypr[2] - ekf_.x[5]) > CV_PI / 12) {
-    is_jumped = true; // 记录发生跳变
-    for (int i = -5; i <= 5; i++) {
-      double angle_c = ekf_.x[5] + i * 2 * CV_PI / 5;
-      if (std::fabs(angle_c - ypr[2]) < CV_PI / 5) {
-        ekf_.x[5] += i * 2 * CV_PI / 5;
-        break;
-      }
+  if (has_last_observed_roll_) {
+    const double observed_delta = tools::limit_rad(ypr[2] - last_observed_roll_);
+    if (std::abs(observed_delta) > 1e-4 && std::abs(observed_delta) < CV_PI / 5.0) {
+      voter.vote(0.0, observed_delta);
     }
   }
+  has_last_observed_roll_ = true;
+  last_observed_roll_ = ypr[2];
 
-  // 修改：只有在连续跟踪同一个扇叶时，才信任观测差值并进行投票
-  if (!is_jumped) {
-    voter.vote(ekf_.x[5], ypr[2]);
-  }
-  
-  if (voter.clockwise() * ekf_.x[6] < 0) ekf_.x[6] *= -1;  // spd
+  ekf_.x[6] = SMALL_W * voter.clockwise();
 
   // 预测下一个状态
   predict(nowtime - lasttime_);
@@ -294,7 +334,7 @@ void SmallTarget::update(double nowtime, const PowerRune & p)
     {0.01, 0.0, 0.0,  0.0}, // R_yaw
     {0.0, 0.01, 0.0,  0.0}, // R_pitch
     {0.0,  0.0, 0.5,  0.0}, // R_dis
-    {0.0,  0.0, 0.0,  0.1}  // roll
+    {0.0,  0.0, 0.0, 0.01}  // roll
   };
   // clang-format on
 
@@ -329,12 +369,9 @@ void SmallTarget::update(double nowtime, const PowerRune & p)
 
   // 定义非线性转换函数h: x -> z
   auto h2 = [&](const Eigen::VectorXd & x) -> Eigen::Vector3d {
-    Eigen::VectorXd R_ypd{{x[0], x[2], x[3]}};
-    Eigen::VectorXd R_xyz = tools::ypd2xyz(R_ypd);
-    Eigen::VectorXd R_xyz_and_yr{{R_ypd[0], R_ypd[1], R_ypd[2], x[4], x[5]}};
-    Eigen::VectorXd B_xyz = point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.7));
-    Eigen::VectorXd B_ypd = tools::xyz2ypd(B_xyz);
-    return B_ypd;
+    Eigen::Vector3d B_xyz =
+      point_buff2world_from_state(x, Eigen::Vector3d(0.0, 0.0, RUNE_RADIUS_M));
+    return tools::xyz2ypd(B_xyz);
   };
 
   // 防止夹角求差出现异常值
@@ -348,6 +385,14 @@ void SmallTarget::update(double nowtime, const PowerRune & p)
   Eigen::VectorXd z2{{B_ypd[0], B_ypd[1], B_ypd[2]}};
 
   ekf_.update(z2, H2, R2, h2, z_subtract2);
+
+  ekf_.x[0] = R_ypd[0];
+  ekf_.x[1] = 0.0;
+  ekf_.x[2] = R_ypd[1];
+  ekf_.x[3] = R_ypd[2];
+  ekf_.x[4] = ypr[0];
+  ekf_.x[5] = ypr[2];
+  ekf_.x[6] = SMALL_W * voter.clockwise();
 
   // 更新lasttime
   lasttime_ = nowtime;
@@ -385,12 +430,13 @@ Eigen::MatrixXd SmallTarget::h_jacobian() const
   double cos_roll = cos(roll);
   double sin_roll = sin(roll);
   Eigen::MatrixXd H2{
-    {1.0, 0.0, 0.0, 0.7 * cos_yaw * sin_roll,  0.7 * sin_yaw * cos_roll},
-    {0.0, 1.0, 0.0, 0.7 * sin_yaw * sin_roll, -0.7 * cos_yaw * cos_roll},
-    {0.0, 0.0, 1.0,                      0.0,           -0.7 * sin_roll}
+    {1.0, 0.0, 0.0, RUNE_RADIUS_M * cos_yaw * sin_roll,  RUNE_RADIUS_M * sin_yaw * cos_roll},
+    {0.0, 1.0, 0.0, RUNE_RADIUS_M * sin_yaw * sin_roll, -RUNE_RADIUS_M * cos_yaw * cos_roll},
+    {0.0, 0.0, 1.0,                                  0.0,               -RUNE_RADIUS_M * sin_roll}
   };// 3*5
 
-  Eigen::VectorXd B_xyz = point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.7));
+  Eigen::VectorXd B_xyz =
+    point_buff2world_from_state(ekf_.x, Eigen::Vector3d(0.0, 0.0, RUNE_RADIUS_M));
   Eigen::MatrixXd H3 = tools::xyz2ypd_jacobian(B_xyz);// 3*3
   // clang-format on
 
@@ -473,12 +519,14 @@ void BigTarget::get_target(
 
   static std::chrono::steady_clock::time_point start_timestamp = timestamp;
   auto time_gap = tools::delta_time(timestamp, start_timestamp);
+  const auto & obs = p.value();
 
   // init
   if (first_in_) {
     unsolvable_ = true;
-    init(time_gap, p.value());
+    init(time_gap, obs);
     first_in_ = false;
+    last_target_slot_id_ = obs.target_slot_id;
   }
 
   // 处理识别时间间隔过大
@@ -490,9 +538,21 @@ void BigTarget::get_target(
     return;
   }
 
+  std::string reset_reason;
+  if (should_reset_track(ekf_.x, obs, last_target_slot_id_, 0.25, CV_PI / 8.0, reset_reason)) {
+    tools::logger()->debug("[Target] 大符重置EKF: {}", reset_reason);
+    init(time_gap, obs);
+    first_in_ = false;
+    unsolvable_ = false;
+    lost_cn = 0;
+    last_target_slot_id_ = obs.target_slot_id;
+    return;
+  }
+
   // kalman update
   unsolvable_ = false;
-  update(time_gap, p.value());
+  update(time_gap, obs);
+  last_target_slot_id_ = obs.target_slot_id;
 
   // 处理发散
   if (
@@ -695,7 +755,7 @@ void BigTarget::update(double nowtime, const PowerRune & p)
     {0.01, 0.0, 0.0,  0.0}, // R_yaw
     {0.0, 0.01, 0.0,  0.0}, // R_pitch
     {0.0,  0.0, 0.5,  0.0}, // R_dis
-    {0.0,  0.0, 0.0, 0.1}  // roll  1: 0.01 2:0.04
+    {0.0,  0.0, 0.0, 0.02}  // roll  1: 0.01 2:0.04
   };
   // clang-format on
 
@@ -730,12 +790,9 @@ void BigTarget::update(double nowtime, const PowerRune & p)
 
   // 定义非线性转换函数h: x -> z
   auto h2 = [&](const Eigen::VectorXd & x) -> Eigen::Vector3d {
-    Eigen::VectorXd R_ypd{{x[0], x[2], x[3]}};
-    Eigen::VectorXd R_xyz = tools::ypd2xyz(R_ypd);
-    Eigen::VectorXd R_xyz_and_yr{{R_ypd[0], R_ypd[1], R_ypd[2], x[4], x[5]}};
-    Eigen::VectorXd B_xyz = point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.7));
-    Eigen::VectorXd B_ypd = tools::xyz2ypd(B_xyz);
-    return B_ypd;
+    Eigen::Vector3d B_xyz =
+      point_buff2world_from_state(x, Eigen::Vector3d(0.0, 0.0, RUNE_RADIUS_M));
+    return tools::xyz2ypd(B_xyz);
   };
 
   // 防止夹角求差出现异常值
@@ -799,12 +856,13 @@ Eigen::MatrixXd BigTarget::h_jacobian() const
   double cos_roll = cos(roll);
   double sin_roll = sin(roll);
   Eigen::MatrixXd H2{
-    {1.0, 0.0, 0.0, 0.7 * cos_yaw * sin_roll,  0.7 * sin_yaw * cos_roll},
-    {0.0, 1.0, 0.0, 0.7 * sin_yaw * sin_roll, -0.7 * cos_yaw * cos_roll},
-    {0.0, 0.0, 1.0,                      0.0,           -0.7 * sin_roll}
+    {1.0, 0.0, 0.0, RUNE_RADIUS_M * cos_yaw * sin_roll,  RUNE_RADIUS_M * sin_yaw * cos_roll},
+    {0.0, 1.0, 0.0, RUNE_RADIUS_M * sin_yaw * sin_roll, -RUNE_RADIUS_M * cos_yaw * cos_roll},
+    {0.0, 0.0, 1.0,                                  0.0,               -RUNE_RADIUS_M * sin_roll}
   };// 3*5
 
-  Eigen::VectorXd B_xyz = point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.7));
+  Eigen::VectorXd B_xyz =
+    point_buff2world_from_state(ekf_.x, Eigen::Vector3d(0.0, 0.0, RUNE_RADIUS_M));
   Eigen::MatrixXd H3 = tools::xyz2ypd_jacobian(B_xyz);// 3*3
   // clang-format on
 
