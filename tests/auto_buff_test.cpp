@@ -20,6 +20,50 @@
 
 namespace
 {
+using Clock = std::chrono::steady_clock;
+
+struct FrameTiming
+{
+  double total_ms = 0.0;
+  double read_ms = 0.0;
+  double imu_ms = 0.0;
+  double set_imu_ms = 0.0;
+  double detect_ms = 0.0;
+  double solve_ms = 0.0;
+  double target_ms = 0.0;
+  double aim_ms = 0.0;
+  double debug_ms = 0.0;
+  double plot_ms = 0.0;
+  double show_wait_ms = 0.0;
+};
+
+double elapsed_ms(const Clock::time_point & start, const Clock::time_point & end)
+{
+  return std::chrono::duration<double, std::milli>(end - start).count();
+}
+
+std::string timing_terminal_text(const FrameTiming & timing)
+{
+  return fmt::format(
+    "time total={:.2f}ms read={:.2f} imu={:.2f} setR={:.2f} detect={:.2f} solve={:.2f} "
+    "target={:.2f} aim={:.2f} debug={:.2f} plot={:.2f} show_wait={:.2f}",
+    timing.total_ms, timing.read_ms, timing.imu_ms, timing.set_imu_ms, timing.detect_ms,
+    timing.solve_ms, timing.target_ms, timing.aim_ms, timing.debug_ms, timing.plot_ms,
+    timing.show_wait_ms);
+}
+
+void add_timing_data(nlohmann::json & data, const FrameTiming & timing)
+{
+  data["time_read_ms"] = timing.read_ms;
+  data["time_imu_ms"] = timing.imu_ms;
+  data["time_setR_ms"] = timing.set_imu_ms;
+  data["time_detect_ms"] = timing.detect_ms;
+  data["time_solve_ms"] = timing.solve_ms;
+  data["time_target_ms"] = timing.target_ms;
+  data["time_aim_ms"] = timing.aim_ms;
+  data["time_debug_ms"] = timing.debug_ms;
+}
+
 cv::Point2f mean_point(const std::vector<cv::Point2f> & points, size_t begin, size_t end)
 {
   cv::Point2f sum(0.0f, 0.0f);
@@ -110,14 +154,15 @@ std::string compare_terminal_text(const std::string & name, const PixelCompare &
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明 }"
-  "{config-path c  | ../configs/demo.yaml    | yaml配置文件的路径}"
+  "{config-path c  | ../configs/xiaohei.yaml    | yaml配置文件的路径}"
   "{start-index s  | 0                      | 视频起始帧下标    }"
   "{end-index e    | 0                      | 视频结束帧下标    }"
   "{buff-mode m   | small                  | small 或 big      }"
-  "{print-debug p | true                   | 是否在终端输出误差 }"
+  "{print-debug p | flase                   | 是否在终端输出误差 }"
+  "{print-time    | true                  | 是否在终端输出各步骤耗时 }"
   "{print-step    | 1                      | 每隔多少帧输出一次 }"
   "{debug-predict-time | -1                | 蓝色调试框预测时间, 负数使用配置 }"
-  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/yolo_buff/123/9   | avi和txt文件的路径}";
+  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/yolo_buff/123/buff_test_1   | avi和txt文件的路径}";
 
 int main(int argc, char * argv[])
 {
@@ -133,6 +178,7 @@ int main(int argc, char * argv[])
   auto end_index = cli.get<int>("end-index");
   auto buff_mode = cli.get<std::string>("buff-mode");
   auto print_debug = cli.get<bool>("print-debug");
+  auto print_time = cli.get<bool>("print-time");
   auto print_step = std::max(1, cli.get<int>("print-step"));
   auto debug_predict_time_cli = cli.get<double>("debug-predict-time");
 
@@ -194,9 +240,15 @@ int main(int argc, char * argv[])
   for (int frame_count = start_index; !exiter.exit(); frame_count++) {
     if (end_index > 0 && frame_count > end_index) break;
 
+    FrameTiming timing;
+    const auto frame_start = Clock::now();
+
+    auto step_start = Clock::now();
     video.read(img);
+    timing.read_ms = elapsed_ms(step_start, Clock::now());
     if (img.empty()) break;
 
+    step_start = Clock::now();
     double t = frame_count * frame_dt;
     double w = 1.0, x = 0.0, y = 0.0, z = 0.0;
     if (use_imu_text && !(text >> t >> w >> x >> y >> z)) {
@@ -208,29 +260,41 @@ int main(int argc, char * argv[])
         "[auto_buff_test] failed to read imu text, using identity gimbal quaternion");
     }
     auto timestamp = t0 + std::chrono::microseconds(int(t * 1e6));
+    timing.imu_ms = elapsed_ms(step_start, Clock::now());
 
     /// 自瞄核心逻辑
 
+    step_start = Clock::now();
     solver.set_R_gimbal2world({w, x, y, z});
+    timing.set_imu_ms = elapsed_ms(step_start, Clock::now());
 
+    step_start = Clock::now();
     auto power_runes = detector.detect(img);
+    timing.detect_ms = elapsed_ms(step_start, Clock::now());
 
+    step_start = Clock::now();
     solver.solve(power_runes);
+    timing.solve_ms = elapsed_ms(step_start, Clock::now());
 
+    step_start = Clock::now();
     target->get_target(power_runes, timestamp);
+    timing.target_ms = elapsed_ms(step_start, Clock::now());
 
     if (power_runes.has_value() && power_runes->positive_roll_image_direction != 0) {
       last_roll_img_dir = power_runes->positive_roll_image_direction;
     }
 
+    step_start = Clock::now();
     auto aim_target_copy = target->clone();
 
     auto command = aimer.aim(*aim_target_copy, timestamp, 22, false);
+    timing.aim_ms = elapsed_ms(step_start, Clock::now());
 
     // cboard.send(command);
 
     // -------------- 调试输出 --------------
 
+    const auto debug_start = Clock::now();
     nlohmann::json data;
 
     // data["bullet_speed"] = cboard.bullet_speed;
@@ -394,8 +458,14 @@ int main(int argc, char * argv[])
       data["cmd_pitch"] = command.pitch * 57.3;
     }
 
-    plotter.plot(data);
+    timing.debug_ms = elapsed_ms(debug_start, Clock::now());
+    if (print_time) add_timing_data(data, timing);
 
+    step_start = Clock::now();
+    plotter.plot(data);
+    timing.plot_ms = elapsed_ms(step_start, Clock::now());
+
+    step_start = Clock::now();
     cv::imshow("result", img);
 
     int key = cv::waitKey(5);
@@ -403,6 +473,12 @@ int main(int argc, char * argv[])
     while (key == ' ') {
       int y = cv::waitKey(30);
       if (y == 'q') break;
+    }
+    timing.show_wait_ms = elapsed_ms(step_start, Clock::now());
+    timing.total_ms = elapsed_ms(frame_start, Clock::now());
+
+    if (print_time && frame_count % print_step == 0) {
+      fmt::print("frame={} {}\n", frame_count, timing_terminal_text(timing));
     }
   }
   cv::destroyAllWindows();

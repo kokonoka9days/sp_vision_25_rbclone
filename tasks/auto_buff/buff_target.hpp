@@ -2,6 +2,7 @@
 #define AUTO_BUFF__TARGET_HPP
 
 #include <Eigen/Dense>
+#include <deque>
 #include <opencv2/opencv.hpp>
 #include <optional>
 #include <string>
@@ -93,6 +94,14 @@ private:
 
   Eigen::MatrixXd h_jacobian() const;
 
+  void update_observed_small_direction(const PowerRune & p);
+
+  void update_positive_roll_image_direction(int image_direction);
+
+  int small_prediction_roll_direction() const;
+
+  bool has_stable_small_prediction_direction() const;
+
   const double SMALL_W = CV_PI / 3;
   // const double SMALL_W = 0;
   int small_auto_direction_ = 0;
@@ -100,6 +109,8 @@ private:
   int small_reverse_candidate_direction_ = 0;
   int small_reverse_confirm_count_ = 0;
   int last_positive_roll_image_direction_ = 1;
+  std::deque<double> small_direction_deltas_;
+  std::deque<int> small_direction_votes_;
 };
 
 /// BigTarget子类

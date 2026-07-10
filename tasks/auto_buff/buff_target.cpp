@@ -166,7 +166,7 @@ void SmallTarget::get_target(
 
   if (!p.has_value()) {
     lost_cn++;
-    if (first_in_ || lost_cn > 6 || small_buff_direction(small_auto_direction_) == 0) {
+    if (first_in_ || lost_cn > 6 || !has_stable_small_prediction_direction()) {
       if (!first_in_ && lost_cn == 7) tools::logger()->debug("[Target] 小符丢失buff");
       if (lost_cn > 6) first_in_ = true;
       unsolvable_ = true;
@@ -194,9 +194,10 @@ void SmallTarget::get_target(
   std::string reset_reason;
   if (should_reset_track(ekf_.x, obs, last_target_slot_id_, 0.80, CV_PI / 9.0, reset_reason)) {
     tools::logger()->debug("[Target] 小符重置EKF: {}", reset_reason);
+    update_positive_roll_image_direction(obs.positive_roll_image_direction);
     init(time_gap, obs);
     first_in_ = false;
-    unsolvable_ = false;
+    unsolvable_ = !has_stable_small_prediction_direction();
     lost_cn = 0;
     last_target_slot_id_ = obs.target_slot_id;
     return;
@@ -217,11 +218,15 @@ void SmallTarget::get_target(
     first_in_ = true;
     return;
   }
+
+  if (!has_stable_small_prediction_direction()) {
+    unsolvable_ = true;
+  }
 }
 
 void SmallTarget::predict(double dt)
 {
-  ekf_.x[6] = small_roll_direction(small_auto_direction_, last_positive_roll_image_direction_) * SMALL_W;
+  ekf_.x[6] = small_prediction_roll_direction() * SMALL_W;
 
   // 预测下一个状态
   // clang-format off
@@ -255,7 +260,7 @@ void SmallTarget::predict(double dt)
     return x_prior;
   };
   ekf_.predict(A_, Q_, f);
-  ekf_.x[6] = small_roll_direction(small_auto_direction_, last_positive_roll_image_direction_) * SMALL_W;
+  ekf_.x[6] = small_prediction_roll_direction() * SMALL_W;
 }
 
 void SmallTarget::init(double nowtime, const PowerRune & p)
@@ -278,15 +283,11 @@ void SmallTarget::init(double nowtime, const PowerRune & p)
   // [angle/row]
   // [spd]   w=CV_PI/6
 
-  if (p.positive_roll_image_direction != 0) {
-    last_positive_roll_image_direction_ = p.positive_roll_image_direction;
-  }
-
   // clang-format off
   // 初始状态
   x0_ << p.ypd_in_world[0], 0.0, p.ypd_in_world[1], p.ypd_in_world[2],
          p.ypr_in_world[0], p.ypr_in_world[2], 
-         SMALL_W * small_roll_direction(small_auto_direction_, last_positive_roll_image_direction_);
+         SMALL_W * small_prediction_roll_direction();
   // 初始状态协方差矩阵
   P0_ << 10.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
           0.0, 10.0,  0.0,  0.0,  0.0,  0.0,  0.0,
@@ -334,58 +335,10 @@ void SmallTarget::update(double nowtime, const PowerRune & p)
   const Eigen::VectorXd & ypr = p.ypr_in_world;
   const Eigen::VectorXd & B_ypd = p.blade_ypd_in_world;  // center of blade
 
-  if (p.positive_roll_image_direction != 0) {
-    last_positive_roll_image_direction_ = p.positive_roll_image_direction;
-  }
+  update_positive_roll_image_direction(p.positive_roll_image_direction);
+  update_observed_small_direction(p);
 
-  if (configured_small_buff_direction() == 0 && has_last_observed_target_angle_) {
-    const double observed_delta = tools::limit_rad(p.target_angle - last_observed_target_angle_);
-    constexpr double min_direction_delta = CV_PI / 900.0;  // 0.2 deg, reject jitter
-    constexpr int confirm_score = 4;
-    constexpr int score_limit = 8;
-    constexpr int reverse_confirm_frames = 12;
-    if (std::abs(observed_delta) > min_direction_delta && std::abs(observed_delta) < CV_PI / 5.0) {
-      const int image_direction = observed_delta > 0.0 ? 1 : -1;
-      if (small_auto_direction_ == 0 || image_direction == small_auto_direction_) {
-        small_reverse_candidate_direction_ = 0;
-        small_reverse_confirm_count_ = 0;
-        small_direction_score_ =
-          std::clamp(small_direction_score_ + image_direction, -score_limit, score_limit);
-        if (std::abs(small_direction_score_) >= confirm_score) {
-          const int confirmed_direction = signum(small_direction_score_);
-          if (confirmed_direction != 0 && confirmed_direction != small_auto_direction_) {
-            tools::logger()->debug(
-              "[Target] 小符图像方向确认: dir {}, score {}, img_dir {}, roll_img_dir {}",
-              confirmed_direction, small_direction_score_, image_direction,
-              last_positive_roll_image_direction_);
-          }
-          small_auto_direction_ = confirmed_direction;
-        }
-      } else {
-        if (small_reverse_candidate_direction_ != image_direction) {
-          small_reverse_candidate_direction_ = image_direction;
-          small_reverse_confirm_count_ = 0;
-        }
-        small_reverse_confirm_count_++;
-        small_direction_score_ =
-          std::clamp(small_direction_score_ + image_direction, -score_limit, score_limit);
-        if (small_reverse_confirm_count_ >= reverse_confirm_frames) {
-          small_auto_direction_ = image_direction;
-          small_direction_score_ = image_direction * confirm_score;
-          small_reverse_candidate_direction_ = 0;
-          small_reverse_confirm_count_ = 0;
-          tools::logger()->debug(
-            "[Target] 小符图像方向翻转确认: dir {}, score {}, img_dir {}, roll_img_dir {}",
-            small_auto_direction_, small_direction_score_, image_direction,
-            last_positive_roll_image_direction_);
-        }
-      }
-    }
-  }
-  has_last_observed_target_angle_ = true;
-  last_observed_target_angle_ = p.target_angle;
-
-  ekf_.x[6] = SMALL_W * small_roll_direction(small_auto_direction_, last_positive_roll_image_direction_);
+  ekf_.x[6] = SMALL_W * small_prediction_roll_direction();
 
   // 预测下一个状态
   predict(nowtime - lasttime_);
@@ -475,11 +428,138 @@ void SmallTarget::update(double nowtime, const PowerRune & p)
   ekf_.x[3] = R_ypd[2];
   ekf_.x[4] = ypr[0];
   ekf_.x[5] = ypr[2];
-  ekf_.x[6] = SMALL_W * small_roll_direction(small_auto_direction_, last_positive_roll_image_direction_);
+  ekf_.x[6] = SMALL_W * small_prediction_roll_direction();
 
   // 更新lasttime
   lasttime_ = nowtime;
   return;
+}
+
+void SmallTarget::update_positive_roll_image_direction(int image_direction)
+{
+  if (image_direction == 0) return;
+  last_positive_roll_image_direction_ = image_direction;
+}
+
+void SmallTarget::update_observed_small_direction(const PowerRune & p)
+{
+  if (!has_last_observed_target_angle_) {
+    has_last_observed_target_angle_ = true;
+    last_observed_target_angle_ = p.target_angle;
+    return;
+  }
+
+  const double observed_delta = tools::limit_rad(p.target_angle - last_observed_target_angle_);
+  has_last_observed_target_angle_ = true;
+  last_observed_target_angle_ = p.target_angle;
+
+  if (configured_small_buff_direction() != 0) return;
+
+  constexpr double min_direction_delta = CV_PI / 900.0;  // 0.2 deg, reject jitter
+  constexpr double max_direction_delta = CV_PI / 5.0;    // reject slot switches
+  constexpr double confirm_window_delta = CV_PI / 60.0;  // 3 deg net motion
+  constexpr int direction_window = 10;
+  constexpr int min_window_samples = 6;
+  constexpr int confirm_vote_margin = 4;
+  constexpr int confirm_score = 6;
+  constexpr int score_limit = 30;
+  constexpr int reverse_confirm_frames = 16;
+
+  if (
+    std::abs(observed_delta) <= min_direction_delta ||
+    std::abs(observed_delta) >= max_direction_delta) {
+    return;
+  }
+
+  const int image_direction = observed_delta > 0.0 ? 1 : -1;
+  small_direction_deltas_.push_back(observed_delta);
+  small_direction_votes_.push_back(image_direction);
+  while (static_cast<int>(small_direction_deltas_.size()) > direction_window) {
+    small_direction_deltas_.pop_front();
+    small_direction_votes_.pop_front();
+  }
+
+  small_direction_score_ =
+    std::clamp(small_direction_score_ + image_direction, -score_limit, score_limit);
+
+  double window_delta_sum = 0.0;
+  int window_vote_sum = 0;
+  for (size_t i = 0; i < small_direction_deltas_.size(); ++i) {
+    window_delta_sum += small_direction_deltas_[i];
+    window_vote_sum += small_direction_votes_[i];
+  }
+
+  int window_direction = 0;
+  if (
+    static_cast<int>(small_direction_deltas_.size()) >= min_window_samples &&
+    std::abs(window_delta_sum) >= confirm_window_delta &&
+    std::abs(window_vote_sum) >= confirm_vote_margin) {
+    const int delta_direction = window_delta_sum > 0.0 ? 1 : -1;
+    const int vote_direction = signum(window_vote_sum);
+    if (delta_direction == vote_direction) window_direction = delta_direction;
+  }
+
+  if (window_direction == 0) {
+    small_reverse_candidate_direction_ = 0;
+    small_reverse_confirm_count_ = 0;
+    return;
+  }
+
+  if (small_auto_direction_ == 0) {
+    const int score_direction = signum(small_direction_score_);
+    if (
+      score_direction == window_direction &&
+      std::abs(small_direction_score_) >= confirm_score) {
+      small_auto_direction_ = window_direction;
+      small_direction_score_ =
+        std::clamp(small_direction_score_, -score_limit, score_limit);
+      small_reverse_candidate_direction_ = 0;
+      small_reverse_confirm_count_ = 0;
+      tools::logger()->debug(
+        "[Target] 小符图像方向确认: dir {}, score {}, window_votes {}, window_delta {:.1f}deg, roll_img_dir {}",
+        small_auto_direction_, small_direction_score_, window_vote_sum,
+        window_delta_sum * 57.3, last_positive_roll_image_direction_);
+    }
+    return;
+  }
+
+  if (window_direction == small_auto_direction_) {
+    small_reverse_candidate_direction_ = 0;
+    small_reverse_confirm_count_ = 0;
+    return;
+  }
+
+  if (small_reverse_candidate_direction_ != window_direction) {
+    small_reverse_candidate_direction_ = window_direction;
+    small_reverse_confirm_count_ = 1;
+  } else {
+    small_reverse_confirm_count_++;
+  }
+
+  if (
+    small_reverse_confirm_count_ >= reverse_confirm_frames &&
+    small_direction_score_ * small_auto_direction_ <= -confirm_score) {
+    small_auto_direction_ = window_direction;
+    small_direction_score_ = window_direction * confirm_score;
+    small_reverse_candidate_direction_ = 0;
+    small_reverse_confirm_count_ = 0;
+    tools::logger()->debug(
+      "[Target] 小符图像方向重确认: dir {}, score {}, window_votes {}, window_delta {:.1f}deg, roll_img_dir {}",
+      small_auto_direction_, small_direction_score_, window_vote_sum, window_delta_sum * 57.3,
+      last_positive_roll_image_direction_);
+  }
+}
+
+int SmallTarget::small_prediction_roll_direction() const
+{
+  const int image_direction = small_buff_direction(small_auto_direction_);
+  if (image_direction == 0) return 0;
+  return image_direction * last_positive_roll_image_direction_;
+}
+
+bool SmallTarget::has_stable_small_prediction_direction() const
+{
+  return small_buff_direction(small_auto_direction_) != 0;
 }
 
 Eigen::MatrixXd SmallTarget::h_jacobian() const
