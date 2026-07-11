@@ -99,6 +99,12 @@ target_link_libraries(auto_aim_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io au
 add_executable(auto_buff_test tests/auto_buff_test.cpp)
 target_link_libraries(auto_buff_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
 
+add_executable(auto_buff_partial_pnp_test tests/auto_buff_partial_pnp_test.cpp)
+target_link_libraries(auto_buff_partial_pnp_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
+
+add_executable(auto_buff_small_target_test tests/auto_buff_small_target_test.cpp)
+target_link_libraries(auto_buff_small_target_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
+
 add_executable(camera_detect_test tests/camera_detect_test.cpp)
 target_link_libraries(camera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools auto_aim io)
 

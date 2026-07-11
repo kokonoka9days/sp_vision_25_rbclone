@@ -1,5 +1,6 @@
 #include <fmt/core.h>
 
+#include <array>
 #include <chrono>
 #include <fstream>
 #include <memory>
@@ -40,6 +41,20 @@ struct FrameTiming
 double elapsed_ms(const Clock::time_point & start, const Clock::time_point & end)
 {
   return std::chrono::duration<double, std::milli>(end - start).count();
+}
+
+size_t observation_index(auto_buff::BuffObservationType type)
+{
+  if (type == auto_buff::BuffObservationType::TARGET_ONLY) return 1;
+  if (type == auto_buff::BuffObservationType::FAN_ONLY) return 2;
+  return 0;
+}
+
+size_t pose_index(auto_buff::BuffPoseQuality quality)
+{
+  if (quality == auto_buff::BuffPoseQuality::PARTIAL_5_POINT) return 1;
+  if (quality == auto_buff::BuffPoseQuality::PARTIAL_4_POINT) return 2;
+  return 0;
 }
 
 std::string timing_terminal_text(const FrameTiming & timing)
@@ -226,6 +241,16 @@ int main(int argc, char * argv[])
   io::Command last_command;
   double last_t = -1;
   int last_roll_img_dir = 0;
+  std::array<int, 3> observation_counts{0, 0, 0};
+  std::array<int, 3> pose_counts{0, 0, 0};
+  int pnp_failure_count = 0;
+  int track_switch_count = 0;
+  int last_track_id = -1;
+  int solved_frames = 0;
+  int blind_frames = 0;
+  int current_solved_streak = 0;
+  int longest_solved_streak = 0;
+  int processed_frames = 0;
 
   video.set(cv::CAP_PROP_POS_FRAMES, start_index);
   for (int i = 0; use_imu_text && i < start_index; i++) {
@@ -269,15 +294,31 @@ int main(int argc, char * argv[])
     timing.set_imu_ms = elapsed_ms(step_start, Clock::now());
 
     step_start = Clock::now();
-    auto power_runes = detector.detect(img);
+    auto buff_observation = detector.detect(img, timestamp);
+    processed_frames++;
+    if (buff_observation.has_value()) {
+      observation_counts[observation_index(buff_observation->type)]++;
+      if (last_track_id >= 0 && buff_observation->track_id != last_track_id) track_switch_count++;
+      last_track_id = buff_observation->track_id;
+    }
     timing.detect_ms = elapsed_ms(step_start, Clock::now());
 
     step_start = Clock::now();
-    solver.solve(power_runes);
+    auto power_runes = solver.solve(buff_observation);
+    if (buff_observation.has_value() && !power_runes.has_value()) pnp_failure_count++;
+    if (power_runes.has_value()) pose_counts[pose_index(power_runes->pose_quality)]++;
     timing.solve_ms = elapsed_ms(step_start, Clock::now());
 
     step_start = Clock::now();
     target->get_target(power_runes, timestamp);
+    if (!target->is_unsolve()) {
+      solved_frames++;
+      current_solved_streak++;
+      longest_solved_streak = std::max(longest_solved_streak, current_solved_streak);
+      if (target->is_blind()) blind_frames++;
+    } else {
+      current_solved_streak = 0;
+    }
     timing.target_ms = elapsed_ms(step_start, Clock::now());
 
     if (power_runes.has_value() && power_runes->positive_roll_image_direction != 0) {
@@ -316,13 +357,15 @@ int main(int argc, char * argv[])
       std::optional<PixelCompare> obs_compare;
       std::optional<PixelCompare> green_compare;
       std::optional<PixelCompare> blue_compare;
+      double green_r_error = -1.0;
 
       if (p != nullptr) {
         // 显示
-        for (int i = 0; i < 4; i++) tools::draw_point(img, p->target().points[i]);
-        for (int i = 0; i < 4; i++)
-          tools::draw_point(img, p->target().fan_points[i], {0, 128, 255});
-        tools::draw_point(img, p->target().center, {0, 0, 255}, 3);
+        for (const auto & point : p->target().points) tools::draw_point(img, point);
+        for (const auto & point : p->target().fan_points) {
+          tools::draw_point(img, point, {0, 128, 255});
+        }
+        if (!p->target().points.empty()) tools::draw_point(img, p->target().center, {0, 0, 255}, 3);
         tools::draw_point(img, p->r_center, {0, 0, 255}, 3);
 
         // raw PNP重投影: 只检查8个关键点PNP本身，不经过EKF和预测
@@ -352,7 +395,10 @@ int main(int argc, char * argv[])
       // 当前帧target更新后buff
       auto Rxyz_in_world_now = target->point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
       auto green_points =
-        solver.reproject_buff(Rxyz_in_world_now, target->ekf_x()[4], target->ekf_x()[5]);
+        solver.reproject_buff(Rxyz_in_world_now, target->rotation_buff2world());
+      if (p != nullptr && !green_points.empty()) {
+        green_r_error = cv::norm(green_points.back() - p->r_center);
+      }
       tools::draw_points(
         img, std::vector<cv::Point2f>(green_points.begin(), green_points.begin() + 4),
         {0, 255, 0});
@@ -371,8 +417,7 @@ int main(int argc, char * argv[])
       auto Rxyz_in_world_pre =
         debug_target_copy->point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
       auto blue_points =
-        solver.reproject_buff(Rxyz_in_world_pre, debug_target_copy->ekf_x()[4],
-          debug_target_copy->ekf_x()[5]);
+        solver.reproject_buff(Rxyz_in_world_pre, debug_target_copy->rotation_buff2world());
       tools::draw_points(
         img, std::vector<cv::Point2f>(blue_points.begin(), blue_points.begin() + 4), {255, 0, 0});
       tools::draw_points(
@@ -412,9 +457,15 @@ int main(int argc, char * argv[])
         const int debug_spd_sign = debug_spd_deg > 1e-3 ? 1 : (debug_spd_deg < -1e-3 ? -1 : 0);
         const int debug_roll_img_dir = p != nullptr ? p->positive_roll_image_direction : last_roll_img_dir;
         const int debug_pred_image_direction = debug_spd_sign * debug_roll_img_dir;
+        const double raw_yaw_deg = p != nullptr ? p->ypr_in_world[0] * 57.3 : 0.0;
+        const double raw_roll_deg = p != nullptr ? p->ypr_in_world[2] * 57.3 : 0.0;
         fmt::print(
-          "frame={} t={:.3f} mode={} imu={} spd={:.1f}deg/s roll_img_dir={} pred_img_dir={} {} | {} | {}\n",
+          "frame={} t={:.3f} mode={} imu={} spd={:.1f}deg/s phase={:.1f}deg plane={:.1f}deg "
+          "raw_roll={:.1f}deg raw_yaw={:.1f}deg Rdis={:.2f}/{:.2f}m green_R={:.1f}px "
+          "roll_img_dir={} pred_img_dir={} {} | {} | {}\n",
           frame_count, t, buff_mode, use_imu_text ? "txt" : "identity", debug_spd_deg,
+          target->ekf_x()[5] * 57.3, target->ekf_x()[4] * 57.3, raw_roll_deg, raw_yaw_deg,
+          p != nullptr ? p->ypd_in_world[2] : 0.0, target->ekf_x()[3], green_r_error,
           debug_roll_img_dir, debug_pred_image_direction, obs_text, green_text, blue_text);
       }
 
@@ -481,6 +532,14 @@ int main(int argc, char * argv[])
       fmt::print("frame={} {}\n", frame_count, timing_terminal_text(timing));
     }
   }
+  fmt::print(
+    "summary frames={} obs(full/target/fan)={}/{}/{} pose(8/5/4)={}/{}/{} "
+    "pnp_fail={} gate_episode={} track_switch={}/{} ekf_reset={} solved={} blind={} "
+    "longest_solved={}\n",
+    processed_frames, observation_counts[0], observation_counts[1], observation_counts[2],
+    pose_counts[0], pose_counts[1], pose_counts[2], pnp_failure_count,
+    detector.gate_failure_count(), track_switch_count, detector.confirmed_switch_count(),
+    target->reset_count(), solved_frames, blind_frames, longest_solved_streak);
   cv::destroyAllWindows();
   text.close();  // 关闭文件
 

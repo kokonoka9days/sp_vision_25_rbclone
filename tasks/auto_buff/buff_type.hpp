@@ -2,6 +2,7 @@
 #define BUFF__TYPE_HPP
 
 #include <algorithm>
+#include <chrono>
 #include <deque>
 #include <eigen3/Eigen/Dense>  // 必须在opencv2/core/eigen.hpp上面
 #include <opencv2/core/eigen.hpp>
@@ -21,6 +22,36 @@ inline constexpr double RUNE_SLOT_ANGLE = 2.0 * CV_PI / 5.0;
 enum PowerRune_type { SMALL, BIG };
 enum FanBlade_type { _target, _unlight, _light };
 enum Track_status { TRACK, TEM_LOSE, LOSE };
+
+enum class BuffObservationType { FULL, TARGET_ONLY, FAN_ONLY };
+enum class RuneCenterSource { DETECTED, PREDICTED };
+enum class BuffPoseQuality { FULL_8_POINT, PARTIAL_5_POINT, PARTIAL_4_POINT };
+
+inline double BUFF_BLIND_TIMEOUT_S = 0.080;
+inline double BUFF_FIRE_FULL_OBSERVATION_MAX_AGE_S = 0.030;
+
+struct BuffObservation
+{
+  BuffObservationType type = BuffObservationType::FULL;
+  RuneCenterSource center_source = RuneCenterSource::DETECTED;
+  cv::Point2f r_center{0.0f, 0.0f};
+  std::vector<cv::Point2f> target_points;
+  std::vector<cv::Point2f> fan_points;
+  cv::Point2f target_center{0.0f, 0.0f};
+  cv::Point2f fan_center{0.0f, 0.0f};
+  bool target_center_observed = false;
+  bool fan_center_observed = false;
+  double angle = 0.0;
+  double pair_angle_error = 0.0;
+  double pair_distance_ratio = 0.0;
+  double prediction_error = 0.0;
+  float confidence = 0.0f;
+  int track_id = -1;
+  std::chrono::steady_clock::time_point timestamp{};
+
+  bool has_target() const { return target_points.size() == 4; }
+  bool has_fan() const { return fan_points.size() == 4; }
+};
 
 class FanBlade
 {
@@ -57,8 +88,14 @@ public:
 
   int light_num;
   int target_slot_id = -1;
+  int track_id = -1;
   double target_angle = 0.0;
   int positive_roll_image_direction = 0;
+  BuffObservationType observation_type = BuffObservationType::FULL;
+  BuffPoseQuality pose_quality = BuffPoseQuality::FULL_8_POINT;
+  double measurement_noise_scale = 1.0;
+  double reprojection_error = 0.0;
+  double prediction_error = 0.0;
 
   Eigen::Vector3d xyz_in_world;  // 单位：m
   Eigen::Vector3d ypr_in_world;  // 单位：rad
@@ -66,10 +103,12 @@ public:
 
   Eigen::Vector3d blade_xyz_in_world;  // 单位：m
   Eigen::Vector3d blade_ypd_in_world;  // 球坐标系, 单位: m
+  Eigen::Vector3d plane_normal_in_world{1.0, 0.0, 0.0};
 
   explicit PowerRune(
     std::vector<FanBlade> & ts, const cv::Point2f r_center,
     std::optional<PowerRune> last_powerrune);
+  explicit PowerRune(const BuffObservation & observation);
   explicit PowerRune() = default;
 
   FanBlade & target() { return fanblades[0]; };

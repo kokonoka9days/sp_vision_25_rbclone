@@ -76,6 +76,21 @@ PowerRune::PowerRune(
   }
 }
 
+PowerRune::PowerRune(const BuffObservation & observation)
+: r_center(observation.r_center),
+  light_num(1),
+  track_id(observation.track_id),
+  target_angle(observation.angle),
+  observation_type(observation.type),
+  prediction_error(observation.prediction_error)
+{
+  FanBlade blade(
+    observation.target_points, observation.fan_points, observation.target_center,
+    observation.fan_center, _target, observation.confidence, -1);
+  blade.angle = observation.angle;
+  fanblades.emplace_back(std::move(blade));
+}
+
 double PowerRune::atan_angle(cv::Point2f point) const
 {
   auto v = point - r_center;

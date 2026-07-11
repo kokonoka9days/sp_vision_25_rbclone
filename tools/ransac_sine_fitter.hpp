@@ -28,6 +28,16 @@ public:
 
   void fit();
 
+  void clear();
+
+  size_t sample_count() const;
+
+  double time_span() const;
+
+  double inlier_ratio() const;
+
+  bool ready(size_t min_samples, double min_time_span, double min_inlier_ratio) const;
+
   double sine_function(double t, double A, double omega, double phi, double C)
   {
     return A * std::sin(omega * t + phi) + C;

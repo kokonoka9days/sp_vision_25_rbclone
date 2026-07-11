@@ -65,6 +65,33 @@ void RansacSineFitter::fit()
   if (fit_data_.size() > 150) fit_data_.pop_front();
 }
 
+void RansacSineFitter::clear()
+{
+  fit_data_.clear();
+  best_result_ = Result{};
+}
+
+size_t RansacSineFitter::sample_count() const { return fit_data_.size(); }
+
+double RansacSineFitter::time_span() const
+{
+  if (fit_data_.size() < 2) return 0.0;
+  return fit_data_.back().first - fit_data_.front().first;
+}
+
+double RansacSineFitter::inlier_ratio() const
+{
+  if (fit_data_.empty()) return 0.0;
+  return static_cast<double>(best_result_.inliers) / static_cast<double>(fit_data_.size());
+}
+
+bool RansacSineFitter::ready(
+  size_t min_samples, double min_time_span, double min_inlier_ratio) const
+{
+  return sample_count() >= min_samples && time_span() >= min_time_span &&
+         inlier_ratio() >= min_inlier_ratio && best_result_.omega > 1e-6;
+}
+
 bool RansacSineFitter::fit_partial_model(
   const std::vector<std::pair<double, double>> & sample, double omega, Eigen::Vector3d & params)
 {

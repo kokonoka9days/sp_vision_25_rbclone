@@ -174,9 +174,8 @@ int main(int argc, char * argv[])
       auto gs = gimbal.state();
       buff_solver.set_R_gimbal2world(q);
 
-      auto power_runes = buff_detector.detect_24(img);
-
-      buff_solver.solve(power_runes);
+      auto buff_observation = buff_detector.detect_24(img, t);
+      auto power_runes = buff_solver.solve(buff_observation);
 
       auto_aim::Plan buff_plan;
       auto_buff::Target* active_target = nullptr;

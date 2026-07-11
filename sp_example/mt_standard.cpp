@@ -112,9 +112,8 @@ int main(int argc, char * argv[])
 
       buff_solver.set_R_gimbal2world(q);
 
-      auto power_runes = buff_detector.detect(img);
-
-      buff_solver.solve(power_runes);
+      auto buff_observation = buff_detector.detect(img, t);
+      auto power_runes = buff_solver.solve(buff_observation);
 
       io::Command buff_command;
       if (mode.load() == io::Mode::small_buff) {

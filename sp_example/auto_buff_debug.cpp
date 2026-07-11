@@ -61,9 +61,8 @@ int main(int argc, char * argv[])
 
     solver.set_R_gimbal2world(q);
 
-    auto power_runes = detector.detect(img);
-
-    solver.solve(power_runes);
+    auto buff_observation = detector.detect(img, t);
+    auto power_runes = solver.solve(buff_observation);
 
     target.get_target(power_runes, t);
 
@@ -99,7 +98,7 @@ int main(int argc, char * argv[])
       // 当前帧target更新后buff
       auto Rxyz_in_world_now = target.point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
       auto image_points =
-        solver.reproject_buff(Rxyz_in_world_now, target.ekf_x()[4], target.ekf_x()[5]);
+        solver.reproject_buff(Rxyz_in_world_now, target.rotation_buff2world());
       tools::draw_points(
         img, std::vector<cv::Point2f>(image_points.begin(), image_points.begin() + 4), {0, 255, 0});
       tools::draw_points(
@@ -109,7 +108,7 @@ int main(int argc, char * argv[])
       double dangle = target.ekf_x()[5] - target_copy.ekf_x()[5];
       auto Rxyz_in_world_pre = target.point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
       image_points =
-        solver.reproject_buff(Rxyz_in_world_pre, target_copy.ekf_x()[4], target_copy.ekf_x()[5]);
+        solver.reproject_buff(Rxyz_in_world_pre, target_copy.rotation_buff2world());
       tools::draw_points(
         img, std::vector<cv::Point2f>(image_points.begin(), image_points.begin() + 4), {255, 0, 0});
       tools::draw_points(

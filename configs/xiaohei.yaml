@@ -158,10 +158,21 @@ buff_confidence_threshold: 0.6
 buff_keypoint_threshold: 0.3
 buff_rune_radius_m: 0.700
 buff_small_direction: 0 # 0:auto, 1/-1: force small buff prediction direction
-buff_locked_gate_deg: 25
-buff_switch_gate_deg: 10
-buff_switch_confirm_frames: 3
-buff_locked_lost_max: 6
+buff_pair_angle_gate_deg: 15
+buff_pair_ratio_min: 0.30
+buff_pair_ratio_max: 0.70
+buff_pair_ratio_center: 0.51
+buff_track_gate_min_deg: 12
+buff_track_gate_max_deg: 25
+buff_blind_timeout_s: 0.080
+buff_track_reset_timeout_s: 0.500
+buff_switch_confirm_frames: 5
+buff_pnp_full_reprojection_gate_px: 6.0
+buff_pnp_target_center_gate_px: 6.0
+buff_pnp_fan_center_gate_px: 8.0
+buff_pnp_partial_center_gate_px: 8.0
+buff_pnp_partial_angle_gate_deg: 15
+buff_fire_full_observation_max_age_s: 0.030
 #####-----buff_aimer参数-----#####
 aim_time: 0.150         # s
 wait_time: 0.300        # s

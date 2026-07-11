@@ -120,9 +120,8 @@ int main(int argc, char * argv[])
 
       Eigen::Vector3d gimbal_pos = tools::eulers(solver.R_gimbal2world(), 2, 1, 0);
 
-      auto power_runes = buff_detector.detect(img);
-
-      buff_solver.solve(power_runes);
+      auto buff_observation = buff_detector.detect(img, t);
+      auto power_runes = buff_solver.solve(buff_observation);
 
       auto_aim::Plan buff_plan;
       if (mode.load() == io::GimbalMode::SMALL_BUFF) {

@@ -15,6 +15,10 @@ Aimer::Aimer(const std::string & config_path)
   predict_time_ = yaml["predict_time"].as<double>();
   if (yaml["buff_rune_radius_m"]) RUNE_RADIUS_M = yaml["buff_rune_radius_m"].as<double>();
   if (yaml["buff_small_direction"]) SMALL_BUFF_DIRECTION = yaml["buff_small_direction"].as<int>();
+  if (yaml["buff_fire_full_observation_max_age_s"]) {
+    BUFF_FIRE_FULL_OBSERVATION_MAX_AGE_S =
+      yaml["buff_fire_full_observation_max_age_s"].as<double>();
+  }
 
   last_fire_t_ = std::chrono::steady_clock::now();
 }
@@ -35,8 +39,6 @@ io::Command Aimer::aim(
   auto future = to_now ? (detect_now_gap + predict_time_) : 0.1 + predict_time_;
   double yaw, pitch;
 
-  bool angle_changed =
-    std::abs(last_yaw_ - yaw) > 5 / 57.3 || std::abs(last_pitch_ - pitch) > 5 / 57.3;
   if (get_send_angle(target, future, bullet_speed, to_now, yaw, pitch)) {
     command.yaw = yaw;
     command.pitch = -pitch;  //世界坐标系下的pitch向上为负
@@ -57,7 +59,7 @@ io::Command Aimer::aim(
     last_pitch_ = pitch;
   }
 
-  if (switch_fanblade_) {
+  if (switch_fanblade_ || !target.can_fire(now)) {
     command.shoot = false;
     last_fire_t_ = now;
   } else if (!switch_fanblade_ && tools::delta_time(now, last_fire_t_) > fire_gap_time_) {
@@ -87,9 +89,6 @@ auto_aim::Plan Aimer::mpc_aim(
   auto detect_now_gap = tools::delta_time(now, timestamp);
   auto future = to_now ? (detect_now_gap + predict_time_) : 0.1 + predict_time_;
   double yaw, pitch;
-
-  bool angle_changed =
-    std::abs(last_yaw_ - yaw) > 5 / 57.3 || std::abs(last_pitch_ - pitch) > 5 / 57.3;
 
   auto target_for_future = target.clone(); // 拷贝干净的状态
   if (get_send_angle(*target_for_future, future, bullet_speed, to_now, yaw, pitch)) {
@@ -136,7 +135,7 @@ auto_aim::Plan Aimer::mpc_aim(
   }
 }
 
-  if (switch_fanblade_) {
+  if (switch_fanblade_ || !target.can_fire(now)) {
     plan.fire = false;
     last_fire_t_ = now;
   } else if (!switch_fanblade_ && tools::delta_time(now, last_fire_t_) > fire_gap_time_) {

@@ -44,7 +44,15 @@ public:
 
   Eigen::Vector3d point_buff2world(const Eigen::Vector3d & point_in_buff) const;
 
+  virtual Eigen::Matrix3d rotation_buff2world() const;
+
   bool is_unsolve() const;
+
+  bool is_blind() const;
+
+  bool can_fire(std::chrono::steady_clock::time_point now) const;
+
+  int reset_count() const { return reset_count_; }
 
   Eigen::VectorXd ekf_x() const;
 
@@ -57,6 +65,13 @@ protected:
 
   virtual void update(double nowtime, const PowerRune & p) = 0;  // 纯虚函数
 
+  double relative_time(std::chrono::steady_clock::time_point timestamp);
+
+  bool predict_without_measurement(std::chrono::steady_clock::time_point timestamp);
+
+  void record_measurement(
+    const PowerRune & p, std::chrono::steady_clock::time_point timestamp);
+
   Eigen::VectorXd x0_;
   Eigen::MatrixXd P0_;
   Eigen::MatrixXd A_;
@@ -68,9 +83,17 @@ protected:
   Voter voter;  // 逆时针-1 顺时针1
   bool first_in_;
   bool unsolvable_;
-  int last_target_slot_id_ = -1;
-  bool has_last_observed_target_angle_ = false;
-  double last_observed_target_angle_ = 0.0;
+  int last_track_id_ = -1;
+  bool blind_ = false;
+  bool has_start_timestamp_ = false;
+  bool has_measurement_timestamp_ = false;
+  bool has_full_observation_timestamp_ = false;
+  std::chrono::steady_clock::time_point start_timestamp_{};
+  std::chrono::steady_clock::time_point last_measurement_timestamp_{};
+  std::chrono::steady_clock::time_point last_full_observation_timestamp_{};
+  BuffPoseQuality last_pose_quality_ = BuffPoseQuality::FULL_8_POINT;
+  int reset_count_ = 0;
+  int innovation_reject_count_ = 0;
 };
 
 /// SmallTarget子类
@@ -85,6 +108,8 @@ public:
 
   void predict(double dt) override;
 
+  Eigen::Matrix3d rotation_buff2world() const override;
+
   std::unique_ptr<Target> clone() const override { return std::make_unique<SmallTarget>(*this); }
 
 private:
@@ -92,11 +117,11 @@ private:
 
   void update(double nowtime, const PowerRune & p) override;
 
-  Eigen::MatrixXd h_jacobian() const;
+  void update_observed_small_direction(double observed_phase);
 
-  void update_observed_small_direction(const PowerRune & p);
+  void update_plane_basis(const PowerRune & p, bool initialize);
 
-  void update_positive_roll_image_direction(int image_direction);
+  double measure_phase(const PowerRune & p, double reference) const;
 
   int small_prediction_roll_direction() const;
 
@@ -108,7 +133,14 @@ private:
   int small_direction_score_ = 0;
   int small_reverse_candidate_direction_ = 0;
   int small_reverse_confirm_count_ = 0;
-  int last_positive_roll_image_direction_ = 1;
+  bool has_plane_basis_ = false;
+  Eigen::Vector3d plane_normal_{1.0, 0.0, 0.0};
+  Eigen::Vector3d plane_normal_sum_{0.0, 0.0, 0.0};
+  double plane_normal_weight_ = 0.0;
+  Eigen::Vector3d phase_zero_axis_{0.0, 0.0, 1.0};
+  Eigen::Vector3d phase_quarter_axis_{0.0, -1.0, 0.0};
+  bool has_last_observed_phase_ = false;
+  double last_observed_phase_ = 0.0;
   std::deque<double> small_direction_deltas_;
   std::deque<int> small_direction_votes_;
 };
@@ -136,7 +168,11 @@ private:
 
   tools::RansacSineFitter spd_fitter_;
 
-  double fit_spd_;
+  double fit_spd_ = 1.1775;
+  bool has_last_speed_observation_ = false;
+  double last_speed_observation_roll_ = 0.0;
+  double last_speed_observation_time_ = 0.0;
+  int speed_model_track_id_ = -1;
 };
 
 }  // namespace auto_buff

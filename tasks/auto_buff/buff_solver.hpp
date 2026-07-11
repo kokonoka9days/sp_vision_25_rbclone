@@ -23,7 +23,10 @@ public:
 
   void set_R_gimbal2world(const Eigen::Quaterniond & q);
 
-  void solve(std::optional<PowerRune> & ps) const;
+  std::optional<PowerRune> solve(const BuffObservation & observation) const;
+
+  std::optional<PowerRune> solve(
+    const std::optional<BuffObservation> & observation) const;
 
   // 调试用
   cv::Point2f point_buff2pixel(cv::Point3f x);
@@ -32,6 +35,9 @@ public:
 
   std::vector<cv::Point2f> reproject_buff(
     const Eigen::Vector3d & xyz_in_world, double yaw, double row) const;
+
+  std::vector<cv::Point2f> reproject_buff(
+    const Eigen::Vector3d & xyz_in_world, const Eigen::Matrix3d & R_buff2world) const;
 
 private:
   cv::Mat camera_matrix_;
@@ -43,6 +49,14 @@ private:
 
   mutable cv::Vec3d rvec_, tvec_;
   mutable bool has_pnp_solution_ = false;
+  mutable bool has_last_pose_ = false;
+  mutable cv::Vec3d last_rvec_, last_tvec_;
+
+  double full_reprojection_gate_px_ = 6.0;
+  double target_center_reprojection_gate_px_ = 6.0;
+  double fan_center_reprojection_gate_px_ = 8.0;
+  double partial_four_center_gate_px_ = 8.0;
+  double partial_four_angle_gate_rad_ = 15.0 / 57.3;
 
   const std::vector<cv::Point3f> PNP_OBJECT_POINTS = {
     cv::Point3f(0.0f, -0.095f, 0.0f), cv::Point3f(0.095f, 0.0f, 0.0f),

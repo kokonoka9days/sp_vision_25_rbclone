@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <numeric>
 
@@ -40,40 +41,31 @@ bool valid_keypoints(const YOLO11_BUFF::Object & object, float threshold)
   });
 }
 
-std::vector<cv::Point2f> order_target_points(
+std::optional<std::vector<cv::Point2f>> order_target_points(
   const std::vector<cv::Point2f> & points, const cv::Point2f & center,
   const cv::Point2f & axis_y)
 {
-  std::array<int, 4> index{};
-  index.fill(0);
-  float min_dot = std::numeric_limits<float>::max();
-  float max_dot = -std::numeric_limits<float>::max();
-  float min_cross = std::numeric_limits<float>::max();
-  float max_cross = -std::numeric_limits<float>::max();
+  if (points.size() != 4) return std::nullopt;
+  const cv::Point2f axis_x{axis_y.y, -axis_y.x};
+  const std::array<cv::Point2f, 4> expected{-axis_y, axis_x, axis_y, -axis_x};
+  std::array<int, 4> permutation{0, 1, 2, 3};
+  std::array<int, 4> index = permutation;
+  double best_cost = std::numeric_limits<double>::max();
+  do {
+    double cost = 0.0;
+    for (int role = 0; role < 4; ++role) {
+      const cv::Point2f direction =
+        normalize_or(points[permutation[role]] - center, expected[role]);
+      cost += 1.0 - dot2d(direction, expected[role]);
+    }
+    if (cost < best_cost) {
+      best_cost = cost;
+      index = permutation;
+    }
+  } while (std::next_permutation(permutation.begin(), permutation.end()));
 
-  for (int i = 0; i < static_cast<int>(points.size()); ++i) {
-    const auto rel = points[i] - center;
-    const float d = dot2d(rel, axis_y);
-    const float c = cross2d(axis_y, rel);
-    if (d < min_dot) {
-      min_dot = d;
-      index[0] = i;
-    }
-    if (d > max_dot) {
-      max_dot = d;
-      index[2] = i;
-    }
-    if (c < min_cross) {
-      min_cross = c;
-      index[1] = i;
-    }
-    if (c > max_cross) {
-      max_cross = c;
-      index[3] = i;
-    }
-  }
-
-  return {points[index[0]], points[index[1]], points[index[2]], points[index[3]]};
+  return std::vector<cv::Point2f>{
+    points[index[0]], points[index[1]], points[index[2]], points[index[3]]};
 }
 
 std::vector<cv::Point2f> order_rect_points(
@@ -97,28 +89,74 @@ std::vector<cv::Point2f> order_rect_points(
   return {points[top[0]], points[top[1]], points[bottom[1]], points[bottom[0]]};
 }
 
-int slot_id_from_angle(double angle)
+bool valid_ordered_quad(const std::vector<cv::Point2f> & points)
 {
-  int slot = static_cast<int>(std::floor((angle + RUNE_SLOT_ANGLE * 0.5) / RUNE_SLOT_ANGLE));
-  slot %= 5;
-  if (slot < 0) slot += 5;
-  return slot;
+  if (points.size() != 4) return false;
+  for (size_t i = 0; i < points.size(); ++i) {
+    for (size_t j = i + 1; j < points.size(); ++j) {
+      if (cv::norm(points[i] - points[j]) < 3.0) return false;
+    }
+  }
+  std::vector<cv::Point2f> hull;
+  cv::convexHull(points, hull);
+  return hull.size() == 4 && std::abs(cv::contourArea(hull)) >= 20.0;
 }
+
+double angle_around(const cv::Point2f & point, const cv::Point2f & center)
+{
+  return std::atan2(point.y - center.y, point.x - center.x);
+}
+
+double seconds_between(
+  std::chrono::steady_clock::time_point now, std::chrono::steady_clock::time_point before)
+{
+  return std::chrono::duration<double>(now - before).count();
+}
+
+int observation_rank(BuffObservationType type)
+{
+  switch (type) {
+    case BuffObservationType::FULL:
+      return 0;
+    case BuffObservationType::TARGET_ONLY:
+      return 1;
+    case BuffObservationType::FAN_ONLY:
+      return 2;
+  }
+  return 3;
+}
+
 }  // namespace
 
 Buff_Detector::Buff_Detector(const std::string & config) : status_(LOSE), lose_(0), MODE_(config)
 {
   auto yaml = YAML::LoadFile(config);
   if (yaml["buff_keypoint_threshold"]) keypoint_threshold_ = yaml["buff_keypoint_threshold"].as<float>();
-  if (yaml["buff_locked_gate_deg"]) locked_gate_rad_ = yaml["buff_locked_gate_deg"].as<double>() / 57.3;
-  if (yaml["buff_switch_gate_deg"]) switch_gate_rad_ = yaml["buff_switch_gate_deg"].as<double>() / 57.3;
-  if (yaml["buff_switch_confirm_frames"]) {
-    switch_confirm_frames_ = yaml["buff_switch_confirm_frames"].as<int>();
-  }
-  if (yaml["buff_locked_lost_max"]) locked_lost_max_ = yaml["buff_locked_lost_max"].as<int>();
   if (yaml["buff_center_lost_max"]) center_lost_max_ = yaml["buff_center_lost_max"].as<int>();
   if (yaml["buff_rune_radius_m"]) RUNE_RADIUS_M = yaml["buff_rune_radius_m"].as<double>();
   if (yaml["buff_small_direction"]) SMALL_BUFF_DIRECTION = yaml["buff_small_direction"].as<int>();
+  if (yaml["buff_pair_angle_gate_deg"]) {
+    pair_angle_gate_rad_ = yaml["buff_pair_angle_gate_deg"].as<double>() / 57.3;
+  }
+  if (yaml["buff_pair_ratio_min"]) pair_ratio_min_ = yaml["buff_pair_ratio_min"].as<double>();
+  if (yaml["buff_pair_ratio_max"]) pair_ratio_max_ = yaml["buff_pair_ratio_max"].as<double>();
+  if (yaml["buff_pair_ratio_center"]) {
+    pair_ratio_center_ = yaml["buff_pair_ratio_center"].as<double>();
+  }
+  if (yaml["buff_track_gate_min_deg"]) {
+    track_gate_min_rad_ = yaml["buff_track_gate_min_deg"].as<double>() / 57.3;
+  }
+  if (yaml["buff_track_gate_max_deg"]) {
+    track_gate_max_rad_ = yaml["buff_track_gate_max_deg"].as<double>() / 57.3;
+  }
+  if (yaml["buff_blind_timeout_s"]) blind_timeout_s_ = yaml["buff_blind_timeout_s"].as<double>();
+  if (yaml["buff_track_reset_timeout_s"]) {
+    track_reset_timeout_s_ = yaml["buff_track_reset_timeout_s"].as<double>();
+  }
+  if (yaml["buff_switch_confirm_frames"]) {
+    switch_confirm_frames_ = yaml["buff_switch_confirm_frames"].as<int>();
+  }
+  BUFF_BLIND_TIMEOUT_S = blind_timeout_s_;
 }
 
 void Buff_Detector::handle_img(const cv::Mat & bgr_img, cv::Mat & dilated_img)
@@ -182,17 +220,16 @@ cv::Point2f Buff_Detector::get_r_center(std::vector<FanBlade> & fanblades, cv::M
 void Buff_Detector::handle_lose()
 {
   lose_++;
-  if (has_locked_target_) lost_locked_count_++;
   if (lose_ >= LOSE_MAX) {
     status_ = LOSE;
-    last_powerrune_ = std::nullopt;
   } else {
     status_ = TEM_LOSE;
   }
 }
 
-std::optional<cv::Point2f> Buff_Detector::select_r_center(
-  const std::vector<YOLO11_BUFF::Object> & results)
+std::optional<Buff_Detector::CenterEstimate> Buff_Detector::select_r_center(
+  const std::vector<YOLO11_BUFF::Object> & results,
+  std::chrono::steady_clock::time_point timestamp)
 {
   const YOLO11_BUFF::Object * best_center = nullptr;
   for (const auto & result : results) {
@@ -204,142 +241,323 @@ std::optional<cv::Point2f> Buff_Detector::select_r_center(
     last_r_center_ = mean_points(best_center->kpt);
     has_last_r_center_ = true;
     center_lost_count_ = 0;
-    return last_r_center_;
+    last_r_center_time_ = timestamp;
+    return CenterEstimate{last_r_center_, RuneCenterSource::DETECTED};
   }
 
-  if (has_last_r_center_ && center_lost_count_ < center_lost_max_) {
+  if (
+    has_last_r_center_ && center_lost_count_ < center_lost_max_ &&
+    seconds_between(timestamp, last_r_center_time_) <= blind_timeout_s_) {
     center_lost_count_++;
-    return last_r_center_;
+    return CenterEstimate{last_r_center_, RuneCenterSource::PREDICTED};
   }
 
   return std::nullopt;
 }
 
-std::vector<FanBlade> Buff_Detector::build_candidates(
+std::vector<BuffObservation> Buff_Detector::build_candidates(
   const std::vector<YOLO11_BUFF::Object> & results, const cv::Point2f & r_center) const
 {
-  std::vector<const YOLO11_BUFF::Object *> targets;
-  std::vector<const YOLO11_BUFF::Object *> fans;
+  struct Detection
+  {
+    const YOLO11_BUFF::Object * object;
+    cv::Point2f center;
+  };
+  struct PairEdge
+  {
+    int target;
+    int fan;
+    double angle_error;
+    double ratio;
+    double score;
+  };
+
+  std::vector<Detection> targets;
+  std::vector<Detection> fans;
   for (const auto & result : results) {
     if (!valid_keypoints(result, keypoint_threshold_)) continue;
-    if (result.label == INACTIVE_TARGET) targets.push_back(&result);
-    if (result.label == INACTIVE_FAN) fans.push_back(&result);
+    if (result.label == INACTIVE_TARGET) targets.push_back({&result, mean_points(result.kpt)});
+    if (result.label == INACTIVE_FAN) fans.push_back({&result, mean_points(result.kpt)});
   }
 
-  std::vector<FanBlade> candidates;
-  for (const auto * target : targets) {
-    const cv::Point2f target_center = mean_points(target->kpt);
-    const cv::Point2f axis_to_center = normalize_or(r_center - target_center, {0.0f, 1.0f});
-    const float center_distance =
-      std::max(static_cast<float>(cv::norm(r_center - target_center)), 1.0f);
+  std::vector<PairEdge> edges;
+  for (int ti = 0; ti < static_cast<int>(targets.size()); ++ti) {
+    const auto & target = targets[ti];
+    const double target_radius = cv::norm(target.center - r_center);
+    if (target_radius < 3.0) continue;
+    for (int fi = 0; fi < static_cast<int>(fans.size()); ++fi) {
+      const auto & fan = fans[fi];
+      const double fan_radius = cv::norm(fan.center - r_center);
+      const cv::Point2f r_to_fan = fan.center - r_center;
+      const cv::Point2f fan_to_target = target.center - fan.center;
+      const double fan_target_distance = cv::norm(fan_to_target);
+      if (fan_radius < 3.0 || fan_target_distance < 3.0 || target_radius <= fan_radius) continue;
 
-    const YOLO11_BUFF::Object * best_fan = nullptr;
-    float best_score = std::numeric_limits<float>::max();
-    cv::Point2f best_fan_center{0.0f, 0.0f};
-    for (const auto * fan : fans) {
-      const cv::Point2f fan_center = mean_points(fan->kpt);
-      const cv::Point2f target_to_fan = fan_center - target_center;
-      const float fan_distance = cv::norm(target_to_fan);
-      if (fan_distance < 1.0f) continue;
-
-      const cv::Point2f fan_axis = target_to_fan * (1.0f / fan_distance);
-      const float direction_penalty = dot2d(axis_to_center, fan_axis) < 0.0f ? 2.0f : 0.0f;
-      const float angle_penalty = std::abs(cross2d(axis_to_center, fan_axis));
-      const float ratio_penalty = std::abs(fan_distance / center_distance - 0.5f);
-      const float score = angle_penalty + 0.4f * ratio_penalty + direction_penalty;
-      if (score < best_score) {
-        best_score = score;
-        best_fan = fan;
-        best_fan_center = fan_center;
+      const cv::Point2f u = normalize_or(r_to_fan, {0.0f, 1.0f});
+      const cv::Point2f v = normalize_or(fan_to_target, {0.0f, 1.0f});
+      const double direction_dot = std::clamp(static_cast<double>(dot2d(u, v)), -1.0, 1.0);
+      if (direction_dot <= 0.0) continue;
+      const double angle_error = std::acos(direction_dot);
+      const double ratio = fan_target_distance / target_radius;
+      if (
+        angle_error > pair_angle_gate_rad_ || ratio < pair_ratio_min_ ||
+        ratio > pair_ratio_max_) {
+        continue;
       }
+
+      const double confidence = 0.5 * (target.object->prob + fan.object->prob);
+      const double angle_term = angle_error / std::max(pair_angle_gate_rad_, 1e-6);
+      const double ratio_term = (ratio - pair_ratio_center_) / 0.20;
+      const double score = angle_term * angle_term + ratio_term * ratio_term + (1.0 - confidence);
+      edges.push_back({ti, fi, angle_error, ratio, score});
+    }
+  }
+
+  std::vector<int> current_match(targets.size(), -1);
+  std::vector<int> best_match(targets.size(), -1);
+  std::vector<bool> used_fans(fans.size(), false);
+  int best_count = -1;
+  double best_score = std::numeric_limits<double>::max();
+  std::function<void(int, int, double)> assign = [&](int ti, int count, double score) {
+    if (ti == static_cast<int>(targets.size())) {
+      if (count > best_count || (count == best_count && score < best_score)) {
+        best_count = count;
+        best_score = score;
+        best_match = current_match;
+      }
+      return;
     }
 
-    if (best_fan == nullptr) continue;
+    current_match[ti] = -1;
+    assign(ti + 1, count, score);
+    for (int ei = 0; ei < static_cast<int>(edges.size()); ++ei) {
+      const auto & edge = edges[ei];
+      if (edge.target != ti || used_fans[edge.fan]) continue;
+      current_match[ti] = ei;
+      used_fans[edge.fan] = true;
+      assign(ti + 1, count + 1, score + edge.score);
+      used_fans[edge.fan] = false;
+      current_match[ti] = -1;
+    }
+  };
+  assign(0, 0, 0.0);
 
-    const auto ordered_target = order_target_points(target->kpt, target_center, axis_to_center);
-    const auto ordered_fan = order_rect_points(best_fan->kpt, best_fan_center, axis_to_center);
-    double angle = std::atan2(target_center.y - r_center.y, target_center.x - r_center.x);
-    if (angle < 0.0) angle += CV_2PI;
-    const int slot_id = slot_id_from_angle(angle);
-    FanBlade candidate(
-      ordered_target, ordered_fan, target_center, best_fan_center, _light,
-      0.5f * (target->prob + best_fan->prob), slot_id);
-    candidate.angle = angle;
-    candidates.emplace_back(candidate);
+  std::vector<BuffObservation> candidates;
+  std::vector<bool> matched_targets(targets.size(), false);
+  std::vector<bool> matched_fans(fans.size(), false);
+  for (int ti = 0; ti < static_cast<int>(best_match.size()); ++ti) {
+    if (best_match[ti] < 0) continue;
+    const auto & edge = edges[best_match[ti]];
+    const auto & target = targets[ti];
+    const auto & fan = fans[edge.fan];
+    const cv::Point2f axis_to_center = normalize_or(r_center - target.center, {0.0f, 1.0f});
+    const auto ordered_target = order_target_points(target.object->kpt, target.center, axis_to_center);
+    const auto ordered_fan = order_rect_points(fan.object->kpt, fan.center, axis_to_center);
+    if (!ordered_target.has_value() || !valid_ordered_quad(*ordered_target) ||
+        !valid_ordered_quad(ordered_fan)) {
+      continue;
+    }
+
+    BuffObservation observation;
+    observation.type = BuffObservationType::FULL;
+    observation.target_points = *ordered_target;
+    observation.fan_points = ordered_fan;
+    observation.target_center = target.center;
+    observation.fan_center = fan.center;
+    observation.target_center_observed = true;
+    observation.fan_center_observed = true;
+    observation.angle = angle_around(target.center, r_center);
+    observation.pair_angle_error = edge.angle_error;
+    observation.pair_distance_ratio = edge.ratio;
+    observation.confidence = 0.5f * (target.object->prob + fan.object->prob);
+    candidates.emplace_back(std::move(observation));
+    matched_targets[ti] = true;
+    matched_fans[edge.fan] = true;
   }
 
-  std::sort(candidates.begin(), candidates.end(), [](const FanBlade & a, const FanBlade & b) {
+  for (int ti = 0; ti < static_cast<int>(targets.size()); ++ti) {
+    if (matched_targets[ti]) continue;
+    const auto & target = targets[ti];
+    const cv::Point2f axis_to_center = normalize_or(r_center - target.center, {0.0f, 1.0f});
+    const auto ordered_target = order_target_points(target.object->kpt, target.center, axis_to_center);
+    if (!ordered_target.has_value() || !valid_ordered_quad(*ordered_target)) continue;
+
+    BuffObservation observation;
+    observation.type = BuffObservationType::TARGET_ONLY;
+    observation.target_points = *ordered_target;
+    observation.target_center = target.center;
+    observation.target_center_observed = true;
+    observation.fan_center = r_center + 0.49f * (target.center - r_center);
+    observation.angle = angle_around(target.center, r_center);
+    observation.confidence = target.object->prob;
+    candidates.emplace_back(std::move(observation));
+  }
+
+  for (int fi = 0; fi < static_cast<int>(fans.size()); ++fi) {
+    if (matched_fans[fi]) continue;
+    const auto & fan = fans[fi];
+    const cv::Point2f axis_to_center = normalize_or(r_center - fan.center, {0.0f, 1.0f});
+    const auto ordered_fan = order_rect_points(fan.object->kpt, fan.center, axis_to_center);
+    if (!valid_ordered_quad(ordered_fan)) continue;
+
+    BuffObservation observation;
+    observation.type = BuffObservationType::FAN_ONLY;
+    observation.fan_points = ordered_fan;
+    observation.fan_center = fan.center;
+    observation.fan_center_observed = true;
+    observation.target_center = r_center + (1.0f / 0.49f) * (fan.center - r_center);
+    observation.angle = angle_around(fan.center, r_center);
+    observation.confidence = fan.object->prob;
+    candidates.emplace_back(std::move(observation));
+  }
+
+  std::sort(candidates.begin(), candidates.end(), [](const BuffObservation & a, const BuffObservation & b) {
+    if (observation_rank(a.type) != observation_rank(b.type)) {
+      return observation_rank(a.type) < observation_rank(b.type);
+    }
     return a.confidence > b.confidence;
   });
   return candidates;
 }
 
-std::optional<FanBlade> Buff_Detector::select_locked_candidate(
-  const std::vector<FanBlade> & candidates)
+std::optional<BuffObservation> Buff_Detector::select_locked_candidate(
+  const std::vector<BuffObservation> & candidates,
+  std::chrono::steady_clock::time_point timestamp)
 {
-  if (candidates.empty()) return std::nullopt;
-
-  auto best_by_confidence = std::max_element(
-    candidates.begin(), candidates.end(),
-    [](const FanBlade & a, const FanBlade & b) { return a.confidence < b.confidence; });
-
-  if (!has_locked_target_) {
-    has_locked_target_ = true;
-    lost_locked_count_ = 0;
+  if (
+    has_locked_target_ && seconds_between(timestamp, last_seen_time_) > track_reset_timeout_s_) {
+    has_locked_target_ = false;
+    has_pending_switch_ = false;
     switch_confirm_count_ = 0;
-    pending_switch_slot_id_ = -1;
-    last_locked_angle_ = best_by_confidence->angle;
-    locked_slot_id_ = best_by_confidence->slot_id;
-    return *best_by_confidence;
   }
 
-  auto best_by_angle = std::min_element(
-    candidates.begin(), candidates.end(), [&](const FanBlade & a, const FanBlade & b) {
-      return std::abs(tools::limit_rad(a.angle - last_locked_angle_)) <
-             std::abs(tools::limit_rad(b.angle - last_locked_angle_));
-    });
-  const double best_error = std::abs(tools::limit_rad(best_by_angle->angle - last_locked_angle_));
-  if (best_error <= locked_gate_rad_) {
-    lost_locked_count_ = 0;
+  if (candidates.empty()) {
+    if (has_locked_target_) lost_locked_count_++;
+    has_pending_switch_ = false;
     switch_confirm_count_ = 0;
-    pending_switch_slot_id_ = -1;
-    last_locked_angle_ = best_by_angle->angle;
-    locked_slot_id_ = best_by_angle->slot_id;
-    return *best_by_angle;
-  }
-
-  lost_locked_count_++;
-  if (lost_locked_count_ <= locked_lost_max_) {
-    tools::logger()->debug(
-      "[Buff_Detector] Locked target gated, err {:.1f} deg, blind predict",
-      best_error * 57.3);
     return std::nullopt;
   }
 
-  const double switch_error =
-    std::abs(tools::limit_rad(best_by_confidence->angle - last_locked_angle_));
-  if (switch_error < switch_gate_rad_) return std::nullopt;
+  auto best_initial = std::min_element(
+    candidates.begin(), candidates.end(), [](const BuffObservation & a, const BuffObservation & b) {
+      if (observation_rank(a.type) != observation_rank(b.type)) {
+        return observation_rank(a.type) < observation_rank(b.type);
+      }
+      return a.confidence > b.confidence;
+    });
 
-  if (pending_switch_slot_id_ != best_by_confidence->slot_id) {
-    pending_switch_slot_id_ = best_by_confidence->slot_id;
+  if (!has_locked_target_) {
+    has_locked_target_ = true;
+    locked_track_id_ = next_track_id_++;
+    lost_locked_count_ = 0;
+    switch_confirm_count_ = 0;
+    has_pending_switch_ = false;
+    angular_velocity_ = 0.0;
+    last_locked_angle_ = best_initial->angle;
+    last_locked_time_ = timestamp;
+    last_seen_time_ = timestamp;
+    gate_episode_active_ = false;
+    auto selected = *best_initial;
+    selected.track_id = locked_track_id_;
+    selected.prediction_error = 0.0;
+    return selected;
+  }
+
+  const double prediction_dt = std::max(0.0, seconds_between(timestamp, last_locked_time_));
+  const double predicted_angle = last_locked_angle_ + angular_velocity_ * prediction_dt;
+  auto best_by_prediction = std::min_element(
+    candidates.begin(), candidates.end(), [&](const BuffObservation & a, const BuffObservation & b) {
+      const double a_error = std::abs(tools::limit_rad(a.angle - predicted_angle));
+      const double b_error = std::abs(tools::limit_rad(b.angle - predicted_angle));
+      const double a_score = a_error + observation_rank(a.type) * 0.02 + (1.0 - a.confidence) * 0.01;
+      const double b_score = b_error + observation_rank(b.type) * 0.02 + (1.0 - b.confidence) * 0.01;
+      return a_score < b_score;
+    });
+  const double best_error =
+    std::abs(tools::limit_rad(best_by_prediction->angle - predicted_angle));
+  const double lost_time = std::max(0.0, seconds_between(timestamp, last_seen_time_));
+  const double gate_ratio = std::clamp(lost_time / std::max(blind_timeout_s_, 1e-3), 0.0, 1.0);
+  const double track_gate =
+    track_gate_min_rad_ + gate_ratio * (track_gate_max_rad_ - track_gate_min_rad_);
+  if (best_error <= track_gate) {
+    const double observation_dt = std::max(0.0, seconds_between(timestamp, last_locked_time_));
+    if (observation_dt > 1e-4) {
+      const double measured_velocity =
+        tools::limit_rad(best_by_prediction->angle - last_locked_angle_) / observation_dt;
+      if (std::abs(measured_velocity) <= 3.0) {
+        angular_velocity_ = 0.8 * angular_velocity_ + 0.2 * measured_velocity;
+      }
+    }
+    lost_locked_count_ = 0;
+    switch_confirm_count_ = 0;
+    has_pending_switch_ = false;
+    last_locked_angle_ = best_by_prediction->angle;
+    last_locked_time_ = timestamp;
+    last_seen_time_ = timestamp;
+    gate_episode_active_ = false;
+    auto selected = *best_by_prediction;
+    selected.track_id = locked_track_id_;
+    selected.prediction_error = best_error;
+    return selected;
+  }
+
+  lost_locked_count_++;
+  if (!gate_episode_active_) {
+    gate_episode_active_ = true;
+    gate_failure_count_++;
+    tools::logger()->debug(
+      "[Buff_Detector] candidate gated, err {:.1f} deg, track {}, blind {:.0f}ms",
+      best_error * 57.3, locked_track_id_, lost_time * 1000.0);
+  }
+  if (lost_time <= blind_timeout_s_) {
+    return std::nullopt;
+  }
+
+  const auto & switch_candidate = *best_initial;
+  if (!has_pending_switch_) {
+    has_pending_switch_ = true;
+    pending_switch_angle_ = switch_candidate.angle;
+    pending_switch_time_ = timestamp;
     switch_confirm_count_ = 1;
   } else {
-    switch_confirm_count_++;
+    const double pending_dt = std::max(0.0, seconds_between(timestamp, pending_switch_time_));
+    const double pending_prediction = pending_switch_angle_ + angular_velocity_ * pending_dt;
+    const double pending_error =
+      std::abs(tools::limit_rad(switch_candidate.angle - pending_prediction));
+    if (pending_error <= track_gate_max_rad_) {
+      pending_switch_angle_ = switch_candidate.angle;
+      pending_switch_time_ = timestamp;
+      switch_confirm_count_++;
+    } else {
+      pending_switch_angle_ = switch_candidate.angle;
+      pending_switch_time_ = timestamp;
+      switch_confirm_count_ = 1;
+    }
   }
 
   if (switch_confirm_count_ < switch_confirm_frames_) return std::nullopt;
 
-  tools::logger()->debug("[Buff_Detector] Relock rune slot {}", best_by_confidence->slot_id);
-  has_locked_target_ = true;
+  const int old_track_id = locked_track_id_;
+  locked_track_id_ = next_track_id_++;
   lost_locked_count_ = 0;
   switch_confirm_count_ = 0;
-  pending_switch_slot_id_ = -1;
-  last_locked_angle_ = best_by_confidence->angle;
-  locked_slot_id_ = best_by_confidence->slot_id;
-  return *best_by_confidence;
+  has_pending_switch_ = false;
+  last_locked_angle_ = switch_candidate.angle;
+  last_locked_time_ = timestamp;
+  last_seen_time_ = timestamp;
+  gate_episode_active_ = false;
+  confirmed_switch_count_++;
+  tools::logger()->debug(
+    "[Buff_Detector] confirmed track switch {} -> {}", old_track_id, locked_track_id_);
+  auto selected = switch_candidate;
+  selected.track_id = locked_track_id_;
+  selected.prediction_error = best_error;
+  return selected;
 }
 
-std::optional<PowerRune> Buff_Detector::detect_impl(cv::Mat & bgr_img, bool single_candidate)
+std::optional<BuffObservation> Buff_Detector::detect_impl(
+  cv::Mat & bgr_img, bool single_candidate,
+  std::chrono::steady_clock::time_point timestamp)
 {
   std::vector<YOLO11_BUFF::Object> results = single_candidate ? MODE_.get_onecandidatebox(bgr_img)
                                                               : MODE_.get_multicandidateboxes(bgr_img);
@@ -348,50 +566,62 @@ std::optional<PowerRune> Buff_Detector::detect_impl(cv::Mat & bgr_img, bool sing
     return std::nullopt;
   }
 
-  auto r_center = select_r_center(results);
+  auto r_center = select_r_center(results, timestamp);
   if (!r_center.has_value()) {
     handle_lose();
     return std::nullopt;
   }
 
-  auto candidates = build_candidates(results, *r_center);
-  auto locked_candidate = select_locked_candidate(candidates);
+  auto candidates = build_candidates(results, r_center->point);
+  for (auto & candidate : candidates) {
+    candidate.r_center = r_center->point;
+    candidate.center_source = r_center->source;
+    candidate.timestamp = timestamp;
+  }
+  auto locked_candidate = select_locked_candidate(candidates, timestamp);
   if (!locked_candidate.has_value()) {
     handle_lose();
     return std::nullopt;
   }
 
-  std::vector<FanBlade> fanblades{*locked_candidate};
-  PowerRune powerrune(fanblades, *r_center, last_powerrune_);
-  if (powerrune.is_unsolve()) {
-    handle_lose();
-    return std::nullopt;
+  tools::draw_point(bgr_img, r_center->point, {0, 0, 255}, 3);
+  if (locked_candidate->target_center_observed) {
+    tools::draw_point(bgr_img, locked_candidate->target_center, {255, 0, 255}, 3);
   }
-
-  tools::draw_point(bgr_img, *r_center, {0, 0, 255}, 3);
-  tools::draw_point(bgr_img, locked_candidate->center, {255, 0, 255}, 3);
+  if (locked_candidate->fan_center_observed) {
+    tools::draw_point(bgr_img, locked_candidate->fan_center, {0, 255, 0}, 3);
+  }
 
   status_ = TRACK;
   lose_ = 0;
-  std::optional<PowerRune> P;
-  P.emplace(powerrune);
-  last_powerrune_ = P;
-  return P;
+  return locked_candidate;
 }
 
-std::optional<PowerRune> Buff_Detector::detect_24(cv::Mat & bgr_img)
+std::optional<BuffObservation> Buff_Detector::detect_24(
+  cv::Mat & bgr_img, std::chrono::steady_clock::time_point timestamp)
 {
-  return detect_impl(bgr_img, false);
+  return detect_impl(bgr_img, false, timestamp);
 }
 
-std::optional<PowerRune> Buff_Detector::detect(cv::Mat & bgr_img)
+std::optional<BuffObservation> Buff_Detector::detect_24(cv::Mat & bgr_img)
 {
-  return detect_impl(bgr_img, false);
+  return detect_24(bgr_img, std::chrono::steady_clock::now());
 }
 
-std::optional<PowerRune> Buff_Detector::detect_debug(cv::Mat & bgr_img, cv::Point2f)
+std::optional<BuffObservation> Buff_Detector::detect(
+  cv::Mat & bgr_img, std::chrono::steady_clock::time_point timestamp)
 {
-  return detect_impl(bgr_img, false);
+  return detect_impl(bgr_img, false, timestamp);
+}
+
+std::optional<BuffObservation> Buff_Detector::detect(cv::Mat & bgr_img)
+{
+  return detect(bgr_img, std::chrono::steady_clock::now());
+}
+
+std::optional<BuffObservation> Buff_Detector::detect_debug(cv::Mat & bgr_img, cv::Point2f)
+{
+  return detect(bgr_img, std::chrono::steady_clock::now());
 }
 
 }  // namespace auto_buff

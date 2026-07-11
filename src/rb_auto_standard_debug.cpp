@@ -199,9 +199,8 @@ int main(int argc, char * argv[])
       auto gs = gimbal.state();
       buff_solver.set_R_gimbal2world(q);
 
-      auto power_runes = buff_detector.detect_24(img);
-
-      buff_solver.solve(power_runes);
+      auto buff_observation = buff_detector.detect_24(img, t);
+      auto power_runes = buff_solver.solve(buff_observation);
 
       auto_aim::Plan buff_plan;
       auto_buff::Target* active_target = nullptr;
@@ -241,7 +240,7 @@ int main(int argc, char * argv[])
         // 2. 当前帧target更新后buff位置 (绿色)
         auto Rxyz_in_world_now = active_target->point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
         auto image_points_now =
-          buff_solver.reproject_buff(Rxyz_in_world_now, active_target->ekf_x()[4], active_target->ekf_x()[5]);
+          buff_solver.reproject_buff(Rxyz_in_world_now, active_target->rotation_buff2world());
         tools::draw_points(
           img, std::vector<cv::Point2f>(image_points_now.begin(), image_points_now.begin() + 4), {0, 255, 0});
         tools::draw_points(
@@ -251,7 +250,7 @@ int main(int argc, char * argv[])
         if (target_copy_ptr) {
           auto Rxyz_in_world_pre = active_target->point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
           auto image_points_pre =
-            buff_solver.reproject_buff(Rxyz_in_world_pre, target_copy_ptr->ekf_x()[4], target_copy_ptr->ekf_x()[5]);
+            buff_solver.reproject_buff(Rxyz_in_world_pre, target_copy_ptr->rotation_buff2world());
           tools::draw_points(
             img, std::vector<cv::Point2f>(image_points_pre.begin(), image_points_pre.begin() + 4), {255, 0, 0});
           tools::draw_points(
