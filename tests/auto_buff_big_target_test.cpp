@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <fmt/core.h>
 
@@ -20,6 +21,9 @@ auto_buff::PowerRune make_observation(
   p.track_id = track_id;
   p.pose_quality = auto_buff::BuffPoseQuality::FULL_8_POINT;
   p.measurement_noise_scale = 1.0;
+  p.reprojection_error = 1.0;
+  p.prediction_error = 0.0;
+  p.center_source = auto_buff::RuneCenterSource::DETECTED;
   p.xyz_in_world = center;
   p.ypd_in_world = tools::xyz2ypd(center);
   p.blade_xyz_in_world = center + auto_buff::RUNE_RADIUS_M * radial;
@@ -75,6 +79,63 @@ int main()
   const Eigen::Vector3d filtered_center =
     tools::ypd2xyz(Eigen::Vector3d(target.ekf_x()[0], target.ekf_x()[2], target.ekf_x()[3]));
   ok &= near((filtered_center - center).norm(), 0.0, 0.02, "center after track switch");
+
+  const Eigen::Vector3d stable_plane = target.rotation_buff2world().col(0).normalized();
+  phase += speed * dt;
+  auto partial = make_observation(phase, 2, center, plane_normal);
+  partial.pose_quality = auto_buff::BuffPoseQuality::PARTIAL_5_POINT;
+  partial.measurement_noise_scale = 2.0;
+  partial.plane_normal_in_world =
+    Eigen::AngleAxisd(20.0 / 57.3, Eigen::Vector3d::UnitZ()) * plane_normal;
+  auto partial_timestamp = start + std::chrono::milliseconds(520);
+  target.get_target(partial, partial_timestamp);
+  const Eigen::Vector3d partial_plane = target.rotation_buff2world().col(0).normalized();
+  ok &= near(
+    std::acos(std::clamp(std::abs(stable_plane.dot(partial_plane)), 0.0, 1.0)), 0.0,
+    0.5 / 57.3, "partial plane freeze");
+
+  auto_buff::BigTarget sine_target;
+  constexpr double sine_A = 0.90;
+  constexpr double sine_omega = 1.94;
+  constexpr double sine_phi = 0.35;
+  constexpr double sine_C = 1.19;
+  double sine_phase = 0.2;
+  constexpr int sine_samples = 280;
+  for (int i = 0; i < sine_samples; ++i) {
+    const double sample_time = i * dt;
+    const double sample_speed =
+      sine_A * std::sin(sine_omega * sample_time + sine_phi) + sine_C;
+    sine_phase += sample_speed * dt;
+    double measured_phase = sine_phase + 0.002 * std::sin(17.0 * sample_time);
+    if (i == 120) measured_phase += 0.04;
+    auto observation = make_observation(measured_phase, 10, center, plane_normal);
+    auto timestamp = start + std::chrono::microseconds(static_cast<int64_t>(sample_time * 1e6));
+    sine_target.get_target(observation, timestamp);
+  }
+
+  ok &= !sine_target.is_unsolve();
+  ok &= near(sine_target.ekf_x()[7], sine_A, 0.20, "fitted amplitude");
+  ok &= near(sine_target.ekf_x()[8], sine_omega, 0.04, "fitted omega");
+
+  auto sine_predicted = sine_target.clone();
+  sine_predicted->predict(0.12);
+  const double predicted_delta = sine_predicted->ekf_x()[5] - sine_target.ekf_x()[5];
+  const double last_sample_time = (sine_samples - 1) * dt;
+  const double future_time = last_sample_time + 0.12;
+  const double expected_delta =
+    -sine_A / sine_omega * std::cos(sine_omega * future_time + sine_phi) +
+    sine_A / sine_omega * std::cos(sine_omega * last_sample_time + sine_phi) + sine_C * 0.12;
+  ok &= near(predicted_delta, expected_delta, 0.08, "sine prediction");
+  ok &= predicted_delta > 0.0;
+
+  sine_phase += auto_buff::RUNE_SLOT_ANGLE;
+  auto sine_switched = make_observation(sine_phase, 11, center, plane_normal);
+  sine_switched.slot_offset = 1;
+  auto sine_switch_timestamp = start + std::chrono::milliseconds(sine_samples * 10);
+  sine_target.get_target(sine_switched, sine_switch_timestamp);
+  auto switched_prediction = sine_target.clone();
+  switched_prediction->predict(0.12);
+  ok &= switched_prediction->ekf_x()[5] > sine_target.ekf_x()[5];
 
   if (!ok) return 1;
   fmt::print("auto_buff_big_target_test passed\n");

@@ -157,18 +157,36 @@ public:
   std::unique_ptr<Target> clone() const override { return std::make_unique<BigTarget>(*this); }
 
 private:
+  struct PhaseSample
+  {
+    double time = 0.0;
+    double phase = 0.0;
+    double weight = 1.0;
+  };
+
   void init(double nowtime, const PowerRune & p) override;
 
   void update(double nowtime, const PowerRune & p) override;
+
+  void clear_speed_samples(bool clear_fitter);
+
+  std::optional<double> estimate_window_speed() const;
+
+  void add_speed_sample(double nowtime, double observed_phase, const PowerRune & p);
 
   tools::RansacSineFitter spd_fitter_;
   PhaseDirectionTracker phase_direction_;
 
   double fit_spd_ = 1.1775;
-  bool has_last_speed_observation_ = false;
-  double last_speed_observation_phase_ = 0.0;
-  double last_speed_observation_time_ = 0.0;
-  int speed_model_track_id_ = -1;
+  double fit_blend_ = 0.0;
+  double last_accepted_speed_time_ = 0.0;
+  double last_fitter_sample_time_ = -1.0;
+  double pause_speed_samples_until_ = 0.0;
+  int speed_model_direction_ = 0;
+  bool has_speed_center_ = false;
+  Eigen::Vector3d last_speed_center_{0.0, 0.0, 0.0};
+  std::deque<PhaseSample> phase_samples_;
+  std::deque<double> accepted_speed_samples_;
 };
 
 }  // namespace auto_buff

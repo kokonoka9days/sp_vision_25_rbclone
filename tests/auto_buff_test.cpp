@@ -520,10 +520,11 @@ int main(int argc, char * argv[])
   }
   fmt::print(
     "summary frames={} obs(full/target/fan)={}/{}/{} pose(8/5/4)={}/{}/{} "
-    "pnp_fail={} gate_episode={} track_switch={}/{} ekf_reset={} solved={} blind={} "
+    "pnp_fail={} temporal_reject={} gate_episode={} track_switch={}/{} ekf_reset={} solved={} blind={} "
     "longest_solved={}\n",
     processed_frames, observation_counts[0], observation_counts[1], observation_counts[2],
     pose_counts[0], pose_counts[1], pose_counts[2], pnp_failure_count,
+    detector.temporal_reject_count(),
     detector.gate_failure_count(), track_switch_count, detector.confirmed_switch_count(),
     target->reset_count(), solved_frames, blind_frames, longest_solved_streak);
   cv::destroyAllWindows();

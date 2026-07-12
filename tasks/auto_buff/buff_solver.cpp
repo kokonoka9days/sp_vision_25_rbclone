@@ -256,7 +256,10 @@ std::optional<PowerRune> Solver::solve(const BuffObservation & observation) cons
 
   PowerRune p(observation);
   p.pose_quality = pose_quality;
-  p.measurement_noise_scale = noise_scale;
+  const double geometry_noise_scale =
+    std::clamp(1.0 + 2.0 * (1.0 - observation.quad_quality), 1.0, 3.0);
+  p.measurement_noise_scale =
+    noise_scale * observation.keypoint_noise_scale * geometry_noise_scale;
   p.reprojection_error = best_error;
 
   Eigen::Vector3d t_target2camera;

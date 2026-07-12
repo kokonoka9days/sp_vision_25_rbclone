@@ -35,6 +35,26 @@ double unwrap_near(double angle, double reference)
 {
   return angle + std::round((reference - angle) / CV_2PI) * CV_2PI;
 }
+
+double phase_noise_multiplier(const PowerRune & p)
+{
+  if (p.pose_quality == BuffPoseQuality::PARTIAL_4_POINT) return 10.0 / 6.0;
+  if (p.pose_quality == BuffPoseQuality::PARTIAL_5_POINT) return 2.0;
+  return 1.0;
+}
+
+double median(std::vector<double> values)
+{
+  if (values.empty()) return 0.0;
+  const size_t middle = values.size() / 2;
+  std::nth_element(values.begin(), values.begin() + middle, values.end());
+  double result = values[middle];
+  if (values.size() % 2 == 0) {
+    std::nth_element(values.begin(), values.begin() + middle - 1, values.end());
+    result = 0.5 * (result + values[middle - 1]);
+  }
+  return result;
+}
 }  // namespace
 
 void PhaseDirectionTracker::rebase(double phase, bool preserve_direction)
@@ -260,14 +280,16 @@ double Target::update_plane_basis(const PowerRune & p, bool initialize)
                       std::sin(previous_phase) * phase_quarter_axis_;
   }
 
-  if (!has_plane_basis_ || initialize || plane_normal_weight_ <= 0.0) {
+  if (!has_plane_basis_ || initialize) {
     plane_normal_sum_ = normal;
     plane_normal_weight_ = 1.0;
+    plane_normal_ = normal;
   } else {
-    const double weight = p.pose_quality == BuffPoseQuality::FULL_8_POINT ? 1.0 : 0.2;
-    plane_normal_sum_ += weight * normal;
-    plane_normal_weight_ += weight;
+    if (p.pose_quality != BuffPoseQuality::FULL_8_POINT) return 0.0;
+    plane_normal_sum_ += normal;
+    plane_normal_weight_ += 1.0;
     normal = plane_normal_sum_.normalized();
+    plane_normal_ = normal;
   }
 
   Eigen::Vector3d zero_axis = Eigen::Vector3d::UnitZ() - normal.z() * normal;
@@ -277,7 +299,6 @@ double Target::update_plane_basis(const PowerRune & p, bool initialize)
   zero_axis.normalize();
   Eigen::Vector3d quarter_axis = normal.cross(zero_axis).normalized();
 
-  plane_normal_ = normal;
   phase_zero_axis_ = zero_axis;
   phase_quarter_axis_ = quarter_axis;
   has_plane_basis_ = true;
@@ -361,7 +382,11 @@ void SmallTarget::get_target(
     return;
   }
 
-  const auto & obs = p.value();
+  auto obs = p.value();
+  if (first_in_ && obs.pose_quality != BuffPoseQuality::FULL_8_POINT) {
+    unsolvable_ = true;
+    return;
+  }
 
   // init
   if (first_in_) {
@@ -549,7 +574,7 @@ void SmallTarget::update(double nowtime, const PowerRune & p)
   const double basis_phase_shift = update_plane_basis(p, false);
   phase_direction_.shift_reference(basis_phase_shift);
   double observed_phase = measure_phase(p, ekf_.x[5]);
-  phase_direction_.update(observed_phase);
+  if (p.pose_quality == BuffPoseQuality::FULL_8_POINT) phase_direction_.update(observed_phase);
 
   ekf_.x[6] = SMALL_W * small_prediction_roll_direction();
 
@@ -558,35 +583,42 @@ void SmallTarget::update(double nowtime, const PowerRune & p)
   observed_phase = unwrap_near(observed_phase, ekf_.x[5]);
   const double plane_yaw = std::atan2(plane_normal_.y(), plane_normal_.x());
 
-  // clang-format off
-  Eigen::MatrixXd H{
-    {1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}, // R_yaw
-    {0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0}, // R_pitch
-    {0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0}, // R_dis
-    {0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0}, // plane_yaw
-    {0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0}  // continuous phase
-  };
-
-  Eigen::MatrixXd R{
-    {0.0001,    0.0,  0.0, 0.0,    0.0}, // R_yaw
-    {   0.0, 0.0001,  0.0, 0.0,    0.0}, // R_pitch
-    {   0.0,    0.0, 0.04, 0.0,    0.0}, // R_dis
-    {   0.0,    0.0,  0.0, 0.01,   0.0}, // plane_yaw
-    {   0.0,    0.0,  0.0, 0.0, 0.0001}  // continuous phase
-  };
-  R *= p.measurement_noise_scale;
-  // clang-format on
-
   auto z_subtract = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
     Eigen::VectorXd c = a - b;
     c[0] = tools::limit_rad(c[0]);
     c[1] = tools::limit_rad(c[1]);
-    c[3] = tools::limit_rad(c[3]);
+    if (c.size() == 5) c[3] = tools::limit_rad(c[3]);
+    c[c.size() - 1] = tools::limit_rad(c[c.size() - 1]);
     return c;
   };
 
-  Eigen::VectorXd z{{R_ypd[0], R_ypd[1], R_ypd[2], plane_yaw, observed_phase}};
-  ekf_.update(z, H, R, z_subtract);
+  const bool use_plane_measurement = p.pose_quality == BuffPoseQuality::FULL_8_POINT;
+  double center_scale = p.measurement_noise_scale;
+  const double phase_scale = center_scale * phase_noise_multiplier(p);
+  if (use_plane_measurement) {
+    Eigen::MatrixXd H{
+      {1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+      {0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0},
+      {0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0},
+      {0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0},
+      {0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0}};
+    Eigen::MatrixXd R = Eigen::MatrixXd::Zero(5, 5);
+    R.diagonal() << 0.0001 * center_scale, 0.0001 * center_scale, 0.04 * center_scale,
+      0.01 * center_scale, 0.0001 * phase_scale;
+    Eigen::VectorXd z{{R_ypd[0], R_ypd[1], R_ypd[2], plane_yaw, observed_phase}};
+    ekf_.update(z, H, R, z_subtract);
+  } else {
+    Eigen::MatrixXd H{
+      {1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+      {0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0},
+      {0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0},
+      {0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0}};
+    Eigen::MatrixXd R = Eigen::MatrixXd::Zero(4, 4);
+    R.diagonal() << 0.0001 * center_scale, 0.0001 * center_scale, 0.04 * center_scale,
+      0.0001 * phase_scale;
+    Eigen::VectorXd z{{R_ypd[0], R_ypd[1], R_ypd[2], observed_phase}};
+    ekf_.update(z, H, R, z_subtract);
+  }
 
   ekf_.x[6] = SMALL_W * small_prediction_roll_direction();
 
@@ -607,7 +639,117 @@ bool SmallTarget::has_stable_small_prediction_direction() const
 
 /// BigTarget
 
-BigTarget::BigTarget() : Target(), spd_fitter_(100, 0.5, 1.884, 2.000) {}
+BigTarget::BigTarget() : Target(), spd_fitter_(100, 0.25, 1.884, 2.000) {}
+
+void BigTarget::clear_speed_samples(bool clear_fitter)
+{
+  phase_samples_.clear();
+  last_fitter_sample_time_ = -1.0;
+  if (!clear_fitter) return;
+
+  accepted_speed_samples_.clear();
+  spd_fitter_.clear();
+  fit_spd_ = 1.1775;
+  fit_blend_ = 0.0;
+  last_accepted_speed_time_ = 0.0;
+}
+
+std::optional<double> BigTarget::estimate_window_speed() const
+{
+  if (phase_samples_.size() < 3) return std::nullopt;
+  if (phase_samples_.back().time - phase_samples_.front().time < BUFF_BIG_SPEED_MIN_SPAN_S) {
+    return std::nullopt;
+  }
+
+  double weight_sum = 0.0;
+  double mean_time = 0.0;
+  double mean_phase = 0.0;
+  for (const auto & sample : phase_samples_) {
+    weight_sum += sample.weight;
+    mean_time += sample.weight * sample.time;
+    mean_phase += sample.weight * sample.phase;
+  }
+  if (weight_sum < 1e-9) return std::nullopt;
+  mean_time /= weight_sum;
+  mean_phase /= weight_sum;
+
+  double numerator = 0.0;
+  double denominator = 0.0;
+  for (const auto & sample : phase_samples_) {
+    const double centered_time = sample.time - mean_time;
+    numerator += sample.weight * centered_time * (sample.phase - mean_phase);
+    denominator += sample.weight * centered_time * centered_time;
+  }
+  if (denominator < 1e-9) return std::nullopt;
+  return numerator / denominator;
+}
+
+void BigTarget::add_speed_sample(double nowtime, double observed_phase, const PowerRune & p)
+{
+  const bool valid_quality =
+    p.pose_quality == BuffPoseQuality::FULL_8_POINT &&
+    p.center_source == RuneCenterSource::DETECTED && p.reprojection_error <= 4.5 &&
+    p.prediction_error <= 8.0 / 57.3 && nowtime >= pause_speed_samples_until_;
+  if (!valid_quality) {
+    phase_samples_.clear();
+    return;
+  }
+
+  const int direction = phase_direction_.direction();
+  if (speed_model_direction_ != 0 && direction != 0 && speed_model_direction_ != direction) {
+    clear_speed_samples(true);
+  }
+  if (direction != 0) speed_model_direction_ = direction;
+
+  if (has_speed_center_ && (p.xyz_in_world - last_speed_center_).norm() > 0.15) {
+    clear_speed_samples(true);
+  }
+  last_speed_center_ = p.xyz_in_world;
+  has_speed_center_ = true;
+
+  if (!phase_samples_.empty() && nowtime - phase_samples_.back().time > 0.3) {
+    clear_speed_samples(true);
+  }
+
+  phase_samples_.push_back(
+    {nowtime, observed_phase, 1.0 / std::max(1.0, p.measurement_noise_scale)});
+  while (static_cast<int>(phase_samples_.size()) > BUFF_BIG_SPEED_PHASE_WINDOW) {
+    phase_samples_.pop_front();
+  }
+
+  const auto estimated_signed_speed = estimate_window_speed();
+  if (!estimated_signed_speed.has_value()) return;
+  if (direction != 0 && estimated_signed_speed.value() * direction <= 0.0) return;
+
+  const double speed = std::abs(estimated_signed_speed.value());
+  if (speed < 0.35 || speed > 2.25) return;
+
+  if (accepted_speed_samples_.size() >= 3) {
+    const std::vector<double> samples(accepted_speed_samples_.begin(), accepted_speed_samples_.end());
+    const double sample_median = median(samples);
+    std::vector<double> deviations;
+    deviations.reserve(samples.size());
+    for (const double value : samples) deviations.push_back(std::abs(value - sample_median));
+    const double mad = median(std::move(deviations));
+    const double limit = std::max(0.25, 3.0 * 1.4826 * mad);
+    if (std::abs(speed - sample_median) > limit) return;
+  }
+
+  const double speed_dt =
+    last_accepted_speed_time_ > 0.0 ? nowtime - last_accepted_speed_time_ : 0.12;
+  const double alpha = 1.0 - std::exp(-std::max(speed_dt, 0.0) / 0.12);
+  fit_spd_ = std::clamp((1.0 - alpha) * fit_spd_ + alpha * speed, 0.35, 2.25);
+  last_accepted_speed_time_ = nowtime;
+
+  accepted_speed_samples_.push_back(speed);
+  while (accepted_speed_samples_.size() > 7) accepted_speed_samples_.pop_front();
+
+  if (last_fitter_sample_time_ < 0.0 || nowtime - last_fitter_sample_time_ >= 0.015) {
+    spd_fitter_.add_data(nowtime, speed);
+    spd_fitter_.fit();
+    last_fitter_sample_time_ = nowtime;
+  }
+}
 
 // void BigTarget::get_target(
 //   const std::optional<PowerRune> & p, std::chrono::steady_clock::time_point & timestamp)
@@ -668,13 +810,16 @@ void BigTarget::get_target(
     return;
   }
 
-  const auto & obs = p.value();
+  auto obs = p.value();
+  if (first_in_ && obs.pose_quality != BuffPoseQuality::FULL_8_POINT) {
+    unsolvable_ = true;
+    return;
+  }
   if (first_in_) {
     unsolvable_ = true;
     init(time_gap, obs);
     first_in_ = false;
     last_track_id_ = obs.track_id;
-    speed_model_track_id_ = obs.track_id;
     record_measurement(obs, timestamp);
     return;
   }
@@ -689,17 +834,18 @@ void BigTarget::get_target(
     const int old_track_id = last_track_id_;
     update_plane_basis(obs, false);
     const double switched_phase = measure_phase(obs, ekf_.x[5]);
+    const bool legal_slot_switch =
+      obs.slot_offset != 0 && std::abs(obs.slot_offset) <= 2 &&
+      obs.slot_residual <= 12.0 / 57.3;
     ekf_.x[5] = switched_phase;
     ekf_.P.row(5).setZero();
     ekf_.P.col(5).setZero();
     ekf_.P(5, 5) = 0.01;
     phase_direction_.rebase(switched_phase, true);
-    spd_fitter_.clear();
-    has_last_speed_observation_ = false;
-    fit_spd_ = 1.1775;
+    clear_speed_samples(!legal_slot_switch);
+    pause_speed_samples_until_ = time_gap + 0.1;
     lasttime_ = time_gap;
     last_track_id_ = obs.track_id;
-    speed_model_track_id_ = obs.track_id;
     unsolvable_ = !phase_direction_.ready();
     record_measurement(obs, timestamp);
     tools::logger()->debug(
@@ -726,18 +872,21 @@ void BigTarget::get_target(
 void BigTarget::predict(double dt)
 {
   dt = std::max(0.0, dt);
-  const bool fit_ready = spd_fitter_.ready(60, 0.5, 0.70);
+  const bool fit_ready = spd_fitter_.ready(
+    60, BUFF_BIG_FIT_MIN_SPAN_S, BUFF_BIG_FIT_MIN_INLIER_RATIO, BUFF_BIG_FIT_MAX_RMS);
   const auto fit = spd_fitter_.best_result_;
   const double t = lasttime_ + dt;
   const int direction = phase_direction_.direction();
   double speed_magnitude = std::clamp(fit_spd_, 0.0, 2.1);
   double phase_delta = speed_magnitude * dt;
   if (fit_ready && fit.omega > 1e-6) {
-    speed_magnitude = std::clamp(
+    const double fitted_speed = std::clamp(
       spd_fitter_.sine_function(t, fit.A, fit.omega, fit.phi, fit.C), 0.0, 2.1);
-    phase_delta =
+    const double fitted_phase_delta =
       -fit.A / fit.omega * std::cos(fit.omega * t + fit.phi) +
       fit.A / fit.omega * std::cos(fit.omega * lasttime_ + fit.phi) + fit.C * dt;
+    speed_magnitude = (1.0 - fit_blend_) * speed_magnitude + fit_blend_ * fitted_speed;
+    phase_delta = (1.0 - fit_blend_) * phase_delta + fit_blend_ * fitted_phase_delta;
   }
 
   A_.setIdentity(10, 10);
@@ -776,8 +925,13 @@ void BigTarget::init(double nowtime, const PowerRune & p)
   lasttime_ = nowtime;
   unsolvable_ = true;
   fit_spd_ = 1.1775;
-  has_last_speed_observation_ = false;
-  spd_fitter_.clear();
+  fit_blend_ = 0.0;
+  last_accepted_speed_time_ = 0.0;
+  last_fitter_sample_time_ = -1.0;
+  pause_speed_samples_until_ = 0.0;
+  speed_model_direction_ = 0;
+  has_speed_center_ = false;
+  clear_speed_samples(true);
   update_plane_basis(p, !has_plane_basis_);
   const double phase_reference = ekf_.x.size() >= 6 ? ekf_.x[5] : 0.0;
   const double observed_phase = measure_phase(p, phase_reference);
@@ -821,7 +975,6 @@ void BigTarget::init(double nowtime, const PowerRune & p)
   // 创建扩展卡尔曼滤波器对象
   ekf_ = tools::ExtendedKalmanFilter(x0_, P0_, x_add);
   phase_direction_.rebase(observed_phase, false);
-  speed_model_track_id_ = p.track_id;
 }
 
 void BigTarget::update(double nowtime, const PowerRune & p)
@@ -839,75 +992,67 @@ void BigTarget::update(double nowtime, const PowerRune & p)
   const Eigen::VectorXd & R_ypd = p.ypd_in_world;  // R
   const double basis_phase_shift = update_plane_basis(p, false);
   phase_direction_.shift_reference(basis_phase_shift);
-  if (has_last_speed_observation_) last_speed_observation_phase_ += basis_phase_shift;
+  for (auto & sample : phase_samples_) sample.phase += basis_phase_shift;
   double observed_phase = measure_phase(p, ekf_.x[5]);
-  phase_direction_.update(observed_phase);
-
-  if (speed_model_track_id_ != p.track_id) {
-    spd_fitter_.clear();
-    has_last_speed_observation_ = false;
-    speed_model_track_id_ = p.track_id;
-  }
-
-  if (has_last_speed_observation_) {
-    const double observation_dt = nowtime - last_speed_observation_time_;
-    if (observation_dt > 1e-4 && observation_dt < 0.1) {
-      const double signed_speed =
-        (observed_phase - last_speed_observation_phase_) / observation_dt;
-      const double speed = std::abs(signed_speed);
-      if (speed <= 2.5) {
-        fit_spd_ = 0.85 * fit_spd_ + 0.15 * speed;
-        spd_fitter_.add_data(nowtime, speed);
-        spd_fitter_.fit();
-      }
-    }
-  }
-  has_last_speed_observation_ = true;
-  last_speed_observation_phase_ = observed_phase;
-  last_speed_observation_time_ = nowtime;
+  if (p.pose_quality == BuffPoseQuality::FULL_8_POINT) phase_direction_.update(observed_phase);
+  add_speed_sample(nowtime, observed_phase, p);
 
   const double state_dt = nowtime - lasttime_;
+  const bool fit_ready = spd_fitter_.ready(
+    60, BUFF_BIG_FIT_MIN_SPAN_S, BUFF_BIG_FIT_MIN_INLIER_RATIO, BUFF_BIG_FIT_MAX_RMS);
+  if (fit_ready) {
+    fit_blend_ = std::min(
+      1.0, fit_blend_ + std::max(state_dt, 0.0) / std::max(BUFF_BIG_FIT_BLEND_S, 1e-3));
+  } else {
+    fit_blend_ = 0.0;
+  }
   predict(state_dt);
   observed_phase = unwrap_near(observed_phase, ekf_.x[5]);
   const double plane_yaw = std::atan2(plane_normal_.y(), plane_normal_.x());
-
-  Eigen::MatrixXd H{
-    {1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}, // R_yaw
-    {0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}, // R_pitch
-    {0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}, // R_dis
-    {0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0}, // plane_yaw
-    {0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0}  // phase
-  };
-
-  Eigen::MatrixXd R{
-    {0.0001,    0.0,  0.0, 0.0,    0.0},
-    {   0.0, 0.0001,  0.0, 0.0,    0.0},
-    {   0.0,    0.0, 0.04, 0.0,    0.0},
-    {   0.0,    0.0,  0.0, 0.01,   0.0},
-    {   0.0,    0.0,  0.0, 0.0, 0.0004}
-  };
-  R *= p.measurement_noise_scale;
 
   auto z_subtract = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
     Eigen::VectorXd c = a - b;
     c[0] = tools::limit_rad(c[0]);
     c[1] = tools::limit_rad(c[1]);
-    c[3] = tools::limit_rad(c[3]);
+    if (c.size() == 5) c[3] = tools::limit_rad(c[3]);
+    c[c.size() - 1] = tools::limit_rad(c[c.size() - 1]);
     return c;
   };
 
-  Eigen::VectorXd z{{R_ypd[0], R_ypd[1], R_ypd[2], plane_yaw, observed_phase}};
-  ekf_.update(z, H, R, z_subtract);
+  const bool use_plane_measurement = p.pose_quality == BuffPoseQuality::FULL_8_POINT;
+  double center_scale = p.measurement_noise_scale;
+  const double phase_scale = center_scale * phase_noise_multiplier(p);
+  if (use_plane_measurement) {
+    Eigen::MatrixXd H{
+      {1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+      {0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+      {0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+      {0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+      {0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0}};
+    Eigen::MatrixXd R = Eigen::MatrixXd::Zero(5, 5);
+    R.diagonal() << 0.0001 * center_scale, 0.0001 * center_scale, 0.04 * center_scale,
+      0.01 * center_scale, 0.0004 * phase_scale;
+    Eigen::VectorXd z{{R_ypd[0], R_ypd[1], R_ypd[2], plane_yaw, observed_phase}};
+    ekf_.update(z, H, R, z_subtract);
+  } else {
+    Eigen::MatrixXd H{
+      {1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+      {0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+      {0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+      {0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0}};
+    Eigen::MatrixXd R = Eigen::MatrixXd::Zero(4, 4);
+    R.diagonal() << 0.0001 * center_scale, 0.0001 * center_scale, 0.04 * center_scale,
+      0.0004 * phase_scale;
+    Eigen::VectorXd z{{R_ypd[0], R_ypd[1], R_ypd[2], observed_phase}};
+    ekf_.update(z, H, R, z_subtract);
+  }
 
-  if (spd_fitter_.ready(60, 0.5, 0.70)) {
+  if (fit_ready) {
     const auto & fit = spd_fitter_.best_result_;
-    fit_spd_ = std::clamp(
-      spd_fitter_.sine_function(nowtime, fit.A, fit.omega, fit.phi, fit.C), 0.0, 2.1);
     ekf_.x[7] = fit.A;
     ekf_.x[8] = fit.omega;
     ekf_.x[9] = tools::limit_rad(fit.phi);
   }
-  ekf_.x[6] = phase_direction_.direction() * fit_spd_;
   spd = ekf_.x[6];
 
   lasttime_ = nowtime;

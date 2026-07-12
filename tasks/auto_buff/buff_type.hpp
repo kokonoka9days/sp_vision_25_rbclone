@@ -29,6 +29,12 @@ enum class BuffPoseQuality { FULL_8_POINT, PARTIAL_5_POINT, PARTIAL_4_POINT };
 
 inline double BUFF_BLIND_TIMEOUT_S = 0.080;
 inline double BUFF_FIRE_FULL_OBSERVATION_MAX_AGE_S = 0.030;
+inline int BUFF_BIG_SPEED_PHASE_WINDOW = 7;
+inline double BUFF_BIG_SPEED_MIN_SPAN_S = 0.030;
+inline double BUFF_BIG_FIT_MIN_SPAN_S = 1.0;
+inline double BUFF_BIG_FIT_MIN_INLIER_RATIO = 0.75;
+inline double BUFF_BIG_FIT_MAX_RMS = 0.18;
+inline double BUFF_BIG_FIT_BLEND_S = 0.30;
 
 struct BuffObservation
 {
@@ -37,6 +43,8 @@ struct BuffObservation
   cv::Point2f r_center{0.0f, 0.0f};
   std::vector<cv::Point2f> target_points;
   std::vector<cv::Point2f> fan_points;
+  std::vector<cv::Point2f> raw_target_points;
+  std::vector<cv::Point2f> raw_fan_points;
   cv::Point2f target_center{0.0f, 0.0f};
   cv::Point2f fan_center{0.0f, 0.0f};
   bool target_center_observed = false;
@@ -45,7 +53,14 @@ struct BuffObservation
   double pair_angle_error = 0.0;
   double pair_distance_ratio = 0.0;
   double prediction_error = 0.0;
+  double keypoint_temporal_residual = 0.0;
+  double quad_quality = 1.0;
+  double association_cost = 0.0;
+  double slot_residual = 0.0;
+  double keypoint_noise_scale = 1.0;
   float confidence = 0.0f;
+  float min_keypoint_confidence = 1.0f;
+  int slot_offset = 0;
   int track_id = -1;
   std::chrono::steady_clock::time_point timestamp{};
 
@@ -89,7 +104,10 @@ public:
   int light_num;
   int target_slot_id = -1;
   int track_id = -1;
+  int slot_offset = 0;
   double target_angle = 0.0;
+  double slot_residual = 0.0;
+  RuneCenterSource center_source = RuneCenterSource::DETECTED;
   BuffObservationType observation_type = BuffObservationType::FULL;
   BuffPoseQuality pose_quality = BuffPoseQuality::FULL_8_POINT;
   double measurement_noise_scale = 1.0;

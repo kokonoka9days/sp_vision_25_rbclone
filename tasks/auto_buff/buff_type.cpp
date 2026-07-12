@@ -80,7 +80,10 @@ PowerRune::PowerRune(const BuffObservation & observation)
 : r_center(observation.r_center),
   light_num(1),
   track_id(observation.track_id),
+  slot_offset(observation.slot_offset),
   target_angle(observation.angle),
+  slot_residual(observation.slot_residual),
+  center_source(observation.center_source),
   observation_type(observation.type),
   prediction_error(observation.prediction_error)
 {

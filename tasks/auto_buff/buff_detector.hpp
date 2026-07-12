@@ -33,6 +33,7 @@ public:
   int gate_failure_count() const { return gate_failure_count_; }
 
   int confirmed_switch_count() const { return confirmed_switch_count_; }
+  int temporal_reject_count() const { return temporal_reject_count_; }
 
 private:
   void handle_img(const cv::Mat & bgr_img, cv::Mat & dilated_img);
@@ -62,12 +63,20 @@ private:
     const std::vector<BuffObservation> & candidates,
     std::chrono::steady_clock::time_point timestamp);
 
+  std::optional<BuffObservation> stabilize_candidate(BuffObservation candidate);
+
+  void remember_temporal_candidate(const BuffObservation & candidate);
+
+  void reset_pending_switch();
+
   YOLO11_BUFF MODE_;
   Track_status status_;
   int lose_;  // 丢失的次数
   double lastlen_;
 
   float keypoint_threshold_ = 0.3f;
+  float hard_keypoint_threshold_ = 0.15f;
+  double temporal_residual_gate_px_ = 10.0;
   int center_lost_max_ = 6;
 
   double pair_angle_gate_rad_ = 15.0 / 57.3;
@@ -79,6 +88,13 @@ private:
   double blind_timeout_s_ = 0.080;
   double track_reset_timeout_s_ = 0.500;
   int switch_confirm_frames_ = 5;
+  int same_slot_confirm_frames_ = 3;
+  int adjacent_switch_confirm_frames_ = 8;
+  double adjacent_switch_delay_s_ = 0.180;
+  double slot_tolerance_rad_ = 12.0 / 57.3;
+  double switch_pair_angle_gate_rad_ = 10.0 / 57.3;
+  double switch_pair_ratio_min_ = 0.38;
+  double switch_pair_ratio_max_ = 0.64;
 
   bool has_last_r_center_ = false;
   cv::Point2f last_r_center_{0.0f, 0.0f};
@@ -95,11 +111,20 @@ private:
   double pending_switch_angle_ = 0.0;
   std::chrono::steady_clock::time_point pending_switch_time_{};
   int switch_confirm_count_ = 0;
+  int pending_slot_offset_ = 0;
   std::chrono::steady_clock::time_point last_locked_time_{};
   std::chrono::steady_clock::time_point last_seen_time_{};
   bool gate_episode_active_ = false;
   int gate_failure_count_ = 0;
   int confirmed_switch_count_ = 0;
+  int temporal_reject_count_ = 0;
+
+  bool has_temporal_candidate_ = false;
+  int temporal_track_id_ = -1;
+  double temporal_angle_ = 0.0;
+  cv::Point2f temporal_r_center_{0.0f, 0.0f};
+  std::vector<cv::Point2f> temporal_target_points_;
+  std::vector<cv::Point2f> temporal_fan_points_;
 };
 }  // namespace auto_buff
 #endif  // DETECTOR_HPP
