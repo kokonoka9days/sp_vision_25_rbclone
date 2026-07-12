@@ -83,7 +83,7 @@ int main(int argc, char * argv[])
     // auto armors = traditional.detect(img, frame_count);
 
     auto tracker_start = std::chrono::steady_clock::now();
-    auto targets = tracker.track(armors, timestamp);
+    auto targets = tracker.test_track(armors, timestamp);
 
     auto aimer_start = std::chrono::steady_clock::now();
     auto command = aimer.aim(targets, timestamp, 27, false);
