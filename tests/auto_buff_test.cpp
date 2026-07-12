@@ -240,7 +240,6 @@ int main(int argc, char * argv[])
 
   io::Command last_command;
   double last_t = -1;
-  int last_roll_img_dir = 0;
   std::array<int, 3> observation_counts{0, 0, 0};
   std::array<int, 3> pose_counts{0, 0, 0};
   int pnp_failure_count = 0;
@@ -321,10 +320,6 @@ int main(int argc, char * argv[])
     }
     timing.target_ms = elapsed_ms(step_start, Clock::now());
 
-    if (power_runes.has_value() && power_runes->positive_roll_image_direction != 0) {
-      last_roll_img_dir = power_runes->positive_roll_image_direction;
-    }
-
     step_start = Clock::now();
     auto aim_target_copy = target->clone();
 
@@ -346,15 +341,11 @@ int main(int argc, char * argv[])
       data["buff_R_yaw"] = p.ypd_in_world[0];
       data["buff_R_pitch"] = p.ypd_in_world[1];
       data["buff_R_dis"] = p.ypd_in_world[2];
-      data["buff_yaw"] = p.ypr_in_world[0] * 57.3;
-      data["buff_pitch"] = p.ypr_in_world[1] * 57.3;
-      data["buff_roll"] = p.ypr_in_world[2] * 57.3;
     }
 
     if (!target->is_unsolve()) {
       auto * p = power_runes.has_value() ? &power_runes.value() : nullptr;
       std::optional<std::vector<cv::Point2f>> pnp_points;
-      std::optional<PixelCompare> obs_compare;
       std::optional<PixelCompare> green_compare;
       std::optional<PixelCompare> blue_compare;
       double green_r_error = -1.0;
@@ -377,18 +368,6 @@ int main(int argc, char * argv[])
           tools::draw_points(
             img, std::vector<cv::Point2f>(pnp_points->begin() + 4, pnp_points->end()),
             {0, 255, 255});
-        }
-
-        // 当前PNP观测转成旧buff坐标系后的重投影: 不经过EKF，用来定位solver/坐标系误差
-        auto obs_points = solver.reproject_buff(p->xyz_in_world, p->ypr_in_world[0], p->ypr_in_world[2]);
-        tools::draw_points(
-          img, std::vector<cv::Point2f>(obs_points.begin(), obs_points.begin() + 4),
-          {255, 0, 255});
-        tools::draw_points(
-          img, std::vector<cv::Point2f>(obs_points.begin() + 4, obs_points.end()), {255, 0, 255});
-        if (pnp_points.has_value()) {
-          obs_compare = compare_points(*pnp_points, obs_points);
-          if (obs_compare.has_value()) add_compare_data(data, "obs_vs_raw", obs_compare.value());
         }
       }
 
@@ -428,11 +407,6 @@ int main(int argc, char * argv[])
       }
 
       int debug_y = 130;
-      if (obs_compare.has_value()) {
-        tools::draw_text(img, compare_text("purple obs", obs_compare.value()), {20, debug_y},
-          {255, 0, 255}, 0.55, 1);
-        debug_y += 22;
-      }
       if (green_compare.has_value()) {
         tools::draw_text(img, compare_text("green ekf", green_compare.value()), {20, debug_y},
           {0, 255, 0}, 0.55, 1);
@@ -444,8 +418,6 @@ int main(int argc, char * argv[])
       }
 
       if (print_debug && frame_count % print_step == 0) {
-        std::string obs_text =
-          obs_compare.has_value() ? compare_terminal_text("obs", obs_compare.value()) : "obs:NA";
         std::string green_text = green_compare.has_value()
                                    ? compare_terminal_text("green", green_compare.value())
                                    : "green:NA";
@@ -454,19 +426,33 @@ int main(int argc, char * argv[])
                                    : (p == nullptr ? "blue:blind" : "blue:NA");
         if (!green_compare.has_value() && p == nullptr) green_text = "green:blind";
         const double debug_spd_deg = target->ekf_x().size() > 6 ? target->ekf_x()[6] * 57.3 : 0.0;
-        const int debug_spd_sign = debug_spd_deg > 1e-3 ? 1 : (debug_spd_deg < -1e-3 ? -1 : 0);
-        const int debug_roll_img_dir = p != nullptr ? p->positive_roll_image_direction : last_roll_img_dir;
-        const int debug_pred_image_direction = debug_spd_sign * debug_roll_img_dir;
-        const double raw_yaw_deg = p != nullptr ? p->ypr_in_world[0] * 57.3 : 0.0;
-        const double raw_roll_deg = p != nullptr ? p->ypr_in_world[2] * 57.3 : 0.0;
+        int debug_pred_image_direction = 0;
+        auto direction_probe = target->clone();
+        direction_probe->predict(0.01);
+        const auto direction_center =
+          direction_probe->point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
+        const auto direction_points =
+          solver.reproject_buff(direction_center, direction_probe->rotation_buff2world());
+        if (green_points.size() >= 9 && direction_points.size() >= 9) {
+          const double current_image_phase =
+            std::atan2(
+              mean_point(green_points, 0, 4).y - green_points.back().y,
+              mean_point(green_points, 0, 4).x - green_points.back().x);
+          const double predicted_image_phase =
+            std::atan2(
+              mean_point(direction_points, 0, 4).y - direction_points.back().y,
+              mean_point(direction_points, 0, 4).x - direction_points.back().x);
+          const double image_delta =
+            tools::limit_rad(predicted_image_phase - current_image_phase);
+          debug_pred_image_direction = image_delta > 1e-5 ? 1 : (image_delta < -1e-5 ? -1 : 0);
+        }
         fmt::print(
           "frame={} t={:.3f} mode={} imu={} spd={:.1f}deg/s phase={:.1f}deg plane={:.1f}deg "
-          "raw_roll={:.1f}deg raw_yaw={:.1f}deg Rdis={:.2f}/{:.2f}m green_R={:.1f}px "
-          "roll_img_dir={} pred_img_dir={} {} | {} | {}\n",
+          "Rdis={:.2f}/{:.2f}m green_R={:.1f}px pred_img_dir={} {} | {}\n",
           frame_count, t, buff_mode, use_imu_text ? "txt" : "identity", debug_spd_deg,
-          target->ekf_x()[5] * 57.3, target->ekf_x()[4] * 57.3, raw_roll_deg, raw_yaw_deg,
+          target->ekf_x()[5] * 57.3, target->ekf_x()[4] * 57.3,
           p != nullptr ? p->ypd_in_world[2] : 0.0, target->ekf_x()[3], green_r_error,
-          debug_roll_img_dir, debug_pred_image_direction, obs_text, green_text, blue_text);
+          debug_pred_image_direction, green_text, blue_text);
       }
 
       // 观测器内部数据

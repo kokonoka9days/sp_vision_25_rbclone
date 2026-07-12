@@ -90,7 +90,6 @@ public:
   int target_slot_id = -1;
   int track_id = -1;
   double target_angle = 0.0;
-  int positive_roll_image_direction = 0;
   BuffObservationType observation_type = BuffObservationType::FULL;
   BuffPoseQuality pose_quality = BuffPoseQuality::FULL_8_POINT;
   double measurement_noise_scale = 1.0;
@@ -98,7 +97,6 @@ public:
   double prediction_error = 0.0;
 
   Eigen::Vector3d xyz_in_world;  // 单位：m
-  Eigen::Vector3d ypr_in_world;  // 单位：rad
   Eigen::Vector3d ypd_in_world;  // 球坐标系
 
   Eigen::Vector3d blade_xyz_in_world;  // 单位：m

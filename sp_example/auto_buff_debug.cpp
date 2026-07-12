@@ -82,9 +82,6 @@ int main(int argc, char * argv[])
       data["buff_R_yaw"] = p.ypd_in_world[0];
       data["buff_R_pitch"] = p.ypd_in_world[1];
       data["buff_R_dis"] = p.ypd_in_world[2];
-      data["buff_yaw"] = p.ypr_in_world[0] * 57.3;
-      data["buff_pitch"] = p.ypr_in_world[1] * 57.3;
-      data["buff_roll"] = p.ypr_in_world[2] * 57.3;
     }
 
     if (!target.is_unsolve()) {

@@ -24,39 +24,6 @@ double reprojection_error(
   return std::sqrt(squared_error / static_cast<double>(projected.size()));
 }
 
-Eigen::Vector3d no_pitch_ypr_from_radial(
-  const Eigen::Vector3d & center_in_world, const Eigen::Vector3d & target_in_world,
-  const Eigen::Matrix3d & R_target2world)
-{
-  Eigen::Vector3d radial = target_in_world - center_in_world;
-  if (radial.norm() < 1e-6) radial = R_target2world * Eigen::Vector3d(0.0, -1.0, 0.0);
-  if (radial.norm() < 1e-6) radial = Eigen::Vector3d::UnitZ();
-  radial.normalize();
-
-  const double roll = std::acos(std::clamp(radial.z(), -1.0, 1.0));
-  const double sin_roll = std::sin(roll);
-
-  double yaw = 0.0;
-  if (std::abs(sin_roll) > 1e-6) {
-    yaw = std::atan2(radial.x(), -radial.y());
-  } else {
-    Eigen::Vector3d normal = R_target2world * Eigen::Vector3d::UnitZ();
-    normal.z() = 0.0;
-    if (normal.norm() < 1e-6) normal = center_in_world;
-    if (normal.norm() < 1e-6) normal = Eigen::Vector3d::UnitX();
-    yaw = std::atan2(normal.y(), normal.x());
-  }
-
-  return {tools::limit_rad(yaw), 0.0, tools::limit_rad(roll)};
-}
-
-cv::Point2f mean_point(const std::vector<cv::Point2f> & points, size_t begin, size_t end)
-{
-  cv::Point2f sum(0.0f, 0.0f);
-  for (size_t i = begin; i < end; ++i) sum += points[i];
-  return sum * (1.0f / static_cast<float>(end - begin));
-}
-
 double image_angle_around_center(const cv::Point2f & point, const cv::Point2f & center)
 {
   return std::atan2(point.y - center.y, point.x - center.x);
@@ -327,31 +294,11 @@ std::optional<PowerRune> Solver::solve(const BuffObservation & observation) cons
   const Eigen::Vector3d center_in_world = R_gimbal2world_ * center_in_gimbal;
   const Eigen::Matrix3d R_target2world = R_gimbal2world_ * R_target2gimbal;
 
-  const Eigen::Vector3d ypr_no_pitch =
-    no_pitch_ypr_from_radial(center_in_world, target_in_world, R_target2world);
-
   p.xyz_in_world = center_in_world;
   p.ypd_in_world = tools::xyz2ypd(p.xyz_in_world);
   p.blade_xyz_in_world = target_in_world;
   p.blade_ypd_in_world = tools::xyz2ypd(p.blade_xyz_in_world);
   p.plane_normal_in_world = R_target2world * Eigen::Vector3d::UnitZ();
-  p.ypr_in_world = ypr_no_pitch;
-
-  const double roll_probe = 0.02;
-  const auto current_points =
-    reproject_buff(p.xyz_in_world, p.ypr_in_world[0], p.ypr_in_world[2]);
-  const auto positive_roll_points = reproject_buff(
-    p.xyz_in_world, p.ypr_in_world[0], tools::limit_rad(p.ypr_in_world[2] + roll_probe));
-  if (current_points.size() >= 4 && positive_roll_points.size() >= 4) {
-    const double current_angle =
-      image_angle_around_center(mean_point(current_points, 0, 4), p.r_center);
-    const double positive_roll_angle =
-      image_angle_around_center(mean_point(positive_roll_points, 0, 4), p.r_center);
-    const double image_delta = tools::limit_rad(positive_roll_angle - current_angle);
-    p.positive_roll_image_direction = image_delta >= 0.0 ? 1 : -1;
-  } else {
-    p.positive_roll_image_direction = 0;
-  }
   return p;
 }
 
@@ -371,13 +318,6 @@ std::optional<std::vector<cv::Point2f>> Solver::reproject_pnp_points() const
   std::vector<cv::Point2f> image_points;
   cv::projectPoints(PNP_OBJECT_POINTS, rvec_, tvec_, camera_matrix_, distort_coeffs_, image_points);
   return image_points;
-}
-
-std::vector<cv::Point2f> Solver::reproject_buff(
-  const Eigen::Vector3d & xyz_in_world, double yaw, double row) const
-{
-  return reproject_buff(
-    xyz_in_world, tools::rotation_matrix(Eigen::Vector3d(yaw, 0.0, row)));
 }
 
 std::vector<cv::Point2f> Solver::reproject_buff(

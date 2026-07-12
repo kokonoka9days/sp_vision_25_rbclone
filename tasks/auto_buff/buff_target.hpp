@@ -19,15 +19,24 @@
 
 namespace auto_buff
 {
-class Voter
+class PhaseDirectionTracker
 {
 public:
-  Voter();
-  void vote(const double angle_last, const double angle_now);
-  int clockwise();
+  void rebase(double phase, bool preserve_direction);
+  void shift_reference(double delta);
+  void update(double phase);
+  int direction() const { return direction_; }
+  bool ready() const { return direction_ != 0; }
 
 private:
-  int clockwise_;
+  bool has_last_phase_ = false;
+  double last_phase_ = 0.0;
+  int direction_ = 0;
+  int score_ = 0;
+  int reverse_candidate_direction_ = 0;
+  int reverse_confirm_count_ = 0;
+  std::deque<double> deltas_;
+  std::deque<int> votes_;
 };
 
 /// Target 基类
@@ -72,6 +81,10 @@ protected:
   void record_measurement(
     const PowerRune & p, std::chrono::steady_clock::time_point timestamp);
 
+  double update_plane_basis(const PowerRune & p, bool initialize);
+
+  double measure_phase(const PowerRune & p, double reference) const;
+
   Eigen::VectorXd x0_;
   Eigen::MatrixXd P0_;
   Eigen::MatrixXd A_;
@@ -80,7 +93,6 @@ protected:
   Eigen::MatrixXd R_;
   tools::ExtendedKalmanFilter ekf_;
   double lasttime_ = 0;
-  Voter voter;  // 逆时针-1 顺时针1
   bool first_in_;
   bool unsolvable_;
   int last_track_id_ = -1;
@@ -94,6 +106,12 @@ protected:
   BuffPoseQuality last_pose_quality_ = BuffPoseQuality::FULL_8_POINT;
   int reset_count_ = 0;
   int innovation_reject_count_ = 0;
+  bool has_plane_basis_ = false;
+  Eigen::Vector3d plane_normal_{1.0, 0.0, 0.0};
+  Eigen::Vector3d plane_normal_sum_{0.0, 0.0, 0.0};
+  double plane_normal_weight_ = 0.0;
+  Eigen::Vector3d phase_zero_axis_{0.0, 0.0, 1.0};
+  Eigen::Vector3d phase_quarter_axis_{0.0, -1.0, 0.0};
 };
 
 /// SmallTarget子类
@@ -108,8 +126,6 @@ public:
 
   void predict(double dt) override;
 
-  Eigen::Matrix3d rotation_buff2world() const override;
-
   std::unique_ptr<Target> clone() const override { return std::make_unique<SmallTarget>(*this); }
 
 private:
@@ -117,32 +133,13 @@ private:
 
   void update(double nowtime, const PowerRune & p) override;
 
-  void update_observed_small_direction(double observed_phase);
-
-  void update_plane_basis(const PowerRune & p, bool initialize);
-
-  double measure_phase(const PowerRune & p, double reference) const;
-
   int small_prediction_roll_direction() const;
 
   bool has_stable_small_prediction_direction() const;
 
   const double SMALL_W = CV_PI / 3;
   // const double SMALL_W = 0;
-  int small_auto_direction_ = 0;
-  int small_direction_score_ = 0;
-  int small_reverse_candidate_direction_ = 0;
-  int small_reverse_confirm_count_ = 0;
-  bool has_plane_basis_ = false;
-  Eigen::Vector3d plane_normal_{1.0, 0.0, 0.0};
-  Eigen::Vector3d plane_normal_sum_{0.0, 0.0, 0.0};
-  double plane_normal_weight_ = 0.0;
-  Eigen::Vector3d phase_zero_axis_{0.0, 0.0, 1.0};
-  Eigen::Vector3d phase_quarter_axis_{0.0, -1.0, 0.0};
-  bool has_last_observed_phase_ = false;
-  double last_observed_phase_ = 0.0;
-  std::deque<double> small_direction_deltas_;
-  std::deque<int> small_direction_votes_;
+  PhaseDirectionTracker phase_direction_;
 };
 
 /// BigTarget子类
@@ -164,13 +161,12 @@ private:
 
   void update(double nowtime, const PowerRune & p) override;
 
-  Eigen::MatrixXd h_jacobian() const;
-
   tools::RansacSineFitter spd_fitter_;
+  PhaseDirectionTracker phase_direction_;
 
   double fit_spd_ = 1.1775;
   bool has_last_speed_observation_ = false;
-  double last_speed_observation_roll_ = 0.0;
+  double last_speed_observation_phase_ = 0.0;
   double last_speed_observation_time_ = 0.0;
   int speed_model_track_id_ = -1;
 };

@@ -34,9 +34,6 @@ public:
   std::optional<std::vector<cv::Point2f>> reproject_pnp_points() const;
 
   std::vector<cv::Point2f> reproject_buff(
-    const Eigen::Vector3d & xyz_in_world, double yaw, double row) const;
-
-  std::vector<cv::Point2f> reproject_buff(
     const Eigen::Vector3d & xyz_in_world, const Eigen::Matrix3d & R_buff2world) const;
 
 private:

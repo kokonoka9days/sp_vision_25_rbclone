@@ -8,44 +8,6 @@ namespace auto_buff
 {
 namespace
 {
-Eigen::Vector3d point_buff2world_from_state(
-  const Eigen::VectorXd & x, const Eigen::Vector3d & point_in_buff)
-{
-  Eigen::Matrix3d R_buff2world =
-    tools::rotation_matrix(Eigen::Vector3d(x[4], 0.0, x[5]));  // pitch = 0
-  Eigen::Vector3d center_in_world = tools::ypd2xyz(Eigen::Vector3d(x[0], x[2], x[3]));
-  return R_buff2world * point_in_buff + center_in_world;
-}
-
-bool should_reset_track(
-  const Eigen::VectorXd & x, const PowerRune & p, int last_track_id,
-  double blade_error_gate_m, double roll_error_gate_rad, std::string & reason)
-{
-  if (p.track_id >= 0 && last_track_id >= 0 && p.track_id != last_track_id) {
-    reason = fmt::format("track {}->{}", last_track_id, p.track_id);
-    return true;
-  }
-
-  if (x.size() < 6) return false;
-
-  const auto predicted_blade =
-    point_buff2world_from_state(x, Eigen::Vector3d(0.0, 0.0, RUNE_RADIUS_M));
-  const double blade_error = (predicted_blade - p.blade_xyz_in_world).norm();
-  const double quality_scale = std::sqrt(std::max(1.0, p.measurement_noise_scale));
-  if (blade_error > blade_error_gate_m * quality_scale) {
-    reason = fmt::format("blade_err {:.3f}m", blade_error);
-    return true;
-  }
-
-  const double roll_error = std::abs(tools::limit_rad(p.ypr_in_world[2] - x[5]));
-  if (roll_error > roll_error_gate_rad * quality_scale) {
-    reason = fmt::format("roll_err {:.1f}deg", roll_error * 57.3);
-    return true;
-  }
-
-  return false;
-}
-
 int configured_small_buff_direction()
 {
   if (SMALL_BUFF_DIRECTION > 0) return 1;
@@ -62,14 +24,6 @@ int small_buff_direction(int auto_direction)
   return 0;
 }
 
-int small_roll_direction(int image_direction, int positive_roll_image_direction)
-{
-  const int direction = small_buff_direction(image_direction);
-  if (direction == 0) return 0;
-  const int roll_image_direction = positive_roll_image_direction == 0 ? 1 : positive_roll_image_direction;
-  return direction * roll_image_direction;
-}
-
 int signum(int value)
 {
   if (value > 0) return 1;
@@ -83,20 +37,111 @@ double unwrap_near(double angle, double reference)
 }
 }  // namespace
 
-///voter
-
-Voter::Voter() : clockwise_(0) {}
-
-void Voter::vote(const double angle_last, const double angle_now)
+void PhaseDirectionTracker::rebase(double phase, bool preserve_direction)
 {
-  if (std::abs(clockwise_) > 50) return;
-  if (tools::limit_rad(angle_now - angle_last) < 0.0)
-    clockwise_--;
-  else
-    clockwise_++;
+  has_last_phase_ = true;
+  last_phase_ = phase;
+  deltas_.clear();
+  votes_.clear();
+  reverse_candidate_direction_ = 0;
+  reverse_confirm_count_ = 0;
+  if (!preserve_direction) {
+    direction_ = 0;
+    score_ = 0;
+  } else if (direction_ != 0) {
+    score_ = direction_ * 6;
+  }
 }
 
-int Voter::clockwise() { return clockwise_ > 0 ? 1 : -1; }
+void PhaseDirectionTracker::shift_reference(double delta)
+{
+  if (has_last_phase_) last_phase_ += delta;
+}
+
+void PhaseDirectionTracker::update(double phase)
+{
+  if (!has_last_phase_) {
+    rebase(phase, true);
+    return;
+  }
+
+  const double delta = phase - last_phase_;
+  last_phase_ = phase;
+
+  constexpr double min_direction_delta = CV_PI / 900.0;
+  constexpr double max_direction_delta = CV_PI / 5.0;
+  constexpr double confirm_window_delta = CV_PI / 60.0;
+  constexpr int direction_window = 10;
+  constexpr int min_window_samples = 6;
+  constexpr int confirm_vote_margin = 4;
+  constexpr int confirm_score = 6;
+  constexpr int score_limit = 30;
+  constexpr int reverse_confirm_frames = 16;
+
+  if (std::abs(delta) <= min_direction_delta || std::abs(delta) >= max_direction_delta) return;
+
+  const int sample_direction = delta > 0.0 ? 1 : -1;
+  deltas_.push_back(delta);
+  votes_.push_back(sample_direction);
+  while (static_cast<int>(deltas_.size()) > direction_window) {
+    deltas_.pop_front();
+    votes_.pop_front();
+  }
+  score_ = std::clamp(score_ + sample_direction, -score_limit, score_limit);
+
+  double window_delta_sum = 0.0;
+  int window_vote_sum = 0;
+  for (size_t i = 0; i < deltas_.size(); ++i) {
+    window_delta_sum += deltas_[i];
+    window_vote_sum += votes_[i];
+  }
+
+  int window_direction = 0;
+  if (
+    static_cast<int>(deltas_.size()) >= min_window_samples &&
+    std::abs(window_delta_sum) >= confirm_window_delta &&
+    std::abs(window_vote_sum) >= confirm_vote_margin) {
+    const int delta_direction = window_delta_sum > 0.0 ? 1 : -1;
+    const int vote_direction = signum(window_vote_sum);
+    if (delta_direction == vote_direction) window_direction = delta_direction;
+  }
+
+  if (window_direction == 0) {
+    reverse_candidate_direction_ = 0;
+    reverse_confirm_count_ = 0;
+    return;
+  }
+
+  if (direction_ == 0) {
+    if (signum(score_) == window_direction && std::abs(score_) >= confirm_score) {
+      direction_ = window_direction;
+      reverse_candidate_direction_ = 0;
+      reverse_confirm_count_ = 0;
+    }
+    return;
+  }
+
+  if (window_direction == direction_) {
+    reverse_candidate_direction_ = 0;
+    reverse_confirm_count_ = 0;
+    return;
+  }
+
+  if (reverse_candidate_direction_ != window_direction) {
+    reverse_candidate_direction_ = window_direction;
+    reverse_confirm_count_ = 1;
+  } else {
+    reverse_confirm_count_++;
+  }
+
+  if (
+    reverse_confirm_count_ >= reverse_confirm_frames && score_ * direction_ <= -confirm_score) {
+    direction_ = window_direction;
+    score_ = window_direction * confirm_score;
+    reverse_candidate_direction_ = 0;
+    reverse_confirm_count_ = 0;
+  }
+}
 
 /// Target
 
@@ -112,7 +157,22 @@ Eigen::Vector3d Target::point_buff2world(const Eigen::Vector3d & point_in_buff) 
 
 Eigen::Matrix3d Target::rotation_buff2world() const
 {
-  return tools::rotation_matrix(Eigen::Vector3d(ekf_.x[4], 0.0, ekf_.x[5]));
+  if (!has_plane_basis_) {
+    return tools::rotation_matrix(Eigen::Vector3d(ekf_.x[4], 0.0, ekf_.x[5]));
+  }
+
+  Eigen::Vector3d z =
+    std::cos(ekf_.x[5]) * phase_zero_axis_ + std::sin(ekf_.x[5]) * phase_quarter_axis_;
+  z.normalize();
+  Eigen::Vector3d x = plane_normal_.normalized();
+  Eigen::Vector3d y = z.cross(x).normalized();
+  x = y.cross(z).normalized();
+
+  Eigen::Matrix3d rotation;
+  rotation.col(0) = x;
+  rotation.col(1) = y;
+  rotation.col(2) = z;
+  return rotation;
 }
 
 bool Target::is_unsolve() const { return unsolvable_; }
@@ -176,29 +236,11 @@ Eigen::VectorXd Target::ekf_x() const { return ekf_.x; }
 
 SmallTarget::SmallTarget() : Target() {}
 
-Eigen::Matrix3d SmallTarget::rotation_buff2world() const
-{
-  if (!has_plane_basis_) return Target::rotation_buff2world();
-
-  Eigen::Vector3d z =
-    std::cos(ekf_.x[5]) * phase_zero_axis_ + std::sin(ekf_.x[5]) * phase_quarter_axis_;
-  z.normalize();
-  Eigen::Vector3d x = plane_normal_.normalized();
-  Eigen::Vector3d y = z.cross(x).normalized();
-  x = y.cross(z).normalized();
-
-  Eigen::Matrix3d rotation;
-  rotation.col(0) = x;
-  rotation.col(1) = y;
-  rotation.col(2) = z;
-  return rotation;
-}
-
-void SmallTarget::update_plane_basis(const PowerRune & p, bool initialize)
+double Target::update_plane_basis(const PowerRune & p, bool initialize)
 {
   Eigen::Vector3d normal = p.plane_normal_in_world;
   if (!normal.allFinite() || normal.norm() < 1e-6) {
-    if (has_plane_basis_) return;
+    if (has_plane_basis_) return 0.0;
     normal = Eigen::Vector3d::UnitX();
   }
   normal.normalize();
@@ -244,10 +286,12 @@ void SmallTarget::update_plane_basis(const PowerRune & p, bool initialize)
     const double reexpressed = std::atan2(
       previous_radial.dot(phase_quarter_axis_), previous_radial.dot(phase_zero_axis_));
     ekf_.x[5] = unwrap_near(reexpressed, previous_phase);
+    return ekf_.x[5] - previous_phase;
   }
+  return 0.0;
 }
 
-double SmallTarget::measure_phase(const PowerRune & p, double reference) const
+double Target::measure_phase(const PowerRune & p, double reference) const
 {
   Eigen::Vector3d radial = p.blade_xyz_in_world - p.xyz_in_world;
   if (!radial.allFinite() || radial.norm() < 1e-6 || !has_plane_basis_) return reference;
@@ -344,8 +388,7 @@ void SmallTarget::get_target(
     ekf_.P.row(5).setZero();
     ekf_.P.col(5).setZero();
     ekf_.P(5, 5) = 0.01;
-    has_last_observed_phase_ = true;
-    last_observed_phase_ = switched_phase;
+    phase_direction_.rebase(switched_phase, true);
     lasttime_ = time_gap;
     last_track_id_ = obs.track_id;
     unsolvable_ = !has_stable_small_prediction_direction();
@@ -490,8 +533,7 @@ void SmallTarget::init(double nowtime, const PowerRune & p)
   };
   // 创建扩展卡尔曼滤波器对象
   ekf_ = tools::ExtendedKalmanFilter(x0_, P0_, x_add);
-  has_last_observed_phase_ = true;
-  last_observed_phase_ = observed_phase;
+  phase_direction_.rebase(observed_phase, false);
 }
 
 void SmallTarget::update(double nowtime, const PowerRune & p)
@@ -504,9 +546,10 @@ void SmallTarget::update(double nowtime, const PowerRune & p)
   // [angle/row] angle5
   // [spd]   w=CV_PI/6
   const Eigen::VectorXd & R_ypd = p.ypd_in_world;  // R
-  update_plane_basis(p, false);
+  const double basis_phase_shift = update_plane_basis(p, false);
+  phase_direction_.shift_reference(basis_phase_shift);
   double observed_phase = measure_phase(p, ekf_.x[5]);
-  update_observed_small_direction(observed_phase);
+  phase_direction_.update(observed_phase);
 
   ekf_.x[6] = SMALL_W * small_prediction_roll_direction();
 
@@ -552,121 +595,14 @@ void SmallTarget::update(double nowtime, const PowerRune & p)
   return;
 }
 
-void SmallTarget::update_observed_small_direction(double observed_phase)
-{
-  if (!has_last_observed_phase_) {
-    has_last_observed_phase_ = true;
-    last_observed_phase_ = observed_phase;
-    return;
-  }
-
-  const double observed_delta = observed_phase - last_observed_phase_;
-  last_observed_phase_ = observed_phase;
-
-  if (configured_small_buff_direction() != 0) return;
-
-  constexpr double min_direction_delta = CV_PI / 900.0;  // 0.2 deg, reject jitter
-  constexpr double max_direction_delta = CV_PI / 5.0;    // reject slot switches
-  constexpr double confirm_window_delta = CV_PI / 60.0;  // 3 deg net motion
-  constexpr int direction_window = 10;
-  constexpr int min_window_samples = 6;
-  constexpr int confirm_vote_margin = 4;
-  constexpr int confirm_score = 6;
-  constexpr int score_limit = 30;
-  constexpr int reverse_confirm_frames = 16;
-
-  if (
-    std::abs(observed_delta) <= min_direction_delta ||
-    std::abs(observed_delta) >= max_direction_delta) {
-    return;
-  }
-
-  const int phase_direction = observed_delta > 0.0 ? 1 : -1;
-  small_direction_deltas_.push_back(observed_delta);
-  small_direction_votes_.push_back(phase_direction);
-  while (static_cast<int>(small_direction_deltas_.size()) > direction_window) {
-    small_direction_deltas_.pop_front();
-    small_direction_votes_.pop_front();
-  }
-
-  small_direction_score_ =
-    std::clamp(small_direction_score_ + phase_direction, -score_limit, score_limit);
-
-  double window_delta_sum = 0.0;
-  int window_vote_sum = 0;
-  for (size_t i = 0; i < small_direction_deltas_.size(); ++i) {
-    window_delta_sum += small_direction_deltas_[i];
-    window_vote_sum += small_direction_votes_[i];
-  }
-
-  int window_direction = 0;
-  if (
-    static_cast<int>(small_direction_deltas_.size()) >= min_window_samples &&
-    std::abs(window_delta_sum) >= confirm_window_delta &&
-    std::abs(window_vote_sum) >= confirm_vote_margin) {
-    const int delta_direction = window_delta_sum > 0.0 ? 1 : -1;
-    const int vote_direction = signum(window_vote_sum);
-    if (delta_direction == vote_direction) window_direction = delta_direction;
-  }
-
-  if (window_direction == 0) {
-    small_reverse_candidate_direction_ = 0;
-    small_reverse_confirm_count_ = 0;
-    return;
-  }
-
-  if (small_auto_direction_ == 0) {
-    const int score_direction = signum(small_direction_score_);
-    if (
-      score_direction == window_direction &&
-      std::abs(small_direction_score_) >= confirm_score) {
-      small_auto_direction_ = window_direction;
-      small_direction_score_ =
-        std::clamp(small_direction_score_, -score_limit, score_limit);
-      small_reverse_candidate_direction_ = 0;
-      small_reverse_confirm_count_ = 0;
-      tools::logger()->debug(
-        "[Target] 小符连续相位方向确认: dir {}, score {}, window_votes {}, window_delta {:.1f}deg",
-        small_auto_direction_, small_direction_score_, window_vote_sum,
-        window_delta_sum * 57.3);
-    }
-    return;
-  }
-
-  if (window_direction == small_auto_direction_) {
-    small_reverse_candidate_direction_ = 0;
-    small_reverse_confirm_count_ = 0;
-    return;
-  }
-
-  if (small_reverse_candidate_direction_ != window_direction) {
-    small_reverse_candidate_direction_ = window_direction;
-    small_reverse_confirm_count_ = 1;
-  } else {
-    small_reverse_confirm_count_++;
-  }
-
-  if (
-    small_reverse_confirm_count_ >= reverse_confirm_frames &&
-    small_direction_score_ * small_auto_direction_ <= -confirm_score) {
-    small_auto_direction_ = window_direction;
-    small_direction_score_ = window_direction * confirm_score;
-    small_reverse_candidate_direction_ = 0;
-    small_reverse_confirm_count_ = 0;
-    tools::logger()->debug(
-      "[Target] 小符连续相位方向重确认: dir {}, score {}, window_votes {}, window_delta {:.1f}deg",
-      small_auto_direction_, small_direction_score_, window_vote_sum, window_delta_sum * 57.3);
-  }
-}
-
 int SmallTarget::small_prediction_roll_direction() const
 {
-  return small_buff_direction(small_auto_direction_);
+  return small_buff_direction(phase_direction_.direction());
 }
 
 bool SmallTarget::has_stable_small_prediction_direction() const
 {
-  return small_buff_direction(small_auto_direction_) != 0;
+  return configured_small_buff_direction() != 0 || phase_direction_.ready();
 }
 
 /// BigTarget
@@ -728,12 +664,11 @@ void BigTarget::get_target(
 {
   const double time_gap = relative_time(timestamp);
   if (!p.has_value()) {
-    predict_without_measurement(timestamp);
+    if (!phase_direction_.ready() || !predict_without_measurement(timestamp)) unsolvable_ = true;
     return;
   }
 
   const auto & obs = p.value();
-
   if (first_in_) {
     unsolvable_ = true;
     init(time_gap, obs);
@@ -741,37 +676,51 @@ void BigTarget::get_target(
     last_track_id_ = obs.track_id;
     speed_model_track_id_ = obs.track_id;
     record_measurement(obs, timestamp);
+    return;
   }
 
-  std::string reset_reason;
-  if (should_reset_track(ekf_.x, obs, last_track_id_, 0.50, CV_PI / 6.0, reset_reason)) {
-    const bool track_changed =
-      obs.track_id >= 0 && last_track_id_ >= 0 && obs.track_id != last_track_id_;
-    if (obs.pose_quality != BuffPoseQuality::FULL_8_POINT ||
-        (!track_changed && ++innovation_reject_count_ < 3)) {
-      tools::logger()->debug("[Target] 大符拒绝异常观测: {}", reset_reason);
+  if (obs.track_id >= 0 && last_track_id_ >= 0 && obs.track_id != last_track_id_) {
+    if (obs.pose_quality != BuffPoseQuality::FULL_8_POINT) {
+      tools::logger()->debug("[Target] 大符拒绝部分观测换轨");
       predict_without_measurement(timestamp);
       return;
     }
-    tools::logger()->debug("[Target] 大符重置EKF: {}", reset_reason);
-    reset_count_++;
+
+    const int old_track_id = last_track_id_;
+    update_plane_basis(obs, false);
+    const double switched_phase = measure_phase(obs, ekf_.x[5]);
+    ekf_.x[5] = switched_phase;
+    ekf_.P.row(5).setZero();
+    ekf_.P.col(5).setZero();
+    ekf_.P(5, 5) = 0.01;
+    phase_direction_.rebase(switched_phase, true);
     spd_fitter_.clear();
     has_last_speed_observation_ = false;
-    init(time_gap, obs);
-    first_in_ = false;
-    unsolvable_ = false;
+    fit_spd_ = 1.1775;
+    lasttime_ = time_gap;
     last_track_id_ = obs.track_id;
     speed_model_track_id_ = obs.track_id;
-    innovation_reject_count_ = 0;
+    unsolvable_ = !phase_direction_.ready();
     record_measurement(obs, timestamp);
+    tools::logger()->debug(
+      "[Target] 大符切换跟踪 {}->{}, 保留中心和平面状态", old_track_id, obs.track_id);
     return;
   }
-  innovation_reject_count_ = 0;
 
-  unsolvable_ = false;
+  const double observed_phase = measure_phase(obs, ekf_.x[5]);
+  const double quality_scale = std::sqrt(std::max(1.0, obs.measurement_noise_scale));
+  const double phase_error = std::abs(observed_phase - ekf_.x[5]);
+  if (phase_error > CV_PI / 6.0 * quality_scale) {
+    tools::logger()->debug(
+      "[Target] 大符拒绝异常连续相位: {:.1f}deg", phase_error * 57.3);
+    predict_without_measurement(timestamp);
+    return;
+  }
+
   update(time_gap, obs);
   last_track_id_ = obs.track_id;
   record_measurement(obs, timestamp);
+  unsolvable_ = !phase_direction_.ready();
 }
 
 void BigTarget::predict(double dt)
@@ -779,62 +728,44 @@ void BigTarget::predict(double dt)
   dt = std::max(0.0, dt);
   const bool fit_ready = spd_fitter_.ready(60, 0.5, 0.70);
   const auto fit = spd_fitter_.best_result_;
-  const double a = fit_ready ? fit.A : ekf_.x[7];
-  const double w = fit_ready ? fit.omega : ekf_.x[8];
-  const double fi = fit_ready ? fit.phi : ekf_.x[9];
-  const double c = fit_ready ? fit.C : 2.09 - a;
-  double t = lasttime_ + dt;
-  // clang-format off
-  A_ << 1.0,  dt, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,//R_yaw
-        0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,//v_R_yaw
-        0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,//R_pitch
-        0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,//R_dis
-        0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0,//yaw
-        0.0, 0.0, 0.0, 0.0, 0.0, 1.0, voter.clockwise() * dt , 0.0, 0.0, 0.0,//row
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, sin(w * t + fi) - 1, t * a * cos(w * t + fi), a * cos(w * t + fi),//spd
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,//a
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,//w
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0;//theta
-        
-  // 过程噪声协方差矩阵                            //// 调整
-  auto v1 = 0.9;  // 角加速度方差
-  auto a1 = dt * dt * dt * dt / 4;
-  auto b1 = dt * dt * dt / 2;
-  auto c1 = dt * dt;
-  Q_ << a1 * v1, b1 * v1, 0.0, 0.0, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-        b1 * v1, c1 * v1, 0.0, 0.0, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-            0.0,     0.0, 0.0, 0.0, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-            0.0,     0.0, 0.0, 0.0, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-            0.0,     0.0, 0.0, 0.0, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-            0.0,     0.0, 0.0, 0.0, 0.0, 0.09,  0.0,  0.0,  0.0,  0.0,//row
-            0.0,     0.0, 0.0, 0.0, 0.0,  0.0,  0.5,  0.0,  0.0,  0.0,// spd 0.5  1
-            0.0,     0.0, 0.0, 0.0, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,// a
-            0.0,     0.0, 0.0, 0.0, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,// w
-            0.0,     0.0, 0.0, 0.0, 0.0,  0.0,  0.0,  0.0,  0.0,  1.0;// fi
-            // 0.0,     0.0, 0.0, 0.0, 0.0,  0.0,  1.0,  0.0,  0.0,  0.0,// spd  2
-            // 0.0,     0.0, 0.0, 0.0, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-            // 0.0,     0.0, 0.0, 0.0, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0, 
-            // 0.0,     0.0, 0.0, 0.0, 0.0,  0.0,  0.0,  0.0,  0.0,  4.0;
+  const double t = lasttime_ + dt;
+  const int direction = phase_direction_.direction();
+  double speed_magnitude = std::clamp(fit_spd_, 0.0, 2.1);
+  double phase_delta = speed_magnitude * dt;
+  if (fit_ready && fit.omega > 1e-6) {
+    speed_magnitude = std::clamp(
+      spd_fitter_.sine_function(t, fit.A, fit.omega, fit.phi, fit.C), 0.0, 2.1);
+    phase_delta =
+      -fit.A / fit.omega * std::cos(fit.omega * t + fit.phi) +
+      fit.A / fit.omega * std::cos(fit.omega * lasttime_ + fit.phi) + fit.C * dt;
+  }
 
-            // 0.0,     0.0, 0.0, 0.0, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-            // 0.0,     0.0, 0.0, 0.0, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0, 
-            // 0.0,     0.0, 0.0, 0.0, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0;
+  A_.setIdentity(10, 10);
+  A_(0, 1) = dt;
+  A_(5, 6) = dt;
+  Q_.setZero(10, 10);
+  Q_(0, 0) = 1e-6;
+  Q_(1, 1) = 1e-5;
+  Q_(2, 2) = 1e-6;
+  Q_(3, 3) = 1e-3;
+  Q_(4, 4) = 1e-7;
+  Q_(5, 5) = 1e-4;
+  Q_(6, 6) = 0.02;
+
   auto f = [&](const Eigen::VectorXd & x) -> Eigen::VectorXd {
     Eigen::VectorXd x_prior = x;
     x_prior[0] = tools::limit_rad(x_prior[0] + dt * x_prior[1]);
     x_prior[2] = tools::limit_rad(x_prior[2]);
-    x_prior[4] = tools::limit_rad(x_prior[4]); // yaw
-    x_prior[5] = tools::limit_rad(x_prior[5] + voter.clockwise() * 
-    (-a / w * std::cos(w * t + fi) + a / w * std::cos(w * lasttime_ + fi) + c * dt)); // roll
-    x_prior[6] = std::clamp(a * sin(w * t + fi) + c, 0.0, 2.1); // spd
+    x_prior[4] = tools::limit_rad(x_prior[4]);
+    x_prior[5] += direction * phase_delta;
+    x_prior[6] = direction * speed_magnitude;
     if (fit_ready) {
-      x_prior[7] = a;
-      x_prior[8] = w;
-      x_prior[9] = tools::limit_rad(fi);
+      x_prior[7] = fit.A;
+      x_prior[8] = fit.omega;
+      x_prior[9] = tools::limit_rad(fit.phi);
     }
     return x_prior;
   };
-  // clang-format on
   ekf_.predict(A_, Q_, f);
   lasttime_ = t;
 }
@@ -846,14 +777,19 @@ void BigTarget::init(double nowtime, const PowerRune & p)
   unsolvable_ = true;
   fit_spd_ = 1.1775;
   has_last_speed_observation_ = false;
+  spd_fitter_.clear();
+  update_plane_basis(p, !has_plane_basis_);
+  const double phase_reference = ekf_.x.size() >= 6 ? ekf_.x[5] : 0.0;
+  const double observed_phase = measure_phase(p, phase_reference);
+  const double plane_yaw = std::atan2(plane_normal_.y(), plane_normal_.x());
 
   // 初始状态协方差矩阵
   x0_.resize(10);
   P0_.resize(10, 10);
   A_.resize(10, 10);
   Q_.resize(10, 10);
-  H_.resize(7, 10);
-  R_.resize(7, 7);
+  H_.resize(5, 10);
+  R_.resize(5, 5);
 
   // [R_yaw]
   // [v_R_yaw]
@@ -867,30 +803,10 @@ void BigTarget::init(double nowtime, const PowerRune & p)
   // [fi]
 
   // clang-format off
-  // 初始状态
   x0_ << p.ypd_in_world[0], 0.0, p.ypd_in_world[1], p.ypd_in_world[2],
-         p.ypr_in_world[0], p.ypr_in_world[2], 
-         1.1775, 0.9125, 1.942, 0.0;//std::atan((spd - 2.09) / 0.9125 + 1
-  // 初始状态协方差矩阵
-  P0_ << 10.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-          0.0, 10.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-          0.0,  0.0, 10.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-          0.0,  0.0,  0.0, 10.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-          0.0,  0.0,  0.0,  0.0, 10.0,  0.0,  0.0,  0.0,  0.0,  0.0,
-          0.0,  0.0,  0.0,  0.0,  0.0, 10.0,  0.0,  0.0,  0.0,  0.0,
-          0.0,  0.0,  0.0,  0.0,  0.0,  0.0, 100.0, 0.0,  0.0,  0.0,
-          0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, 10.0,  0.0,  0.0,
-          0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, 10.0,  0.0,
-          0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, 400.0;
-  // 状态转移矩阵
-  // A_
-  // 过程噪声协方差矩阵                            //// 调整
-  // Q_
-  // 测量方程矩阵
-  // H_
-  // 测量噪声协方差矩阵                            //// 调整
-  // R_
-
+         plane_yaw, observed_phase, 0.0, 0.9125, 1.942, 0.0;
+  P0_.setZero();
+  P0_.diagonal() << 0.01, 0.01, 0.01, 0.25, 0.04, 0.04, 0.25, 0.1, 0.1, 0.5;
   // clang-format on
 
   // 防止夹角求和出现异常值
@@ -899,12 +815,13 @@ void BigTarget::init(double nowtime, const PowerRune & p)
     c[0] = tools::limit_rad(c[0]);
     c[2] = tools::limit_rad(c[2]);
     c[4] = tools::limit_rad(c[4]);
-    c[5] = tools::limit_rad(c[5]);
     c[9] = tools::limit_rad(c[9]);
     return c;
   };
   // 创建扩展卡尔曼滤波器对象
   ekf_ = tools::ExtendedKalmanFilter(x0_, P0_, x_add);
+  phase_direction_.rebase(observed_phase, false);
+  speed_model_track_id_ = p.track_id;
 }
 
 void BigTarget::update(double nowtime, const PowerRune & p)
@@ -920,8 +837,11 @@ void BigTarget::update(double nowtime, const PowerRune & p)
   // [w]         1.884-2.000
   // [fi]
   const Eigen::VectorXd & R_ypd = p.ypd_in_world;  // R
-  const Eigen::VectorXd & ypr = p.ypr_in_world;
-  const Eigen::VectorXd & B_ypd = p.blade_ypd_in_world;  // center of blade
+  const double basis_phase_shift = update_plane_basis(p, false);
+  phase_direction_.shift_reference(basis_phase_shift);
+  if (has_last_speed_observation_) last_speed_observation_phase_ += basis_phase_shift;
+  double observed_phase = measure_phase(p, ekf_.x[5]);
+  phase_direction_.update(observed_phase);
 
   if (speed_model_track_id_ != p.track_id) {
     spd_fitter_.clear();
@@ -933,172 +853,64 @@ void BigTarget::update(double nowtime, const PowerRune & p)
     const double observation_dt = nowtime - last_speed_observation_time_;
     if (observation_dt > 1e-4 && observation_dt < 0.1) {
       const double signed_speed =
-        tools::limit_rad(ypr[2] - last_speed_observation_roll_) / observation_dt;
+        (observed_phase - last_speed_observation_phase_) / observation_dt;
       const double speed = std::abs(signed_speed);
-      if (speed <= 2.1) {
+      if (speed <= 2.5) {
         fit_spd_ = 0.85 * fit_spd_ + 0.15 * speed;
         spd_fitter_.add_data(nowtime, speed);
         spd_fitter_.fit();
       }
     }
   }
-  voter.vote(ekf_.x[5], ypr[2]);
   has_last_speed_observation_ = true;
-  last_speed_observation_roll_ = ypr[2];
+  last_speed_observation_phase_ = observed_phase;
   last_speed_observation_time_ = nowtime;
 
-  const auto anglelast = ekf_.x[5];
-
-  // 预测下一个状态
   const double state_dt = nowtime - lasttime_;
   predict(state_dt);
+  observed_phase = unwrap_near(observed_phase, ekf_.x[5]);
+  const double plane_yaw = std::atan2(plane_normal_.y(), plane_normal_.x());
 
-  // [R_yaw]     angle0
-  // [R_pitch]   angle1
-  // [R_dis]
-  // [angle/row] angle3
-  // [B_yaw]     angle4
-  // [B_pitch]   angle5
-  // [B_dis]
-
-  /// 1.
-
-  // [R_yaw]     angle0
-  // [R_pitch]   angle1
-  // [R_dis]
-  // [angle/row] angle3
-
-  // clang-format off
-  Eigen::MatrixXd H1{
+  Eigen::MatrixXd H{
     {1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}, // R_yaw
     {0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}, // R_pitch
     {0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}, // R_dis
-    {0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0}  // roll
+    {0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0}, // plane_yaw
+    {0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0}  // phase
   };
 
-  Eigen::MatrixXd R1{
-    {0.01, 0.0, 0.0,  0.0}, // R_yaw
-    {0.0, 0.01, 0.0,  0.0}, // R_pitch
-    {0.0,  0.0, 0.5,  0.0}, // R_dis
-    {0.0,  0.0, 0.0, 0.02}  // roll  1: 0.01 2:0.04
+  Eigen::MatrixXd R{
+    {0.0001,    0.0,  0.0, 0.0,    0.0},
+    {   0.0, 0.0001,  0.0, 0.0,    0.0},
+    {   0.0,    0.0, 0.04, 0.0,    0.0},
+    {   0.0,    0.0,  0.0, 0.01,   0.0},
+    {   0.0,    0.0,  0.0, 0.0, 0.0004}
   };
-  R1 *= p.measurement_noise_scale;
-  // clang-format on
+  R *= p.measurement_noise_scale;
 
-  // 防止夹角求差出现异常值
-  auto z_subtract1 = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
-    Eigen::VectorXd c = a - b;  //4 1
+  auto z_subtract = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
+    Eigen::VectorXd c = a - b;
     c[0] = tools::limit_rad(c[0]);
     c[1] = tools::limit_rad(c[1]);
     c[3] = tools::limit_rad(c[3]);
     return c;
   };
 
-  Eigen::VectorXd z1{{R_ypd[0], R_ypd[1], R_ypd[2], ypr[2]}};  // R_ypd roll
-
-  ekf_.update(z1, H1, R1, z_subtract1);
-
-  ///2.
-
-  // [B_yaw]     angle4
-  // [B_pitch]   angle5
-  // [B_dis]
-
-  // clang-format off
-  Eigen::MatrixXd H2 = h_jacobian();  // 3*10
-
-  Eigen::MatrixXd R2{
-    {0.01, 0.0, 0.0}, // B_yaw
-    {0.0, 0.01, 0.0}, // B_pitch
-    {0.0,  0.0, 0.5}  // B_dis
-  };
-  R2 *= p.measurement_noise_scale;
-  // clang-format on
-
-  // 定义非线性转换函数h: x -> z
-  auto h2 = [&](const Eigen::VectorXd & x) -> Eigen::Vector3d {
-    Eigen::Vector3d B_xyz =
-      point_buff2world_from_state(x, Eigen::Vector3d(0.0, 0.0, RUNE_RADIUS_M));
-    return tools::xyz2ypd(B_xyz);
-  };
-
-  // 防止夹角求差出现异常值
-  auto z_subtract2 = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
-    Eigen::VectorXd c = a - b;  //6 1
-    c[0] = tools::limit_rad(c[0]);
-    c[1] = tools::limit_rad(c[1]);
-    return c;
-  };
-
-  Eigen::VectorXd z2{{B_ypd[0], B_ypd[1], B_ypd[2]}};
-
-  ekf_.update(z2, H2, R2, h2, z_subtract2);
+  Eigen::VectorXd z{{R_ypd[0], R_ypd[1], R_ypd[2], plane_yaw, observed_phase}};
+  ekf_.update(z, H, R, z_subtract);
 
   if (spd_fitter_.ready(60, 0.5, 0.70)) {
     const auto & fit = spd_fitter_.best_result_;
     fit_spd_ = std::clamp(
       spd_fitter_.sine_function(nowtime, fit.A, fit.omega, fit.phi, fit.C), 0.0, 2.1);
+    ekf_.x[7] = fit.A;
+    ekf_.x[8] = fit.omega;
+    ekf_.x[9] = tools::limit_rad(fit.phi);
   }
-  spd = state_dt > 1e-4
-          ? voter.clockwise() * tools::limit_rad(ekf_.x[5] - anglelast) / state_dt
-          : 0.0;
+  ekf_.x[6] = phase_direction_.direction() * fit_spd_;
+  spd = ekf_.x[6];
 
-  // 更新lasttime
   lasttime_ = nowtime;
   unsolvable_ = false;
-  return;
-}
-
-Eigen::MatrixXd BigTarget::h_jacobian() const
-{
-  /// Z(3,1) = H3(3,3) * H2(3,5) * H1(5,5) * H0(5,10) * x(10,1)
-
-  // clang-format off
-  Eigen::MatrixXd H0{
-    {1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
-    {0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
-    {0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
-    {0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0},
-    {0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0}
-  };// 5*7
-
-  Eigen::VectorXd R_ypd{{ekf_.x[0], ekf_.x[2], ekf_.x[3]}};
-  Eigen::MatrixXd H_ypd2xyz = tools::ypd2xyz_jacobian(R_ypd);  // 3*3
-  Eigen::MatrixXd H1{
-    {H_ypd2xyz(0, 0), H_ypd2xyz(0, 1), H_ypd2xyz(0, 2), 0.0, 0.0},
-    {H_ypd2xyz(1, 0), H_ypd2xyz(1, 1), H_ypd2xyz(1, 2), 0.0, 0.0},
-    {H_ypd2xyz(2, 0), H_ypd2xyz(2, 1), H_ypd2xyz(2, 2), 0.0, 0.0},
-    {            0.0,             0.0,             0.0, 1.0, 0.0},
-    {            0.0,             0.0,             0.0, 0.0, 1.0}
-  };// 5*5
-
-  // double pitch = 0;
-  double yaw = ekf_.x[4];
-  double roll = ekf_.x[5];
-  double cos_yaw = cos(yaw);
-  double sin_yaw = sin(yaw);
-  double cos_roll = cos(roll);
-  double sin_roll = sin(roll);
-  Eigen::MatrixXd H2{
-    {1.0, 0.0, 0.0, RUNE_RADIUS_M * cos_yaw * sin_roll,  RUNE_RADIUS_M * sin_yaw * cos_roll},
-    {0.0, 1.0, 0.0, RUNE_RADIUS_M * sin_yaw * sin_roll, -RUNE_RADIUS_M * cos_yaw * cos_roll},
-    {0.0, 0.0, 1.0,                                  0.0,               -RUNE_RADIUS_M * sin_roll}
-  };// 3*5
-
-  Eigen::VectorXd B_xyz =
-    point_buff2world_from_state(ekf_.x, Eigen::Vector3d(0.0, 0.0, RUNE_RADIUS_M));
-  Eigen::MatrixXd H3 = tools::xyz2ypd_jacobian(B_xyz);// 3*3
-  // clang-format on
-
-  return H3 * H2 * H1 * H0;  // 3*7
-
-  // auto h2 = [&](const Eigen::VectorXd & x) -> Eigen::Vector3d {
-  //   Eigen::VectorXd R_ypd{{x[0], x[2], x[3]}};
-  //   Eigen::VectorXd R_xyz = tools::ypd2xyz(R_ypd);
-  //   Eigen::VectorXd R_xyz_and_yr{{R_ypd[0], R_ypd[1], R_ypd[2], x[4], x[5]}};
-  //   Eigen::VectorXd B_xyz = point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.7));
-  //   Eigen::VectorXd B_ypd = tools::xyz2ypd(B_xyz);
-  //   return B_ypd;
-  // };
 }
 }  // namespace auto_buff
