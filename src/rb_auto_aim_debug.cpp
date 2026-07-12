@@ -29,20 +29,20 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/sb_short.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/sb_long.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
   tools::Exiter exiter;
   tools::Plotter plotter;
 
-  cv::CommandLineParser cli(argc, argv, keys);  
+  cv::CommandLineParser cli(argc, argv, keys);
   auto config_path = cli.get<std::string>(0);
   if (cli.has("help") || config_path.empty()) {
     cli.printMessage();
     return 0;
   }
-  io::Camera::initSDK();
+
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
 
@@ -67,6 +67,8 @@ int main(int argc, char * argv[])
       auto target = target_queue.front(); 
       auto gs = gimbal.state();
 
+
+
       //MPC预测以及+自家火控
       auto plan = planner.plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
 
@@ -80,6 +82,7 @@ int main(int argc, char * argv[])
         name = static_cast<uint8_t>(target->name) + 1;
         tx = target->ekf_x()[0]; 
         ty = target->ekf_x()[2]; 
+
         // tools::logger()->info("{},{},{}", name,tx,ty);
 
       }
@@ -127,7 +130,7 @@ int main(int argc, char * argv[])
         data["tower_h2"] = target->tower_armor_hs[1];
         data["tower_h3"] = target->tower_armor_hs[2];
         data["tower_armor_h"] = target->tower_armor_h;
-                                              
+
         const auto ekf_satic = target->ekf_x();
         data["ekf_x"] = ekf_satic(0);
         data["ekf_vx"] = ekf_satic(1);
@@ -154,7 +157,12 @@ int main(int argc, char * argv[])
 
   while (!exiter.exit()) {
     camera.read(img, t);
-    auto q = gimbal.q(t);
+    auto q = gimbal.q(t - 3ms);
+
+    solver.set_R_gimbal2world(q);
+    auto armors = detector.detect(img);
+    auto targets = tracker.track(armors, t);
+    // recor.record(img, q, t);
 
     auto now = std::chrono::steady_clock::now();
     double fps = 1./tools::delta_time(now, last_t);
@@ -167,13 +175,6 @@ int main(int argc, char * argv[])
     float yaw_deg = ypr[0] * 180.0 / M_PI;
     float pitch_deg = ypr[1] * 180.0 / M_PI;
     float roll_deg = ypr[2] * 180.0 / M_PI;
-        
-    solver.set_R_gimbal2world(q);
-    auto armors = yolo.detect(img);
-    auto targets = tracker.track(armors, t);
-    // recor.record(img, q, t);
-
-
     // std::cout << "DK_Yaw: " << yaw_deg << std::endl;
     // std::cout << "DK_Pitch: " << pitch_deg << std::endl;
     if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
@@ -270,14 +271,14 @@ int main(int argc, char * argv[])
     }
 
 
-    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    // cv::imshow("reprojection", img);
-    // auto key = cv::waitKey(1);
-    // if (key == 'q') break;
-    // if(key == 'r') {//TUDO :右键手动更改
-    //   io::GimbalState* g_demo = gimbal.set_state_();
-    //   g_demo->mode = !g_demo->mode;
-    // }
+    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    cv::imshow("reprojection", img);
+    auto key = cv::waitKey(1);
+    if (key == 'q') break;
+    if(key == 'r') {//TUDO :右键手动更改
+      io::GimbalState* g_demo = gimbal.set_state_();
+      g_demo->mode = !g_demo->mode;
+    }
     // if(key == 's') {
     //   stopkey = !stopkey;
     // }

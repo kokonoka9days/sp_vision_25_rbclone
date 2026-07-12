@@ -97,30 +97,6 @@ target_link_libraries(auto_buff_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff 
 add_executable(camera_detect_test tests/camera_detect_test.cpp)
 target_link_libraries(camera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools auto_aim io)
 
-add_executable(detector_video_test tests/detector_video_test.cpp)
-target_link_libraries(detector_video_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools auto_aim)
-
-add_executable(multi_usbcamera_test tests/multi_usbcamera_test.cpp)
-target_link_libraries(multi_usbcamera_test ${OpenCV_LIBS} fmt::fmt tools io)
-
-add_executable(usbcamera_detect_test tests/usbcamera_detect_test.cpp)
-target_link_libraries(usbcamera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
-
-add_executable(usbcamera_test tests/usbcamera_test.cpp)
-target_link_libraries(usbcamera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
-
-add_executable(handeye_test tests/handeye_test.cpp)
-target_link_libraries(handeye_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
-
-add_executable(gimbal_response_test tests/gimbal_response_test.cpp)
-target_link_libraries(gimbal_response_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
-
-add_executable(dm_test tests/dm_test.cpp)
-target_link_libraries(dm_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
-
-add_executable(minimum_vision_system tests/minimum_vision_system.cpp)
-target_link_libraries(minimum_vision_system ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
-
 add_executable(omniperception_test tests/omniperception_test.cpp)
 target_link_libraries(omniperception_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim omniperception)
 
@@ -130,16 +106,9 @@ target_link_libraries(binocular_camera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp too
 add_executable(4cmaera_test tests/4cmaera_test.cpp)
 target_link_libraries(4cmaera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
-add_executable(camera_thread_test tests/camera_thread_test.cpp)
-target_link_libraries(camera_thread_test ${OpenCV_LIBS} fmt::fmt auto_aim tools io)
-
-add_executable(time_calibrator tests/time_calibrator.cpp)
 add_executable(auto_label tests/auto_label.cpp)
 add_executable(cameras_test tests/cameras_test.cpp)
-target_link_libraries(time_calibrator ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
-add_executable(planner_test_offline tests/planner_test_offline.cpp)
-target_link_libraries(planner_test_offline ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io omniperception)
 endif()
 
 if(TENSOR_RT_MAKE)
@@ -150,26 +119,13 @@ endif()
 
 add_executable(camera_test tests/camera_test.cpp)
 add_executable(rv_camera_detect_test tests/rv_camera_detect_test.cpp)
-add_executable(cboard_test tests/cboard_test.cpp)
-add_executable(fire_test tests/fire_test.cpp)
-
 
 target_link_libraries(camera_test ${OpenCV_LIBS} fmt::fmt tools io)
 target_link_libraries(rv_camera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim  tools io)
-target_link_libraries(cboard_test ${OpenCV_LIBS} fmt::fmt tools io)
-target_link_libraries(fire_test ${OpenCV_LIBS} fmt::fmt tools io)
-target_link_libraries(detector_video_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools auto_aim)
-target_link_libraries(gimbal_response_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
-target_link_libraries(multi_usbcamera_test ${OpenCV_LIBS} fmt::fmt tools io)
-target_link_libraries(usbcamera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
-target_link_libraries(usbcamera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
-target_link_libraries(handeye_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
-target_link_libraries(dm_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
-target_link_libraries(minimum_vision_system ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+
 target_link_libraries(omniperception_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim omniperception)
 target_link_libraries(binocular_camera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 target_link_libraries(4cmaera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
-target_link_libraries(time_calibrator ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim Ceres::ceres)
 target_link_libraries(auto_label ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
 target_link_libraries(cameras_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
@@ -179,10 +135,6 @@ target_link_libraries(gimbal_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tool
 
 add_executable(serial_test tests/serial_test.cpp)
 target_link_libraries(serial_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
-
-add_executable(planner_test tests/planner_test.cpp)
-target_link_libraries(planner_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
-
 
 
 # 检查 ROS 环境
@@ -212,9 +164,6 @@ if(ament_cmake_FOUND AND rclcpp_FOUND AND std_msgs_FOUND AND rosidl_typesupport_
     # add_executable(sentry_bp src/sentry_bp.cpp)
     # add_executable(sentry_debug src/sentry_debug.cpp)
     # add_executable(sentry_multithread src/sentry_multithread.cpp)
-    add_executable(publish_test tests/publish_test.cpp)
-    add_executable(subscribe_test tests/subscribe_test.cpp)
-    add_executable(topic_loop_test tests/topic_loop_test.cpp)
     
     add_executable(sentry_binocular_aim_mpc src/sentry_binocular_aim_mpc.cpp)
     add_executable(sentry_omn_aim_mpc src/sentry_omn_aim_mpc.cpp)
@@ -224,9 +173,6 @@ if(ament_cmake_FOUND AND rclcpp_FOUND AND std_msgs_FOUND AND rosidl_typesupport_
     # target_link_libraries(sentry_bp ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
     # target_link_libraries(sentry_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
     # target_link_libraries(sentry_multithread ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
-    target_link_libraries(publish_test ${OpenCV_LIBS} fmt::fmt tools io auto_aim)
-    target_link_libraries(subscribe_test ${OpenCV_LIBS} fmt::fmt tools io)
-    target_link_libraries(topic_loop_test ${OpenCV_LIBS} fmt::fmt tools io)
     target_link_libraries(sentry_binocular_aim_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
 else()
     message(STATUS "ROS2 environment not found, skipping ROS2-related code.hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
