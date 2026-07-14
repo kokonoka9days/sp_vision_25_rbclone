@@ -20,15 +20,20 @@ inline int SMALL_BUFF_DIRECTION = 0;  // 0: auto, 1/-1: force small buff predict
 inline constexpr double RUNE_SLOT_ANGLE = 2.0 * CV_PI / 5.0;
 
 enum PowerRune_type { SMALL, BIG };
+enum class BuffMode { SMALL, BIG };
 enum FanBlade_type { _target, _unlight, _light };
 enum Track_status { TRACK, TEM_LOSE, LOSE };
 
 enum class BuffObservationType { FULL, TARGET_ONLY, FAN_ONLY };
 enum class RuneCenterSource { DETECTED, PREDICTED };
 enum class BuffPoseQuality { FULL_8_POINT, PARTIAL_5_POINT, PARTIAL_4_POINT };
+enum class BuffTrackStatus { TENTATIVE, CONFIRMED, COASTING };
+enum class TargetReadiness { LOST, TRACKING, PREDICTING };
 
-inline double BUFF_BLIND_TIMEOUT_S = 0.080;
+inline double BUFF_BLIND_TIMEOUT_S = 0.100;
+inline double BUFF_TRACK_RETENTION_S = 0.400;
 inline double BUFF_FIRE_FULL_OBSERVATION_MAX_AGE_S = 0.030;
+inline int BUFF_DIRECTION_CONFIRM_INTERVALS = 3;
 inline int BUFF_BIG_SPEED_PHASE_WINDOW = 7;
 inline double BUFF_BIG_SPEED_MIN_SPAN_S = 0.030;
 inline double BUFF_BIG_FIT_MIN_SPAN_S = 1.0;
@@ -62,6 +67,8 @@ struct BuffObservation
   float min_keypoint_confidence = 1.0f;
   int slot_offset = 0;
   int track_id = -1;
+  BuffTrackStatus track_status = BuffTrackStatus::TENTATIVE;
+  bool primary = false;
   std::chrono::steady_clock::time_point timestamp{};
 
   bool has_target() const { return target_points.size() == 4; }
@@ -105,6 +112,8 @@ public:
   int target_slot_id = -1;
   int track_id = -1;
   int slot_offset = 0;
+  bool primary = false;
+  BuffTrackStatus track_status = BuffTrackStatus::TENTATIVE;
   double target_angle = 0.0;
   double slot_residual = 0.0;
   RuneCenterSource center_source = RuneCenterSource::DETECTED;

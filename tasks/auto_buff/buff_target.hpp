@@ -25,6 +25,7 @@ public:
   void rebase(double phase, bool preserve_direction);
   void shift_reference(double delta);
   void update(double phase);
+  void reset();
   int direction() const { return direction_; }
   bool ready() const { return direction_ != 0; }
 
@@ -49,6 +50,10 @@ public:
     const std::optional<PowerRune> & p,
     std::chrono::steady_clock::time_point & timestamp) = 0;  // 纯虚函数
 
+  void get_target(
+    const std::vector<PowerRune> & observations,
+    std::chrono::steady_clock::time_point & timestamp);
+
   virtual void predict(double dt) = 0;  // 纯虚函数
 
   Eigen::Vector3d point_buff2world(const Eigen::Vector3d & point_in_buff) const;
@@ -57,11 +62,19 @@ public:
 
   bool is_unsolve() const;
 
+  bool can_control() const;
+
+  bool prediction_ready() const;
+
+  TargetReadiness readiness() const { return readiness_; }
+
   bool is_blind() const;
 
   bool can_fire(std::chrono::steady_clock::time_point now) const;
 
   int reset_count() const { return reset_count_; }
+
+  virtual void reset();
 
   Eigen::VectorXd ekf_x() const;
 
@@ -95,6 +108,7 @@ protected:
   double lasttime_ = 0;
   bool first_in_;
   bool unsolvable_;
+  TargetReadiness readiness_ = TargetReadiness::LOST;
   int last_track_id_ = -1;
   bool blind_ = false;
   bool has_start_timestamp_ = false;
@@ -112,6 +126,9 @@ protected:
   double plane_normal_weight_ = 0.0;
   Eigen::Vector3d phase_zero_axis_{0.0, 0.0, 1.0};
   Eigen::Vector3d phase_quarter_axis_{0.0, -1.0, 0.0};
+  bool has_pending_phase_recovery_ = false;
+  double pending_phase_recovery_ = 0.0;
+  int pending_phase_recovery_hits_ = 0;
 };
 
 /// SmallTarget子类
@@ -121,12 +138,16 @@ class SmallTarget : public Target
 public:
   SmallTarget();
 
+  using Target::get_target;
+
   void get_target(
     const std::optional<PowerRune> & p, std::chrono::steady_clock::time_point & timestamp) override;
 
   void predict(double dt) override;
 
   std::unique_ptr<Target> clone() const override { return std::make_unique<SmallTarget>(*this); }
+
+  void reset() override;
 
 private:
   void init(double nowtime, const PowerRune & p) override;
@@ -149,12 +170,16 @@ class BigTarget : public Target
 public:
   BigTarget();
 
+  using Target::get_target;
+
   void get_target(
     const std::optional<PowerRune> & p, std::chrono::steady_clock::time_point & timestamp) override;
 
   void predict(double dt) override;
 
   std::unique_ptr<Target> clone() const override { return std::make_unique<BigTarget>(*this); }
+
+  void reset() override;
 
 private:
   struct PhaseSample

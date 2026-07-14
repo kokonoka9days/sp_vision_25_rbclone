@@ -81,6 +81,8 @@ PowerRune::PowerRune(const BuffObservation & observation)
   light_num(1),
   track_id(observation.track_id),
   slot_offset(observation.slot_offset),
+  primary(observation.primary),
+  track_status(observation.track_status),
   target_angle(observation.angle),
   slot_residual(observation.slot_residual),
   center_source(observation.center_source),

@@ -116,8 +116,11 @@ int main(int argc, char * argv[])
     else if (mode.load() == io::GimbalMode::SMALL_BUFF || mode.load() == io::GimbalMode::BIG_BUFF) {
       buff_solver.set_R_gimbal2world(q);
 
-      auto buff_observation = buff_detector.detect(img, t);
-      auto power_runes = buff_solver.solve(buff_observation);
+      const auto buff_mode = mode.load() == io::GimbalMode::BIG_BUFF
+                               ? auto_buff::BuffMode::BIG
+                               : auto_buff::BuffMode::SMALL;
+      auto buff_observations = buff_detector.detect_tracks(img, buff_mode, t);
+      auto power_runes = buff_solver.solve_all(buff_observations);
 
       auto_aim::Plan buff_plan;
       if (mode.load() == io::GimbalMode::SMALL_BUFF) {

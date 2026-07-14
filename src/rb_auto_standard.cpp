@@ -174,8 +174,11 @@ int main(int argc, char * argv[])
       auto gs = gimbal.state();
       buff_solver.set_R_gimbal2world(q);
 
-      auto buff_observation = buff_detector.detect_24(img, t);
-      auto power_runes = buff_solver.solve(buff_observation);
+      const auto buff_mode = mode.load() == io::GimbalMode::BIG_BUFF
+                               ? auto_buff::BuffMode::BIG
+                               : auto_buff::BuffMode::SMALL;
+      auto buff_observations = buff_detector.detect_tracks(img, buff_mode, t);
+      auto power_runes = buff_solver.solve_all(buff_observations);
 
       auto_aim::Plan buff_plan;
       auto_buff::Target* active_target = nullptr;

@@ -184,6 +184,12 @@ Buff_Detector::Buff_Detector(const std::string & config) : status_(LOSE), lose_(
   if (yaml["buff_keypoint_temporal_gate_px"]) {
     temporal_residual_gate_px_ = yaml["buff_keypoint_temporal_gate_px"].as<double>();
   }
+  if (yaml["buff_center_innovation_gate_px"]) {
+    center_innovation_gate_px_ = yaml["buff_center_innovation_gate_px"].as<double>();
+  }
+  if (yaml["buff_center_recovery_hits"]) {
+    center_recovery_hits_ = yaml["buff_center_recovery_hits"].as<int>();
+  }
   if (yaml["buff_center_lost_max"]) center_lost_max_ = yaml["buff_center_lost_max"].as<int>();
   if (yaml["buff_rune_radius_m"]) RUNE_RADIUS_M = yaml["buff_rune_radius_m"].as<double>();
   if (yaml["buff_small_direction"]) SMALL_BUFF_DIRECTION = yaml["buff_small_direction"].as<int>();
@@ -250,6 +256,30 @@ Buff_Detector::Buff_Detector(const std::string & config) : status_(LOSE), lose_(
     BUFF_BIG_FIT_BLEND_S = yaml["buff_big_fit_blend_s"].as<double>();
   }
   BUFF_BLIND_TIMEOUT_S = blind_timeout_s_;
+
+  BuffTrackBank::Config track_config;
+  track_config.confirm_hits =
+    yaml["buff_track_confirm_hits"] ? yaml["buff_track_confirm_hits"].as<int>() : 2;
+  track_config.recovery_hits =
+    yaml["buff_track_recovery_hits"] ? yaml["buff_track_recovery_hits"].as<int>() : 2;
+  track_config.association_gate_rad = track_gate_max_rad_;
+  track_config.point_residual_gate_px = temporal_residual_gate_px_;
+  track_config.control_blind_timeout_s =
+    yaml["buff_control_blind_timeout_s"]
+      ? yaml["buff_control_blind_timeout_s"].as<double>()
+      : 0.100;
+  track_config.retention_timeout_s =
+    yaml["buff_track_retention_s"] ? yaml["buff_track_retention_s"].as<double>() : 0.400;
+  track_config.spawn_keypoint_threshold = keypoint_threshold_;
+  center_retention_s_ = track_config.retention_timeout_s;
+  blind_timeout_s_ = track_config.control_blind_timeout_s;
+  BUFF_BLIND_TIMEOUT_S = blind_timeout_s_;
+  BUFF_TRACK_RETENTION_S = track_config.retention_timeout_s;
+  BUFF_DIRECTION_CONFIRM_INTERVALS =
+    yaml["buff_direction_confirm_intervals"]
+      ? yaml["buff_direction_confirm_intervals"].as<int>()
+      : 3;
+  track_bank_.configure(track_config);
 }
 
 void Buff_Detector::handle_img(const cv::Mat & bgr_img, cv::Mat & dilated_img)
@@ -330,17 +360,64 @@ std::optional<Buff_Detector::CenterEstimate> Buff_Detector::select_r_center(
     if (best_center == nullptr || result.prob > best_center->prob) best_center = &result;
   }
 
-  if (best_center != nullptr) {
+  if (!has_last_r_center_) {
+    if (best_center == nullptr) return std::nullopt;
     last_r_center_ = mean_points(best_center->kpt);
     has_last_r_center_ = true;
     center_lost_count_ = 0;
     last_r_center_time_ = timestamp;
+    last_r_center_seen_time_ = timestamp;
     return CenterEstimate{last_r_center_, RuneCenterSource::DETECTED};
   }
 
-  if (
-    has_last_r_center_ && center_lost_count_ < center_lost_max_ &&
-    seconds_between(timestamp, last_r_center_time_) <= blind_timeout_s_) {
+  const double dt = std::max(0.0, seconds_between(timestamp, last_r_center_time_));
+  const cv::Point2f predicted = last_r_center_ + r_center_velocity_ * static_cast<float>(dt);
+  if (best_center != nullptr) {
+    const cv::Point2f observed = mean_points(best_center->kpt);
+    const double residual = cv::norm(observed - predicted);
+    if (residual <= center_innovation_gate_px_) {
+      if (dt > 1e-4) {
+        cv::Point2f measured_velocity = (observed - last_r_center_) * static_cast<float>(1.0 / dt);
+        const double speed = cv::norm(measured_velocity);
+        if (speed > 1500.0) measured_velocity *= static_cast<float>(1500.0 / speed);
+        r_center_velocity_ = 0.65f * r_center_velocity_ + 0.35f * measured_velocity;
+      }
+      // A valid center observation is the current-frame geometric anchor. Keep
+      // velocity prediction for gating and dropouts, but do not add image-space
+      // lag while the center is visible.
+      last_r_center_ = observed;
+      last_r_center_time_ = timestamp;
+      last_r_center_seen_time_ = timestamp;
+      center_lost_count_ = 0;
+      has_pending_r_center_ = false;
+      pending_r_center_hits_ = 0;
+      return CenterEstimate{last_r_center_, RuneCenterSource::DETECTED};
+    }
+
+    if (
+      has_pending_r_center_ &&
+      cv::norm(observed - pending_r_center_) <= center_innovation_gate_px_) {
+      pending_r_center_hits_++;
+      pending_r_center_ = observed;
+    } else {
+      has_pending_r_center_ = true;
+      pending_r_center_ = observed;
+      pending_r_center_hits_ = 1;
+    }
+    if (pending_r_center_hits_ >= center_recovery_hits_) {
+      last_r_center_ = pending_r_center_;
+      r_center_velocity_ = {0.0f, 0.0f};
+      last_r_center_time_ = timestamp;
+      last_r_center_seen_time_ = timestamp;
+      has_pending_r_center_ = false;
+      pending_r_center_hits_ = 0;
+      return CenterEstimate{last_r_center_, RuneCenterSource::DETECTED};
+    }
+  }
+
+  if (seconds_between(timestamp, last_r_center_seen_time_) <= center_retention_s_) {
+    last_r_center_ = predicted;
+    last_r_center_time_ = timestamp;
     center_lost_count_++;
     return CenterEstimate{last_r_center_, RuneCenterSource::PREDICTED};
   }
@@ -850,21 +927,38 @@ void Buff_Detector::remember_temporal_candidate(const BuffObservation & candidat
   has_temporal_candidate_ = true;
 }
 
-std::optional<BuffObservation> Buff_Detector::detect_impl(
-  cv::Mat & bgr_img, bool single_candidate,
+void Buff_Detector::reset_for_mode(BuffMode mode)
+{
+  if (has_current_mode_ && current_mode_ == mode) return;
+  current_mode_ = mode;
+  has_current_mode_ = true;
+  track_bank_.reset();
+  has_last_r_center_ = false;
+  r_center_velocity_ = {0.0f, 0.0f};
+  has_pending_r_center_ = false;
+  pending_r_center_hits_ = 0;
+  status_ = LOSE;
+  lose_ = 0;
+}
+
+std::vector<BuffObservation> Buff_Detector::detect_tracks_impl(
+  cv::Mat & bgr_img, bool single_candidate, BuffMode mode,
   std::chrono::steady_clock::time_point timestamp)
 {
+  reset_for_mode(mode);
   std::vector<YOLO11_BUFF::Object> results = single_candidate ? MODE_.get_onecandidatebox(bgr_img)
                                                               : MODE_.get_multicandidateboxes(bgr_img);
   if (results.empty()) {
+    track_bank_.update({}, timestamp, mode);
     handle_lose();
-    return std::nullopt;
+    return {};
   }
 
   auto r_center = select_r_center(results, timestamp);
   if (!r_center.has_value()) {
+    track_bank_.update({}, timestamp, mode);
     handle_lose();
-    return std::nullopt;
+    return {};
   }
 
   auto candidates = build_candidates(results, r_center->point);
@@ -873,37 +967,61 @@ std::optional<BuffObservation> Buff_Detector::detect_impl(
     candidate.center_source = r_center->source;
     candidate.timestamp = timestamp;
   }
-  std::vector<BuffObservation> stabilized_candidates;
-  stabilized_candidates.reserve(candidates.size());
-  for (auto & candidate : candidates) {
-    auto stabilized = stabilize_candidate(std::move(candidate));
-    if (stabilized.has_value()) stabilized_candidates.emplace_back(std::move(*stabilized));
-  }
-  auto locked_candidate = select_locked_candidate(stabilized_candidates, timestamp);
-  if (!locked_candidate.has_value()) {
+  auto tracked = track_bank_.update(candidates, timestamp, mode);
+  if (tracked.empty()) {
     handle_lose();
-    return std::nullopt;
+    return {};
   }
-
-  remember_temporal_candidate(*locked_candidate);
 
   tools::draw_point(bgr_img, r_center->point, {0, 0, 255}, 3);
-  if (locked_candidate->target_center_observed) {
-    tools::draw_point(bgr_img, locked_candidate->target_center, {255, 0, 255}, 3);
-  }
-  if (locked_candidate->fan_center_observed) {
-    tools::draw_point(bgr_img, locked_candidate->fan_center, {0, 255, 0}, 3);
+  for (const auto & observation : tracked) {
+    if (observation.target_center_observed) {
+      tools::draw_point(
+        bgr_img, observation.target_center,
+        observation.primary ? cv::Scalar(255, 0, 255) : cv::Scalar(255, 255, 0), 3);
+    }
+    if (observation.fan_center_observed) {
+      tools::draw_point(
+        bgr_img, observation.fan_center,
+        observation.primary ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 180, 255), 3);
+    }
   }
 
   status_ = TRACK;
   lose_ = 0;
-  return locked_candidate;
+  return tracked;
+}
+
+std::optional<BuffObservation> Buff_Detector::detect_impl(
+  cv::Mat & bgr_img, bool single_candidate, BuffMode mode,
+  std::chrono::steady_clock::time_point timestamp)
+{
+  auto tracks = detect_tracks_impl(bgr_img, single_candidate, mode, timestamp);
+  if (tracks.empty()) return std::nullopt;
+  return tracks.front();
+}
+
+std::vector<BuffObservation> Buff_Detector::detect_tracks(
+  cv::Mat & bgr_img, BuffMode mode, std::chrono::steady_clock::time_point timestamp)
+{
+  return detect_tracks_impl(bgr_img, false, mode, timestamp);
+}
+
+std::vector<BuffObservation> Buff_Detector::detect_tracks(cv::Mat & bgr_img, BuffMode mode)
+{
+  return detect_tracks(bgr_img, mode, std::chrono::steady_clock::now());
+}
+
+std::optional<BuffObservation> Buff_Detector::detect_24(
+  cv::Mat & bgr_img, BuffMode mode, std::chrono::steady_clock::time_point timestamp)
+{
+  return detect_impl(bgr_img, false, mode, timestamp);
 }
 
 std::optional<BuffObservation> Buff_Detector::detect_24(
   cv::Mat & bgr_img, std::chrono::steady_clock::time_point timestamp)
 {
-  return detect_impl(bgr_img, false, timestamp);
+  return detect_impl(bgr_img, false, BuffMode::SMALL, timestamp);
 }
 
 std::optional<BuffObservation> Buff_Detector::detect_24(cv::Mat & bgr_img)
@@ -912,9 +1030,15 @@ std::optional<BuffObservation> Buff_Detector::detect_24(cv::Mat & bgr_img)
 }
 
 std::optional<BuffObservation> Buff_Detector::detect(
+  cv::Mat & bgr_img, BuffMode mode, std::chrono::steady_clock::time_point timestamp)
+{
+  return detect_impl(bgr_img, false, mode, timestamp);
+}
+
+std::optional<BuffObservation> Buff_Detector::detect(
   cv::Mat & bgr_img, std::chrono::steady_clock::time_point timestamp)
 {
-  return detect_impl(bgr_img, false, timestamp);
+  return detect_impl(bgr_img, false, BuffMode::SMALL, timestamp);
 }
 
 std::optional<BuffObservation> Buff_Detector::detect(cv::Mat & bgr_img)

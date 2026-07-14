@@ -136,6 +136,16 @@ int main(int argc, char ** argv)
   bad_center.r_center += cv::Point2f(100.0f, 0.0f);
   if (!require(!solver.solve(bad_center).has_value(), "bad predicted center rejection")) return 1;
 
+  auto good_secondary = make_observation(
+    auto_buff::BuffObservationType::FULL, auto_buff::RuneCenterSource::DETECTED, projected);
+  good_secondary.track_id = 2;
+  auto bad_primary = bad_center;
+  bad_primary.track_id = 3;
+  bad_primary.primary = true;
+  const auto solved_all = solver.solve_all({bad_primary, good_secondary});
+  if (!require(solved_all.size() == 1, "one bad PnP must not discard another track")) return 1;
+  if (!require(solved_all.front().track_id == 2, "per-track PnP result identity")) return 1;
+
   std::cout << "auto_buff_partial_pnp_test passed\n";
   return 0;
 }

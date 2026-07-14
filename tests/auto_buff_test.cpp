@@ -1,9 +1,11 @@
 #include <fmt/core.h>
 
 #include <array>
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <memory>
+#include <vector>
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
 #include <yaml-cpp/yaml.h>
@@ -41,6 +43,15 @@ struct FrameTiming
 double elapsed_ms(const Clock::time_point & start, const Clock::time_point & end)
 {
   return std::chrono::duration<double, std::milli>(end - start).count();
+}
+
+double percentile_ms(std::vector<double> values, double percentile)
+{
+  if (values.empty()) return 0.0;
+  std::sort(values.begin(), values.end());
+  const size_t index = static_cast<size_t>(
+    std::clamp(percentile, 0.0, 1.0) * static_cast<double>(values.size() - 1));
+  return values[index];
 }
 
 size_t observation_index(auto_buff::BuffObservationType type)
@@ -175,9 +186,10 @@ const std::string keys =
   "{buff-mode m   | small                  | small 或 big      }"
   "{print-debug p | flase                   | 是否在终端输出误差 }"
   "{print-time    | flase                  | 是否在终端输出各步骤耗时 }"
+  "{headless      | false                  | 不显示窗口且不等待按键 }"
   "{print-step    | 1                      | 每隔多少帧输出一次 }"
   "{debug-predict-time | -1                | 蓝色调试框预测时间, 负数使用配置 }"
-  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/yolo_buff/123/12   | avi和txt文件的路径}";
+  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/assets/buff/buff guanfang   | avi和txt文件的路径}";
 
 int main(int argc, char * argv[])
 {
@@ -192,8 +204,11 @@ int main(int argc, char * argv[])
   auto start_index = cli.get<int>("start-index");
   auto end_index = cli.get<int>("end-index");
   auto buff_mode = cli.get<std::string>("buff-mode");
+  const auto detector_mode = buff_mode == "big" ? auto_buff::BuffMode::BIG
+                                                : auto_buff::BuffMode::SMALL;
   auto print_debug = cli.get<bool>("print-debug");
   auto print_time = cli.get<bool>("print-time");
+  auto headless = cli.get<bool>("headless");
   auto print_step = std::max(1, cli.get<int>("print-step"));
   auto debug_predict_time_cli = cli.get<double>("debug-predict-time");
 
@@ -250,6 +265,11 @@ int main(int argc, char * argv[])
   int current_solved_streak = 0;
   int longest_solved_streak = 0;
   int processed_frames = 0;
+  int multi_track_frames = 0;
+  int first_control_frame = -1;
+  int first_predict_frame = -1;
+  std::vector<double> detect_timings_ms;
+  std::vector<double> postprocess_timings_ms;
 
   video.set(cv::CAP_PROP_POS_FRAMES, start_index);
   for (int i = 0; use_imu_text && i < start_index; i++) {
@@ -293,23 +313,33 @@ int main(int argc, char * argv[])
     timing.set_imu_ms = elapsed_ms(step_start, Clock::now());
 
     step_start = Clock::now();
-    auto buff_observation = detector.detect(img, timestamp);
+    auto buff_observations = detector.detect_tracks(img, detector_mode, timestamp);
     processed_frames++;
-    if (buff_observation.has_value()) {
-      observation_counts[observation_index(buff_observation->type)]++;
-      if (last_track_id >= 0 && buff_observation->track_id != last_track_id) track_switch_count++;
-      last_track_id = buff_observation->track_id;
+    if (buff_observations.size() > 1) multi_track_frames++;
+    for (const auto & observation : buff_observations) {
+      observation_counts[observation_index(observation.type)]++;
+    }
+    if (!buff_observations.empty()) {
+      const auto primary = std::find_if(
+        buff_observations.begin(), buff_observations.end(),
+        [](const auto_buff::BuffObservation & observation) { return observation.primary; });
+      if (primary != buff_observations.end()) {
+        if (last_track_id >= 0 && primary->track_id != last_track_id) track_switch_count++;
+        last_track_id = primary->track_id;
+      }
     }
     timing.detect_ms = elapsed_ms(step_start, Clock::now());
 
     step_start = Clock::now();
-    auto power_runes = solver.solve(buff_observation);
-    if (buff_observation.has_value() && !power_runes.has_value()) pnp_failure_count++;
-    if (power_runes.has_value()) pose_counts[pose_index(power_runes->pose_quality)]++;
+    auto power_runes = solver.solve_all(buff_observations);
+    pnp_failure_count += static_cast<int>(buff_observations.size() - power_runes.size());
+    for (const auto & rune : power_runes) pose_counts[pose_index(rune.pose_quality)]++;
     timing.solve_ms = elapsed_ms(step_start, Clock::now());
 
     step_start = Clock::now();
     target->get_target(power_runes, timestamp);
+    if (target->can_control() && first_control_frame < 0) first_control_frame = frame_count;
+    if (target->prediction_ready() && first_predict_frame < 0) first_predict_frame = frame_count;
     if (!target->is_unsolve()) {
       solved_frames++;
       current_solved_streak++;
@@ -325,6 +355,8 @@ int main(int argc, char * argv[])
 
     auto command = aimer.aim(*aim_target_copy, timestamp, 22, false);
     timing.aim_ms = elapsed_ms(step_start, Clock::now());
+    detect_timings_ms.push_back(timing.detect_ms);
+    postprocess_timings_ms.push_back(timing.solve_ms + timing.target_ms + timing.aim_ms);
 
     // cboard.send(command);
 
@@ -336,15 +368,15 @@ int main(int argc, char * argv[])
     // data["bullet_speed"] = cboard.bullet_speed;
 
     // buff原始观测数据
-    if (power_runes.has_value()) {
-      const auto & p = power_runes.value();
+    if (!power_runes.empty()) {
+      const auto & p = power_runes.front();
       data["buff_R_yaw"] = p.ypd_in_world[0];
       data["buff_R_pitch"] = p.ypd_in_world[1];
       data["buff_R_dis"] = p.ypd_in_world[2];
     }
 
     if (!target->is_unsolve()) {
-      auto * p = power_runes.has_value() ? &power_runes.value() : nullptr;
+      auto * p = power_runes.empty() ? nullptr : &power_runes.front();
       std::optional<std::vector<cv::Point2f>> pnp_points;
       std::optional<PixelCompare> green_compare;
       std::optional<PixelCompare> blue_compare;
@@ -503,13 +535,15 @@ int main(int argc, char * argv[])
     timing.plot_ms = elapsed_ms(step_start, Clock::now());
 
     step_start = Clock::now();
-    cv::imshow("result", img);
+    if (!headless) {
+      cv::imshow("result", img);
 
-    int key = cv::waitKey(50);
-    if (key == 'q') break;
-    while (key == ' ') {
-      int y = cv::waitKey(30);
-      if (y == 'q') break;
+      int key = cv::waitKey(50);
+      if (key == 'q') break;
+      while (key == ' ') {
+        int y = cv::waitKey(30);
+        if (y == 'q') break;
+      }
     }
     timing.show_wait_ms = elapsed_ms(step_start, Clock::now());
     timing.total_ms = elapsed_ms(frame_start, Clock::now());
@@ -521,12 +555,15 @@ int main(int argc, char * argv[])
   fmt::print(
     "summary frames={} obs(full/target/fan)={}/{}/{} pose(8/5/4)={}/{}/{} "
     "pnp_fail={} temporal_reject={} gate_episode={} track_switch={}/{} ekf_reset={} solved={} blind={} "
-    "longest_solved={}\n",
+    "longest_solved={} multi_track_frames={} first_control={} first_predict={} "
+    "p95_detect={:.2f}ms p95_post={:.2f}ms imu_valid={}\n",
     processed_frames, observation_counts[0], observation_counts[1], observation_counts[2],
     pose_counts[0], pose_counts[1], pose_counts[2], pnp_failure_count,
     detector.temporal_reject_count(),
     detector.gate_failure_count(), track_switch_count, detector.confirmed_switch_count(),
-    target->reset_count(), solved_frames, blind_frames, longest_solved_streak);
+    target->reset_count(), solved_frames, blind_frames, longest_solved_streak, multi_track_frames,
+    first_control_frame, first_predict_frame, percentile_ms(detect_timings_ms, 0.95),
+    percentile_ms(postprocess_timings_ms, 0.95), use_imu_text);
   cv::destroyAllWindows();
   text.close();  // 关闭文件
 

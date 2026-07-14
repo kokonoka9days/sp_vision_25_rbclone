@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "buff_type.hpp"
+#include "buff_track_bank.hpp"
 #include "tools/img_tools.hpp"
 #include "yolo11_buff.hpp"
 const int LOSE_MAX = 5;  // 丢失的阙值
@@ -18,10 +19,21 @@ class Buff_Detector
 public:
   Buff_Detector(const std::string & config);
 
+  std::vector<BuffObservation> detect_tracks(
+    cv::Mat & bgr_img, BuffMode mode, std::chrono::steady_clock::time_point timestamp);
+
+  std::vector<BuffObservation> detect_tracks(cv::Mat & bgr_img, BuffMode mode);
+
+  std::optional<BuffObservation> detect_24(
+    cv::Mat & bgr_img, BuffMode mode, std::chrono::steady_clock::time_point timestamp);
+
   std::optional<BuffObservation> detect_24(
     cv::Mat & bgr_img, std::chrono::steady_clock::time_point timestamp);
 
   std::optional<BuffObservation> detect_24(cv::Mat & bgr_img);
+
+  std::optional<BuffObservation> detect(
+    cv::Mat & bgr_img, BuffMode mode, std::chrono::steady_clock::time_point timestamp);
 
   std::optional<BuffObservation> detect(
     cv::Mat & bgr_img, std::chrono::steady_clock::time_point timestamp);
@@ -32,8 +44,8 @@ public:
 
   int gate_failure_count() const { return gate_failure_count_; }
 
-  int confirmed_switch_count() const { return confirmed_switch_count_; }
-  int temporal_reject_count() const { return temporal_reject_count_; }
+  int confirmed_switch_count() const { return track_bank_.confirmed_switch_count(); }
+  int temporal_reject_count() const { return track_bank_.temporal_reject_count(); }
 
 private:
   void handle_img(const cv::Mat & bgr_img, cv::Mat & dilated_img);
@@ -49,8 +61,14 @@ private:
   };
 
   std::optional<BuffObservation> detect_impl(
-    cv::Mat & bgr_img, bool single_candidate,
+    cv::Mat & bgr_img, bool single_candidate, BuffMode mode,
     std::chrono::steady_clock::time_point timestamp);
+
+  std::vector<BuffObservation> detect_tracks_impl(
+    cv::Mat & bgr_img, bool single_candidate, BuffMode mode,
+    std::chrono::steady_clock::time_point timestamp);
+
+  void reset_for_mode(BuffMode mode);
 
   std::vector<BuffObservation> build_candidates(
     const std::vector<YOLO11_BUFF::Object> & results, const cv::Point2f & r_center) const;
@@ -78,6 +96,9 @@ private:
   float hard_keypoint_threshold_ = 0.15f;
   double temporal_residual_gate_px_ = 10.0;
   int center_lost_max_ = 6;
+  double center_innovation_gate_px_ = 45.0;
+  int center_recovery_hits_ = 2;
+  double center_retention_s_ = 0.400;
 
   double pair_angle_gate_rad_ = 15.0 / 57.3;
   double pair_ratio_min_ = 0.30;
@@ -100,6 +121,15 @@ private:
   cv::Point2f last_r_center_{0.0f, 0.0f};
   int center_lost_count_ = 0;
   std::chrono::steady_clock::time_point last_r_center_time_{};
+  std::chrono::steady_clock::time_point last_r_center_seen_time_{};
+  cv::Point2f r_center_velocity_{0.0f, 0.0f};
+  bool has_pending_r_center_ = false;
+  cv::Point2f pending_r_center_{0.0f, 0.0f};
+  int pending_r_center_hits_ = 0;
+
+  BuffTrackBank track_bank_;
+  BuffMode current_mode_ = BuffMode::SMALL;
+  bool has_current_mode_ = false;
 
   bool has_locked_target_ = false;
   double last_locked_angle_ = 0.0;
