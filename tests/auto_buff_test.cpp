@@ -172,12 +172,12 @@ const std::string keys =
   "{config-path c  | ../configs/xiaohei.yaml    | yaml配置文件的路径}"
   "{start-index s  | 0                      | 视频起始帧下标    }"
   "{end-index e    | 0                      | 视频结束帧下标    }"
-  "{buff-mode m   | big                  | small 或 big      }"
+  "{buff-mode m   | small                  | small 或 big      }"
   "{print-debug p | flase                   | 是否在终端输出误差 }"
   "{print-time    | flase                  | 是否在终端输出各步骤耗时 }"
   "{print-step    | 1                      | 每隔多少帧输出一次 }"
   "{debug-predict-time | -1                | 蓝色调试框预测时间, 负数使用配置 }"
-  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/yolo_buff/123/big_buff_2   | avi和txt文件的路径}";
+  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/yolo_buff/123/12   | avi和txt文件的路径}";
 
 int main(int argc, char * argv[])
 {
@@ -505,7 +505,7 @@ int main(int argc, char * argv[])
     step_start = Clock::now();
     cv::imshow("result", img);
 
-    int key = cv::waitKey(5);
+    int key = cv::waitKey(50);
     if (key == 'q') break;
     while (key == ' ') {
       int y = cv::waitKey(30);
