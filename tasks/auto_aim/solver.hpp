@@ -18,7 +18,7 @@ public:
 
   void set_R_gimbal2world(const Eigen::Quaterniond & q);
 
-  void solve(Armor & armor) const;
+  bool solve(Armor & armor) const;
 
   void omn_dig_yaw_solve(Armor & armor,  Eigen::Vector3d R_camera2biggimbal_ypr, Eigen::Vector3d t_camera2biggimbal ) const;
 

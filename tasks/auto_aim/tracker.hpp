@@ -44,6 +44,7 @@ public:
 
   inline void setSolver(Solver * solver__){this->solver_ = solver__; }
   void set_gimbal(io::Gimbal* gimbal) { gimbal_ = gimbal; }
+  void set_enemy_color(Color color) { enemy_color_ = color; }
   inline size_t get_update_count(){return this->target_.update_count_;}
 private:
   Solver * solver_;
@@ -54,6 +55,7 @@ private:
   int max_temp_lost_count_;
   int detect_count_;
   int temp_lost_count_;
+  int update_reject_count_;
   int outpost_max_temp_lost_count_;
   int normal_temp_lost_count_;
   std::string state_, pre_state_;
@@ -65,6 +67,8 @@ private:
   void state_machine(bool found);
 
   bool set_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
+
+  void initialize_target(const Armor & armor, std::chrono::steady_clock::time_point t);
 
   bool update_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
 

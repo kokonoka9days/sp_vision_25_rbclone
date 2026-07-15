@@ -2,6 +2,7 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <cmath>
 #include <vector>
 
 #include "tools/logger.hpp"
@@ -52,15 +53,21 @@ void Solver::set_R_gimbal2world(const Eigen::Quaterniond & q)
 }
 
 //solvePnP（获得姿态）
-void Solver::solve(Armor & armor) const
+bool Solver::solve(Armor & armor) const
 {
+  if (armor.points.size() != 4) return false;
+
   const auto & object_points =
     (armor.type == ArmorType::big) ? BIG_ARMOR_POINTS : SMALL_ARMOR_POINTS;
 
   cv::Vec3d rvec, tvec;
-  cv::solvePnP(
+  const bool solved = cv::solvePnP(
     object_points, armor.points, camera_matrix_, distort_coeffs_, rvec, tvec, false,
     cv::SOLVEPNP_IPPE);
+  if (!solved || !std::isfinite(tvec[0]) || !std::isfinite(tvec[1]) ||
+      !std::isfinite(tvec[2]) || tvec[2] <= 0.0) {
+    return false;
+  }
 
   Eigen::Vector3d xyz_in_camera;
   cv::cv2eigen(tvec, xyz_in_camera);
@@ -77,14 +84,21 @@ void Solver::solve(Armor & armor) const
   armor.ypr_in_world = tools::eulers(R_armor2world, 2, 1, 0);
 
   armor.ypd_in_world = tools::xyz2ypd(armor.xyz_in_world);
+  armor.yaw_raw = armor.ypr_in_world[0];
+
+  if (!armor.xyz_in_world.allFinite() || !armor.ypr_in_world.allFinite() ||
+      !armor.ypd_in_world.allFinite()) {
+    return false;
+  }
 
   // 平衡不做yaw优化，因为pitch假设不成立
   auto is_balance = (armor.type == ArmorType::big) &&
                     (armor.name == ArmorName::three || armor.name == ArmorName::four ||
                      armor.name == ArmorName::five);
-  if (is_balance) return;
+  if (is_balance) return true;
 
   optimize_yaw(armor);
+  return armor.ypr_in_world.allFinite() && std::isfinite(armor.yaw_raw);
 }
 
 void Solver::omn_dig_yaw_solve(Armor & armor, Eigen::Vector3d R_camera2biggimbal_ypr, Eigen::Vector3d t_camera2biggimbal ) const{

@@ -3,6 +3,7 @@
 #include <numeric>
 #include <cmath>
 #include <algorithm>
+#include <limits>
 
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
@@ -19,11 +20,13 @@ Target::Target(
   const Armor & armor, std::chrono::steady_clock::time_point t, double radius, int armor_num,
   Eigen::VectorXd P0_dig)
 : name(armor.name),
+  color(armor.color),
   armor_type(armor.type),
   jumped(false),
   last_id(0),
   update_count_(0),
   armor_num_(armor_num),
+  nominal_radius_(radius),
   t_(t),
   is_switch_(false),
   is_converged_(false),
@@ -70,11 +73,16 @@ Target::Target(
   };
 
   ekf_ = tools::ExtendedKalmanFilter(x0, P0, x_add);
+  observed_center_ = {center_x, center_y, center_z};
+  cv_position_at_observation_ = observed_center_;
+  observation_time_ = t;
+  init_ca_filter(observed_center_, Eigen::Vector3d::Zero());
+  record_center_observation(t, observed_center_);
 }
 
 // 供手动初始化使用的构造函数
-Target::Target(double x, double vyaw, double radius, double h) 
-: armor_num_(4)
+Target::Target(double x, double vyaw, double radius, double h)
+: armor_num_(4), nominal_radius_(radius), t_(std::chrono::steady_clock::time_point{})
 {
   Eigen::VectorXd x0 = Eigen::VectorXd::Zero(11);
   x0 << x, 0, 0, 0, 0, 0, 0, vyaw, radius, 0, h;
@@ -90,6 +98,11 @@ Target::Target(double x, double vyaw, double radius, double h)
   };
 
   ekf_ = tools::ExtendedKalmanFilter(x0, P0, x_add);
+  observed_center_ = {x, 0, 0};
+  cv_position_at_observation_ = observed_center_;
+  observation_time_ = t_;
+  init_ca_filter(observed_center_, Eigen::Vector3d::Zero());
+  record_center_observation(t_, observed_center_);
 }
 
 void Target::predict(std::chrono::steady_clock::time_point t)
@@ -101,7 +114,10 @@ void Target::predict(std::chrono::steady_clock::time_point t)
 
 void Target::predict(double dt)
 {
-  // ================= 1. 原有的整车 EKF (CV模型) 预测 =================
+  if (!std::isfinite(dt) || std::abs(dt) < 1e-9) return;
+  prediction_age_ += dt;
+
+  // CV model for the complete vehicle state.
   Eigen::MatrixXd F = Eigen::MatrixXd::Identity(11, 11);
   F(0, 1) = dt; F(2, 3) = dt; F(4, 5) = dt; F(6, 7) = dt;
 
@@ -135,55 +151,198 @@ void Target::predict(double dt)
     if (std::abs(this->ekf_.x[7]) > 2) this->ekf_.x[7] = this->ekf_.x[7] > 0 ? 2.51 : -2.51;
   }
 
- ekf_.predict(F, Q, f);
+  ekf_.predict(F, Q, f);
 
-  // ================= 2. 中心级 CA EKF 预测 =================
-  if (ca_ekf_init_) {
-    constexpr double CA_SINGER_ALPHA = 2.0;  // Singer 机动时间常数 (τ=0.5s)
+  if (!ca_ekf_init_) return;
+  // A measurement update may request an implausible acceleration. Bound it before the state
+  // transition so the rejected impulse never contributes to the next position prediction.
+  clamp_ca_state();
 
-    // F_CA: 9x9 完整 CA 模型 (位置←速度←加速度)
-    Eigen::MatrixXd F_CA = Eigen::MatrixXd::Identity(9, 9);
-    const double ea     = std::exp(-CA_SINGER_ALPHA * dt);
-    const double a2     = CA_SINGER_ALPHA * CA_SINGER_ALPHA;
-    const double fac_pa = (CA_SINGER_ALPHA * dt - 1.0 + ea) / a2;
-    const double fac_va = (1.0 - ea) / CA_SINGER_ALPHA;
-    for (int i = 0; i < 3; i++) {
-      F_CA(i*3,     i*3+1) = dt;       // pos ← vel 不变
-      F_CA(i*3,     i*3+2) = fac_pa;   // pos ← acc: Singer
-      F_CA(i*3+1,   i*3+2) = fac_va;   // vel ← acc: Singer
-      F_CA(i*3+2,   i*3+2) = ea;       // acc self-decay: e^(−α·dt)
-    }
-
-    // Q_CA: Singer 型块对角，q=1.0
-    double q = 1.0;
-    double dt2 = dt * dt;
-    double dt3 = dt2 * dt;
-    double dt4 = dt3 * dt;
-    double dt5 = dt4 * dt;
-    Eigen::MatrixXd Q_CA = Eigen::MatrixXd::Zero(9, 9);
-    for (int i = 0; i < 3; i++) {
-      int j = i * 3;
-      Q_CA(j,   j)   = q * dt5 / 20.0;  Q_CA(j,   j+1) = q * dt4 / 8.0;   Q_CA(j,   j+2) = q * dt3 / 6.0;
-      Q_CA(j+1, j)   = q * dt4 / 8.0;   Q_CA(j+1, j+1) = q * dt3 / 3.0;   Q_CA(j+1, j+2) = q * dt2 / 2.0;
-      Q_CA(j+2, j)   = q * dt3 / 6.0;   Q_CA(j+2, j+1) = q * dt2 / 2.0;   Q_CA(j+2, j+2) = q * dt;
-    }
-
-    ca_ekf_.predict(F_CA, Q_CA);
+  // Standard CA transition paired with its matching continuous white-jerk Q.
+  Eigen::MatrixXd F_ca = Eigen::MatrixXd::Identity(9, 9);
+  for (int axis = 0; axis < 3; ++axis) {
+    const int j = axis * 3;
+    F_ca(j, j + 1) = dt;
+    F_ca(j, j + 2) = 0.5 * dt * dt;
+    F_ca(j + 1, j + 2) = dt;
   }
 
+  const double T = std::abs(dt);
+  const double direction = dt >= 0 ? 1.0 : -1.0;
+  const double T2 = T * T;
+  const double T3 = T2 * T;
+  const double T4 = T3 * T;
+  const double T5 = T4 * T;
+  Eigen::MatrixXd Q_ca = Eigen::MatrixXd::Zero(9, 9);
+  for (int axis = 0; axis < 3; ++axis) {
+    const int j = axis * 3;
+    const double q = axis < 2 ? 200.0 : 40.0;
+    Q_ca(j, j) = q * T5 / 20.0;
+    Q_ca(j, j + 1) = Q_ca(j + 1, j) = direction * q * T4 / 8.0;
+    Q_ca(j, j + 2) = Q_ca(j + 2, j) = q * T3 / 6.0;
+    Q_ca(j + 1, j + 1) = q * T3 / 3.0;
+    Q_ca(j + 1, j + 2) = Q_ca(j + 2, j + 1) = direction * q * T2 / 2.0;
+    Q_ca(j + 2, j + 2) = q * T;
+  }
+  ca_ekf_.predict(F_ca, Q_ca);
+}
 
-  // ================= 3. 计算Singer思想的机动频率权重 =================
-  double vyaw = std::abs(ekf_.x[7]);
-  if (this->name == ArmorName::outpost) {
-      // 前哨站强制全信任整车CV
-      w_cv_ = 1.0; 
+void Target::init_ca_filter(
+  const Eigen::Vector3d & center, const Eigen::Vector3d & velocity)
+{
+  Eigen::VectorXd x0 = Eigen::VectorXd::Zero(9);
+  x0 << center.x(), velocity.x(), 0.0, center.y(), velocity.y(), 0.0, center.z(), velocity.z(),
+    0.0;
+
+  Eigen::VectorXd P0_diagonal(9);
+  P0_diagonal << 0.04, 9.0, 100.0, 0.04, 9.0, 100.0, 0.09, 9.0, 64.0;
+  ca_ekf_ = tools::ExtendedKalmanFilter(x0, P0_diagonal.asDiagonal());
+  ca_position_at_observation_ = center;
+  ca_ekf_init_ = true;
+  ca_update_count_ = 0;
+}
+
+void Target::clamp_ca_state()
+{
+  if (!ca_ekf_init_ || ca_ekf_.x.size() != 9) return;
+  constexpr double MAX_ACCEL_XY = 15.0;
+  constexpr double MAX_ACCEL_Z = 8.0;
+  ca_ekf_.x[2] = std::clamp(ca_ekf_.x[2], -MAX_ACCEL_XY, MAX_ACCEL_XY);
+  ca_ekf_.x[5] = std::clamp(ca_ekf_.x[5], -MAX_ACCEL_XY, MAX_ACCEL_XY);
+  ca_ekf_.x[8] = std::clamp(ca_ekf_.x[8], -MAX_ACCEL_Z, MAX_ACCEL_Z);
+}
+
+void Target::record_center_observation(
+  std::chrono::steady_clock::time_point time, const Eigen::Vector3d & center)
+{
+  if (!center.allFinite()) return;
+  if (!center_history_.empty() && center_history_.back().time == time) {
+    center_history_.back().center = center;
   } else {
-      constexpr double OMEGA_THRESH = 1.5; // 机动频率融合阈值 (rad/s)
-      w_cv_ = 1.0 - std::exp(-vyaw / OMEGA_THRESH);
+    center_history_.push_back({time, center});
+  }
+
+  constexpr double HISTORY_SECONDS = 0.5;
+  while (
+    center_history_.size() > 2 &&
+    tools::delta_time(time, center_history_.front().time) > HISTORY_SECONDS) {
+    center_history_.pop_front();
   }
 }
 
-void Target::update(const Armor & armor)
+Eigen::Vector3d Target::align_with_bearing_prediction(const Eigen::Vector3d & center) const
+{
+  const double range = center.norm();
+  if (!std::isfinite(range) || range < 1e-6 || center_history_.size() < 4) return center;
+
+  constexpr double FIT_WINDOW = 0.10;
+  const auto latest_time = center_history_.back().time;
+  std::vector<Eigen::Vector3d> samples;
+  samples.reserve(center_history_.size());
+  double previous_raw_yaw = 0.0;
+  double previous_unwrapped_yaw = 0.0;
+  bool first = true;
+  for (const auto & observation : center_history_) {
+    const double dt = tools::delta_time(observation.time, latest_time);
+    if (dt < -FIT_WINDOW || observation.center.norm() < 1e-6) continue;
+    const double raw_yaw = std::atan2(observation.center.y(), observation.center.x());
+    const double pitch = std::atan2(
+      observation.center.z(), std::hypot(observation.center.x(), observation.center.y()));
+    double unwrapped_yaw = raw_yaw;
+    if (!first) {
+      unwrapped_yaw = previous_unwrapped_yaw + tools::limit_rad(raw_yaw - previous_raw_yaw);
+    }
+    samples.emplace_back(dt, unwrapped_yaw, pitch);
+    previous_raw_yaw = raw_yaw;
+    previous_unwrapped_yaw = unwrapped_yaw;
+    first = false;
+  }
+  if (samples.size() < 4) return center;
+
+  std::vector<double> weights(samples.size(), 1.0);
+  Eigen::Matrix2d coefficients = Eigen::Matrix2d::Zero();
+  bool fit_valid = false;
+  for (int iteration = 0; iteration < 4; ++iteration) {
+    Eigen::Matrix2d normal = Eigen::Matrix2d::Zero();
+    Eigen::Matrix2d rhs = Eigen::Matrix2d::Zero();
+    for (std::size_t i = 0; i < samples.size(); ++i) {
+      const Eigen::Vector2d basis(1.0, samples[i].x());
+      const Eigen::Vector2d angles(samples[i].y(), samples[i].z());
+      normal.noalias() += weights[i] * basis * basis.transpose();
+      rhs.noalias() += weights[i] * basis * angles.transpose();
+    }
+    const Eigen::LDLT<Eigen::Matrix2d> ldlt(normal);
+    if (ldlt.info() != Eigen::Success || !ldlt.isPositive()) break;
+    coefficients = ldlt.solve(rhs);
+    if (!coefficients.allFinite()) break;
+    fit_valid = true;
+
+    std::vector<double> residuals;
+    residuals.reserve(samples.size());
+    for (const auto & sample : samples) {
+      const Eigen::Vector2d basis(1.0, sample.x());
+      const Eigen::Vector2d angles(sample.y(), sample.z());
+      residuals.push_back((coefficients.transpose() * basis - angles).norm());
+    }
+    std::vector<double> sorted_residuals = residuals;
+    std::sort(sorted_residuals.begin(), sorted_residuals.end());
+    const double scale = 1.4826 * sorted_residuals[sorted_residuals.size() / 2] + 1e-7;
+    for (std::size_t i = 0; i < residuals.size(); ++i) {
+      const double u = residuals[i] / (3.0 * scale);
+      if (u >= 1.0) {
+        weights[i] = 0.02;
+      } else {
+        const double one_minus_square = 1.0 - u * u;
+        weights[i] = one_minus_square * one_minus_square;
+      }
+    }
+  }
+  if (!fit_valid) return center;
+
+  const double max_bearing_rate = 0.5 + 8.0 / std::max(range, 1.0);
+  coefficients(1, 0) =
+    std::clamp(coefficients(1, 0), -max_bearing_rate, max_bearing_rate);
+  coefficients(1, 1) =
+    std::clamp(coefficients(1, 1), -max_bearing_rate, max_bearing_rate);
+  const Eigen::Vector2d predicted_angles =
+    coefficients.transpose() * Eigen::Vector2d(1.0, prediction_age_);
+
+  const double center_yaw = std::atan2(center.y(), center.x());
+  const double center_pitch = std::atan2(center.z(), std::hypot(center.x(), center.y()));
+  const double abs_age = std::abs(prediction_age_);
+  const double bearing_weight = std::clamp((0.25 - abs_age) / 0.15, 0.0, 1.0);
+  const double yaw = center_yaw +
+                     bearing_weight * tools::limit_rad(predicted_angles.x() - center_yaw);
+  const double pitch =
+    center_pitch + bearing_weight * (predicted_angles.y() - center_pitch);
+  const double horizontal_range = range * std::cos(pitch);
+  return {
+    horizontal_range * std::cos(yaw), horizontal_range * std::sin(yaw),
+    range * std::sin(pitch)};
+}
+
+Eigen::Vector3d Target::center_from_armor(const Armor & armor, int id) const
+{
+  const bool use_l_h = armor_num_ == 4 && (id == 1 || id == 3);
+  const double radius = use_l_h ? ekf_.x[8] + ekf_.x[9] : ekf_.x[8];
+  const double armor_yaw = armor.ypr_in_world[0];
+
+  double center_z = armor.xyz_in_world[2];
+  if (name == ArmorName::outpost) {
+    const double dz = tower_armor_hs[id].second - tower_armor_hs[0].second;
+    const double direction = dz >= 0.0 ? 1.0 : -1.0;
+    const int steps = std::abs(dz) > TOWER_ARMOR_DTB ? 2 : std::abs(dz) > TOWER_ARMOR_XTB ? 1 : 0;
+    center_z -= ekf_.x[10] * direction * steps;
+  } else if (use_l_h) {
+    center_z -= ekf_.x[10];
+  }
+
+  return {
+    armor.xyz_in_world[0] + radius * std::cos(armor_yaw),
+    armor.xyz_in_world[1] + radius * std::sin(armor_yaw), center_z};
+}
+
+bool Target::update(const Armor & armor)
 {
   int id = 0;
 
@@ -193,7 +352,7 @@ void Target::update(const Armor & armor)
     auto min_angle_error = 1e10;
     const std::vector<Eigen::Vector4d> & xyza_list = armor_xyza_list();
 
-    this->ekf_x()(10) = TOWER_ARMOR_DH;
+    ekf_.x[10] = TOWER_ARMOR_DH;
 
     std::vector<std::pair<Eigen::Vector4d, int>> xyza_i_list;
     for (int i = 0; i < armor_num_; i++) {
@@ -297,6 +456,25 @@ void Target::update(const Armor & armor)
     }
   }
 
+  const Eigen::Vector3d center_measurement = center_from_armor(armor, id);
+  if (!center_measurement.allFinite()) return false;
+  if (update_count_ >= 5) {
+    const double observation_dt = std::max(tools::delta_time(t_, observation_time_), 0.0);
+    constexpr double MAX_TRANSLATION_SPEED = 8.0;
+    const Eigen::Vector3d predicted_center = fused_center();
+    const Eigen::Vector3d line_of_sight = predicted_center.normalized();
+    const Eigen::Vector3d innovation = center_measurement - predicted_center;
+    const double radial_innovation = std::abs(innovation.dot(line_of_sight));
+    const double tangential_innovation =
+      (innovation - innovation.dot(line_of_sight) * line_of_sight).norm();
+    const double motion_allowance = MAX_TRANSLATION_SPEED * observation_dt;
+    constexpr double TANGENTIAL_PNP_MARGIN = 0.10;
+    constexpr double RADIAL_PNP_MARGIN = 0.80;
+    if (tangential_innovation > TANGENTIAL_PNP_MARGIN + motion_allowance) return false;
+
+    if (radial_innovation > RADIAL_PNP_MARGIN + motion_allowance) return false;
+  }
+
   if (id != 0) jumped = true;
 
   // 检测换板事件
@@ -331,59 +509,94 @@ void Target::update(const Armor & armor)
     }
   }
 
-  last_id = id;
-  update_count_++;    
-  xyz_in_world = armor.xyz_in_world;
+  const Eigen::Vector3d cv_prior = cv_center();
+  const Eigen::Vector3d ca_prior =
+    ca_ekf_init_ ? Eigen::Vector3d(ca_ekf_.x[0], ca_ekf_.x[3], ca_ekf_.x[6]) : cv_prior;
 
-  // ================= 1. EKF 状态更新 =================
-  update_ypda(armor, id);
-
-  // ================= 2. 中心级 CA EKF 更新 =================
-  {
-    // 从观测板位反算中心 (plate observation -> center)
-    double c = std::cos(armor.ypr_in_world[0]);
-    double s = std::sin(armor.ypr_in_world[0]);
-    Eigen::Vector3d z_ca(
-      armor.xyz_in_world[0] + ekf_.x[8] * c,
-      armor.xyz_in_world[1] + ekf_.x[8] * s,
-      armor.xyz_in_world[2]
-    );
-
-    if (!ca_ekf_init_) {
-      // 惰性初始化: 位置 = 观测中心, 速度 = CV EKF 当前速度, 加速度 = 0
-      Eigen::VectorXd x0_ca = Eigen::VectorXd::Zero(9);
-      x0_ca(0) = z_ca(0);  x0_ca(1) = ekf_.x[1];  x0_ca(2) = 0;
-      x0_ca(3) = z_ca(1);  x0_ca(4) = ekf_.x[3];  x0_ca(5) = 0;
-      x0_ca(6) = z_ca(2);  x0_ca(7) = ekf_.x[5];  x0_ca(8) = 0;
-
-      Eigen::MatrixXd P0_ca = Eigen::MatrixXd::Identity(9, 9) * 10.0;
-      auto x_add_ca = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) { return a + b; };
-      ca_ekf_ = tools::ExtendedKalmanFilter(x0_ca, P0_ca, x_add_ca);
-      ca_ekf_init_ = true;
-    } else {
-      // 6维观测: 位置(从板位反算的中心) + CV速度作为速度观测
-      Eigen::VectorXd z_ca_ext(6);
-      z_ca_ext << z_ca, ekf_.x[1], ekf_.x[3], ekf_.x[5];
-
-      auto h_ca = [](const Eigen::VectorXd & x) -> Eigen::VectorXd {
-        Eigen::VectorXd z_pred(6);
-        z_pred << x[0], x[3], x[6], x[1], x[4], x[7];
-        return z_pred;
-      };
-      auto z_sub_ca = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) { return a - b; };
-
-      Eigen::MatrixXd H_ca = Eigen::MatrixXd::Zero(6, 9);
-      H_ca(0, 0) = 1;  H_ca(1, 3) = 1;  H_ca(2, 6) = 1;   // 位置观测
-      H_ca(3, 1) = 1;  H_ca(4, 4) = 1;  H_ca(5, 7) = 1;   // 速度观测
-
-      // 位置噪声: 0.01·I (σ≈0.1m), 速度噪声: 0.08·I (σ≈0.28m/s, 配合 Singer α=2)
-      Eigen::MatrixXd R_ca = Eigen::MatrixXd::Zero(6, 6);
-      R_ca(0,0) = R_ca(1,1) = R_ca(2,2) = 0.01;
-      R_ca(3,3) = R_ca(4,4) = R_ca(5,5) = 0.08;
-
-      ca_ekf_.update(z_ca_ext, H_ca, R_ca, h_ca, z_sub_ca);
+  // Compare both models only against a measurement neither model has consumed yet.
+  if (ca_update_count_ >= 3 && center_measurement.allFinite()) {
+    const double cv_error = (cv_prior.head<2>() - center_measurement.head<2>()).squaredNorm();
+    const double ca_error = (ca_prior.head<2>() - center_measurement.head<2>()).squaredNorm();
+    if (cv_error < 1.0 && ca_error < 1.0) {
+      constexpr double ERROR_EMA_KEEP = 0.90;
+      if (!model_error_initialized_) {
+        cv_error_ema_ = cv_error;
+        ca_error_ema_ = ca_error;
+        model_error_initialized_ = true;
+      } else {
+        cv_error_ema_ = ERROR_EMA_KEEP * cv_error_ema_ + (1.0 - ERROR_EMA_KEEP) * cv_error;
+        ca_error_ema_ = ERROR_EMA_KEEP * ca_error_ema_ + (1.0 - ERROR_EMA_KEEP) * ca_error;
+      }
     }
   }
+
+  last_id = id;
+  update_count_++;
+  xyz_in_world = armor.xyz_in_world;
+  observed_center_ = center_measurement;
+  observation_time_ = t_;
+  prediction_age_ = 0.0;
+
+  update_ypda(armor, id);
+
+  if (!ca_ekf_init_) {
+    init_ca_filter(center_measurement, {ekf_.x[1], ekf_.x[3], ekf_.x[5]});
+  } else {
+    Eigen::MatrixXd H_ca = Eigen::MatrixXd::Zero(3, 9);
+    H_ca(0, 0) = 1.0;
+    H_ca(1, 3) = 1.0;
+    H_ca(2, 6) = 1.0;
+
+    const double distance = armor.xyz_in_world.norm();
+    const double sigma_tangential = std::clamp(0.025 + 0.004 * distance, 0.04, 0.08);
+    const double sigma_radial = std::clamp(0.12 + 0.03 * distance, 0.18, 0.45);
+    const Eigen::Vector3d line_of_sight = center_measurement.normalized();
+    Eigen::Matrix3d R_ca =
+      sigma_tangential * sigma_tangential * Eigen::Matrix3d::Identity();
+    R_ca.noalias() +=
+      (sigma_radial * sigma_radial - sigma_tangential * sigma_tangential) *
+      line_of_sight * line_of_sight.transpose();
+
+    const Eigen::Vector3d residual = center_measurement - ca_prior;
+    const Eigen::Matrix3d S = H_ca * ca_ekf_.P * H_ca.transpose() + R_ca;
+    const Eigen::LDLT<Eigen::Matrix3d> ldlt(S);
+    const double nis = ldlt.info() == Eigen::Success
+                         ? residual.dot(ldlt.solve(residual))
+                         : std::numeric_limits<double>::infinity();
+
+    if (!std::isfinite(nis) || residual.norm() > 1.5) {
+      init_ca_filter(center_measurement, {ekf_.x[1], ekf_.x[3], ekf_.x[5]});
+      w_cv_ = 1.0;
+      model_error_initialized_ = false;
+    } else {
+      // Inflate R instead of letting one PnP outlier become a false acceleration command.
+      if (nis > 11.345) R_ca *= std::clamp(nis / 7.815, 1.0, 50.0);
+      ca_ekf_.update(center_measurement, H_ca, R_ca);
+      if (ca_ekf_.data.at("filter_update_rejected") < 0.5) ca_update_count_++;
+    }
+  }
+  clamp_ca_state();
+
+  if (name == ArmorName::outpost || ca_update_count_ < 8 || !model_error_initialized_) {
+    w_cv_ = 1.0;
+  } else {
+    constexpr double ERROR_FLOOR = 0.0025;
+    const double relative_ca = (cv_error_ema_ + ERROR_FLOOR) /
+                               (cv_error_ema_ + ca_error_ema_ + 2.0 * ERROR_FLOOR);
+    const double acceleration = std::hypot(ca_ekf_.x[2], ca_ekf_.x[5]);
+    const double maneuver_evidence = std::clamp((acceleration - 0.4) / 2.5, 0.0, 1.0);
+    const double ca_weight =
+      std::clamp(relative_ca * (0.25 + 0.75 * maneuver_evidence), 0.05, 0.85);
+    const double target_w_cv = 1.0 - ca_weight;
+    w_cv_ = 0.8 * w_cv_ + 0.2 * target_w_cv;
+  }
+
+  // Anchor each model at the measurement it just consumed. Future output then uses the
+  // model's displacement, without carrying its steady-state position lag into aiming.
+  cv_position_at_observation_ = cv_center();
+  ca_position_at_observation_ = {ca_ekf_.x[0], ca_ekf_.x[3], ca_ekf_.x[6]};
+  record_center_observation(t_, center_measurement);
+  return true;
 }
 
 void Target::update_ypda(const Armor & armor, int id)
@@ -436,12 +649,13 @@ void Target::update_ypda(const Armor & armor, int id)
 
   ekf_.update(z, H, R, h, z_subtract);
 
-  if (update_count_ < 15) {
-    double damping = update_count_ / 15.0; // 从 1/15 线性平滑增加到 1.0
-    ekf_.x[1] *= damping; // vx 阻尼
-    ekf_.x[3] *= damping; // vy 阻尼
-    ekf_.x[5] *= damping; // vz 阻尼
-    ekf_.x[7] *= damping; // vyaw (角速度) 阻尼
+  const double min_radius = 0.60 * nominal_radius_;
+  const double max_radius = 1.40 * nominal_radius_;
+  ekf_.x[8] = std::clamp(ekf_.x[8], min_radius, max_radius);
+  if (armor_num_ == 4) {
+    const double long_radius = std::clamp(
+      ekf_.x[8] + ekf_.x[9], 0.60 * nominal_radius_, 2.00 * nominal_radius_);
+    ekf_.x[9] = long_radius - ekf_.x[8];
   }
 }
 
@@ -451,21 +665,68 @@ Eigen::VectorXd Target::ekf_x() const { return ekf_.x; }
 // 获取滤波器常引用
 const tools::ExtendedKalmanFilter & Target::ekf() const { return ekf_; }
 
+Eigen::Vector3d Target::cv_center() const { return {ekf_.x[0], ekf_.x[2], ekf_.x[4]}; }
+
+Eigen::Vector3d Target::fused_center() const
+{
+  const auto anchor_model = [&](
+                              const Eigen::Vector3d & model_center,
+                              const Eigen::Vector3d & model_at_observation) -> Eigen::Vector3d {
+    const double observed_range = observed_center_.norm();
+    if (!std::isfinite(observed_range) || observed_range < 1e-6) return model_center;
+    const Eigen::Vector3d bias = observed_center_ - model_at_observation;
+    const Eigen::Vector3d line_of_sight = observed_center_ / observed_range;
+    const Eigen::Vector3d radial_bias = bias.dot(line_of_sight) * line_of_sight;
+    const Eigen::Vector3d tangential_bias = bias - radial_bias;
+    const double anchor_scale = std::exp(-std::abs(prediction_age_) / 0.05);
+    return (model_center + anchor_scale * (tangential_bias + 0.15 * radial_bias)).eval();
+  };
+
+  const Eigen::Vector3d center_cv = anchor_model(cv_center(), cv_position_at_observation_);
+  if (name == ArmorName::outpost || !ca_ekf_init_) {
+    return align_with_bearing_prediction(center_cv);
+  }
+
+  const Eigen::Vector3d raw_center_ca(ca_ekf_.x[0], ca_ekf_.x[3], ca_ekf_.x[6]);
+  const Eigen::Vector3d center_ca = anchor_model(raw_center_ca, ca_position_at_observation_);
+  if (ca_update_count_ < 8 || !model_error_initialized_) {
+    // During initialization or bounded reacquisition the CV state can be reset repeatedly while
+    // the CA state still carries the local translation. Keep the output continuous at age zero,
+    // then hand the short future prediction to CA instead of treating an unready weight as CV=1.
+    const double ca_prediction_weight =
+      std::clamp(std::abs(prediction_age_) / 0.03, 0.0, 1.0);
+    return ca_prediction_weight * raw_center_ca +
+           (1.0 - ca_prediction_weight) * observed_center_;
+  }
+
+  constexpr double FULL_CV_HORIZON = 0.20;
+  const double horizon_scale =
+    std::clamp(std::abs(prediction_age_) / FULL_CV_HORIZON, 0.05, 1.0);
+  const double effective_w_cv = w_cv_ * horizon_scale;
+  const Eigen::Vector3d bearing_enhanced = align_with_bearing_prediction(
+    effective_w_cv * center_cv + (1.0 - effective_w_cv) * center_ca);
+
+  // Close to an observation the anchor prevents a visible jump. By one 40 ms prediction
+  // interval, the lower-noise CA state supplies most of the position while the robust bearing
+  // fit still corrects the following direction.
+  const double abs_age = std::abs(prediction_age_);
+  const double short_ca_weight = 0.70 * std::clamp(abs_age / 0.04, 0.0, 1.0) *
+                                 std::clamp((0.25 - abs_age) / 0.15, 0.0, 1.0);
+  return short_ca_weight * raw_center_ca + (1.0 - short_ca_weight) * bearing_enhanced;
+}
+
+const Eigen::Vector3d & Target::observed_center() const { return observed_center_; }
+
+std::chrono::steady_clock::time_point Target::observation_time() const
+{
+  return observation_time_;
+}
+
 // 返回所有装甲板的预测四维状态 (X, Y, Z, Angle) 列表
 std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
 {
   std::vector<Eigen::Vector4d> _armor_xyza_list;
-  double w_ca = 1.0 - w_cv_;
-
-  Eigen::Vector3d center_CV(ekf_.x[0], ekf_.x[2], ekf_.x[4]);
-
-  Eigen::Vector3d center_fused;
-  if (ca_ekf_init_ && w_ca > 0.05) {
-    Eigen::Vector3d center_CA(ca_ekf_.x[0], ca_ekf_.x[3], ca_ekf_.x[6]);
-    center_fused = w_cv_ * center_CV + w_ca * center_CA;
-  } else {
-    center_fused = center_CV;
-  }
+  const Eigen::Vector3d center_fused = fused_center();
 
   for (int i = 0; i < armor_num_; i++) {
     auto angle = tools::limit_rad(ekf_.x[6] + i * 2 * CV_PI / armor_num_);
@@ -501,6 +762,7 @@ std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
 bool Target::diverged() const
 {
   auto r_ok = ekf_.x[8] > 0.05 && ekf_.x[8] < 0.5;
+  if (armor_num_ != 4) return !r_ok;
   auto l_ok = ekf_.x[8] + ekf_.x[9] > 0.05 && ekf_.x[8] + ekf_.x[9] < 0.5;
   if (r_ok && l_ok) return false;
   return true;

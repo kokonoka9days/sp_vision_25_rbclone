@@ -14,6 +14,7 @@ Tracker::Tracker(const std::string & config_path, Solver * solver)
 : solver_{solver},
   detect_count_(0),
   temp_lost_count_(0),
+  update_reject_count_(0),
   state_{"lost"},
   pre_state_{"lost"},
   last_timestamp_(std::chrono::steady_clock::now()),
@@ -54,7 +55,9 @@ std::list<Target> Tracker::sb_track(
     state_ = "lost";
   }
   // 过滤掉非我方装甲板
-  armors.remove_if([&](const auto_aim::Armor & a) { return a.color != enemy_color_; });
+  if (use_enemy_color) {
+    armors.remove_if([&](const auto_aim::Armor & a) { return a.color != enemy_color_; });
+  }
 
   // 过滤前哨站顶部装甲板
   // armors.remove_if([this](const auto_aim::Armor & a) {
@@ -94,9 +97,10 @@ std::list<Target> Tracker::sb_track(
   }
 
   if (
-  std::accumulate(
-    target_.ekf().recent_nis_failures.begin(), target_.ekf().recent_nis_failures.end(), 0) >=
-  (0.4 * target_.ekf().window_size)) {
+    target_.ekf().recent_nis_failures.size() >= target_.ekf().window_size &&
+    std::accumulate(
+      target_.ekf().recent_nis_failures.begin(), target_.ekf().recent_nis_failures.end(), 0) >=
+      (0.4 * target_.ekf().recent_nis_failures.size())) {
       tools::logger()->debug("[Target] Bad Converge Found!");
       state_ = "lost";
       return {};
@@ -128,7 +132,9 @@ std::list<Target> Tracker::track(
     state_ = "lost";
   }
   // 过滤掉非我方装甲板
-  armors.remove_if([&](const auto_aim::Armor & a) { return a.color != enemy_color_; });
+  if (use_enemy_color) {
+    armors.remove_if([&](const auto_aim::Armor & a) { return a.color != enemy_color_; });
+  }
 
   // 过滤前哨站顶部装甲板
   // armors.remove_if([this](const auto_aim::Armor & a) {
@@ -167,7 +173,7 @@ std::list<Target> Tracker::track(
     if (state_ == "lost") {
         found = set_target(armors, t);
     }
-    else {
+    else if (!armors.empty()) {
       if(target_.name == armors.front().name 
         && target_.armor_type == armors.front().type)
       {
@@ -195,9 +201,10 @@ std::list<Target> Tracker::track(
   }
 
   if (
-  std::accumulate(
-    target_.ekf().recent_nis_failures.begin(), target_.ekf().recent_nis_failures.end(), 0) >=
-  (0.4 * target_.ekf().window_size)) {
+    target_.ekf().recent_nis_failures.size() >= target_.ekf().window_size &&
+    std::accumulate(
+      target_.ekf().recent_nis_failures.begin(), target_.ekf().recent_nis_failures.end(), 0) >=
+      (0.4 * target_.ekf().recent_nis_failures.size())) {
       tools::logger()->debug("[Target] Bad Converge Found!");
       state_ = "lost";
       return {};
@@ -227,7 +234,9 @@ std::list<Target> Tracker::test_track(
     state_ = "lost";
   }
   // 过滤掉非我方装甲板
-  armors.remove_if([&](const auto_aim::Armor & a) { return a.color != enemy_color_; });
+  if (use_enemy_color) {
+    armors.remove_if([&](const auto_aim::Armor & a) { return a.color != enemy_color_; });
+  }
 
   // 过滤前哨站顶部装甲板
   // armors.remove_if([this](const auto_aim::Armor & a) {
@@ -270,9 +279,10 @@ std::list<Target> Tracker::test_track(
   }
 
   if (
-  std::accumulate(
-    target_.ekf().recent_nis_failures.begin(), target_.ekf().recent_nis_failures.end(), 0) >=
-  (0.4 * target_.ekf().window_size)) {
+    target_.ekf().recent_nis_failures.size() >= target_.ekf().window_size &&
+    std::accumulate(
+      target_.ekf().recent_nis_failures.begin(), target_.ekf().recent_nis_failures.end(), 0) >=
+      (0.4 * target_.ekf().recent_nis_failures.size())) {
       tools::logger()->debug("[Target] Bad Converge Found!");
       state_ = "lost";
       return {};
@@ -424,7 +434,16 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
   if (armors.empty()) return false;
 
   auto & armor = armors.front();
-  solver_->solve(armor);
+  if (!solver_->solve(armor)) return false;
+
+  initialize_target(armor, t);
+  return true;
+}
+
+void Tracker::initialize_target(
+  const Armor & armor, std::chrono::steady_clock::time_point t)
+{
+  update_reject_count_ = 0;
 
   // 根据兵种优化初始化参数
   auto is_balance = (armor.type == ArmorType::big) &&
@@ -450,27 +469,40 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
     Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1}};
     target_ = Target(armor, t, 0.2, 4, P0_dig);
   }
-
-  return true;
 }
+
 bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t)
 {
   target_.predict(t);
-  
-  bool found = false;
+
+  Armor * rejected_candidate = nullptr;
+  bool solved_match = false;
 
   // 由于 armors 在 track/sb_track 中已经按距离图像中心的远近排序
-  // 遍历找到的第一个匹配目标的装甲板，即为视野中最居中、畸变最小的装甲板
+  // 候选已按图像中心距离排序；若最近候选求解或门控失败，继续尝试后续候选。
   for (auto & armor : armors) {
-    if (armor.name == target_.name && armor.type == target_.armor_type) {
-      solver_->solve(armor);
-      target_.update(armor);
-      found = true;
-      break; // 找到最优匹配后立即退出
+    if (
+      armor.name == target_.name && armor.color == target_.color &&
+      armor.type == target_.armor_type) {
+      if (!solver_->solve(armor)) continue;
+      solved_match = true;
+      if (target_.update(armor)) {
+        update_reject_count_ = 0;
+        return true;
+      }
+      rejected_candidate = &armor;
+      // Same-identity boxes are normally duplicate detections. Reacquire from the closest one
+      // after three rejected frames instead of switching to a less central PnP solution now.
+      break;
     }
   }
 
-  return found;
+  if (solved_match && ++update_reject_count_ >= 3 && rejected_candidate != nullptr) {
+    const bool cam_is_short = target_.cam_is_short;
+    initialize_target(*rejected_candidate, t);
+    target_.cam_is_short = cam_is_short;
+  }
+  return solved_match;
 }
 
 }  // namespace auto_aim

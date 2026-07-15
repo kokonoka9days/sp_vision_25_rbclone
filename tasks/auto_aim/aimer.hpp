@@ -14,8 +14,8 @@ namespace auto_aim
 
 struct AimPoint
 {
-  bool valid;
-  Eigen::Vector4d xyza;
+  bool valid = false;
+  Eigen::Vector4d xyza = Eigen::Vector4d::Zero();
 };
 
 class Aimer
