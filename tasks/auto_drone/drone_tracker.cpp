@@ -1,4 +1,5 @@
 #include "drone_tracker.hpp"
+#include <algorithm>
 #include <yaml-cpp/yaml.h>
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
@@ -11,7 +12,7 @@ Tracker::Tracker(const std::string & config_path, Solver * solver)
   detect_count_(0),
   temp_lost_count_(0),
   state_{"lost"},
-  last_timestamp_(std::chrono::steady_clock::now())
+  last_timestamp_()
 {
   auto yaml = YAML::LoadFile(config_path);
   enemy_color_str_ = tools::read<std::string>(yaml, "enemy_color");
@@ -26,7 +27,14 @@ std::string Tracker::state() const { return state_; }
 std::vector<Target> Tracker::track(
   std::vector<Drone> & drones, std::chrono::steady_clock::time_point t)
 {
-  auto dt = tools::delta_time(t, last_timestamp_);
+  double dt = 0.0;
+  if (last_timestamp_ != std::chrono::steady_clock::time_point{}) {
+    if (t <= last_timestamp_) {
+      tools::logger()->warn("[Tracker] Ignoring a non-monotonic frame timestamp");
+      return {};
+    }
+    dt = tools::delta_time(t, last_timestamp_);
+  }
   last_timestamp_ = t;
 
   if (gimbal_ == nullptr) {
@@ -68,7 +76,7 @@ std::vector<Target> Tracker::track(
   if (state_ == "lost") {
     found = set_target(drones, t);
   } else {
-    found = update_target(drones, t);
+    found = update_target(drones, t, dt);
   }
 
   // 5. 更新状态机
@@ -121,32 +129,27 @@ void Tracker::state_machine(bool found)
   }
 }
 
-bool Tracker::set_target(std::vector<Drone> & drones, std::chrono::steady_clock::time_point /*t*/)
+bool Tracker::set_target(std::vector<Drone> & drones, std::chrono::steady_clock::time_point t)
 {
   if (drones.empty()) return false;
 
   // 使用当前最居中的无人机初始化 EKF Target
-  target_ = Target(drones.front());
+  target_ = Target(drones.front(), t);
   return true;
 }
 
-bool Tracker::update_target(std::vector<Drone> & drones, std::chrono::steady_clock::time_point /*t*/)
+bool Tracker::update_target(
+  std::vector<Drone> & drones, std::chrono::steady_clock::time_point t, double dt)
 {
-  // 预测当前时间步
-  // 假设外部传入的 t 与 last_timestamp 的差值已经在 EKF 中由定时器或外部步长处理
-  // 如果你在 Target 类的 EKF 配置里使用的是固定步长 DT，预测只需调用 target_.predict(DT)
-  // 如果是变步长，你需要记录上一次 update 的时间并传入真实 dt
-  // 为了匹配之前的设计，这里假设使用一个固定步长 0.01 或动态计算传入
-  // 这里简化处理：因为 track() 开头计算了 dt，理论上应该将 dt 传入 predict
-  // 为了兼容之前的 target_.hpp 接口，你可以直接在这里使用默认配置的步长预测：
-  target_.predict(0.01); // 视你的 EKF 实现情况传入实际时间差
+  target_.predict(std::max(dt, 1e-4));
+  target_.set_state_timestamp(t);
 
   if (drones.empty()) return false;
 
   // 由于 drones 已经按距中心由近到远排序，直接用最近的更新
   // TODO: 如果画面中存在多个无人机，为了防止频繁跳变，这里应该加入距离当前 Target EKF预测位置最短的匹配算法 (如匈牙利算法)
   // 目前按最居中目标直接更新
-  target_.update(drones.front());
+  target_.update(drones.front(), t);
   
   return true;
 }

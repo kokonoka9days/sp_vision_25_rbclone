@@ -25,7 +25,8 @@ gimbal_r3: 3
 # ==========================================
 
 #####----- 神经网络参数 (YOLO) -----#####
-model_path: "../assets/module_labgame_demo.xml"  # TensorRT 模型路径
+model_path: "../assets/module_labgame_demo.xml"  # OpenVINO IR 模型路径
+inference_num_threads: 0              # 0: 自动预留2个逻辑线程，且最多使用8个推理线程
 
 #####----- 坐标系与相机内参 (Solver) -----#####
 # 云台到 IMU 机体的旋转矩阵 (3x3 行优先，需根据电控安装方向调整)

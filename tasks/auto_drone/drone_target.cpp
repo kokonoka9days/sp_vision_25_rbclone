@@ -3,7 +3,8 @@
 namespace auto_drone
 {
 
-Target::Target(const Drone & drone)
+Target::Target(const Drone & drone, std::chrono::steady_clock::time_point timestamp)
+: state_timestamp_(timestamp), last_observation_timestamp_(timestamp)
 {
   name = drone.name;
   color = drone.color;
@@ -44,7 +45,7 @@ void Target::predict(double dt)
   ekf_.predict(F, Q, f);
 }
 
-void Target::update(const Drone & drone)
+void Target::update(const Drone & drone, std::chrono::steady_clock::time_point timestamp)
 {
   // 观测矩阵 H
   Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 6);
@@ -64,6 +65,23 @@ void Target::update(const Drone & drone)
   };
 
   ekf_.update(z, H, R, h);
+  state_timestamp_ = timestamp;
+  last_observation_timestamp_ = timestamp;
+}
+
+void Target::set_state_timestamp(std::chrono::steady_clock::time_point timestamp)
+{
+  state_timestamp_ = timestamp;
+}
+
+std::chrono::steady_clock::time_point Target::state_timestamp() const
+{
+  return state_timestamp_;
+}
+
+std::chrono::steady_clock::time_point Target::last_observation_timestamp() const
+{
+  return last_observation_timestamp_;
 }
 
 Eigen::Vector3d Target::get_xyz() const

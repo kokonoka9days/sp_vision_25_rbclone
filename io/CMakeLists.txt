@@ -27,7 +27,7 @@ else()
 endif()
 
 # 链接海康大恒相机 SDK、串口及 yaml-cpp
-target_link_libraries(io gxiapi MvCameraControl usb-1.0 yaml-cpp::yaml-cpp serial )
+target_link_libraries(io gxiapi MvCameraControl usb-1.0 yaml-cpp serial )
 
 ################## 检查 ROS 环境 ##################
 find_package(ament_cmake QUIET)

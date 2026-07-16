@@ -20,5 +20,5 @@ target_link_libraries(tools
     spdlog::spdlog
     Eigen3::Eigen
     nlohmann_json::nlohmann_json
-    yaml-cpp::yaml-cpp
+    yaml-cpp
 )

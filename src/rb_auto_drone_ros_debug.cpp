@@ -84,6 +84,7 @@ int main(int argc, char * argv[])
 
   std::atomic<bool> quit = false;
   std::atomic<double> current_fps(0.0);
+  int return_code = 0;
 
   // =================================================================
   // 线程 A：云台规划控制与数据记录线程 (高频独立运行)
@@ -173,27 +174,56 @@ int main(int argc, char * argv[])
   // =================================================================
   cv::Mat img;
   std::chrono::steady_clock::time_point t;
-  std::chrono::steady_clock::time_point last_t = std::chrono::steady_clock::now();
+  std::chrono::steady_clock::time_point last_capture_t;
+  auto detection_window_start = std::chrono::steady_clock::now();
+  std::uint64_t frame_id = 0;
+  int detection_window_count = 0;
+  double detection_fps = 0.0;
 
   while (!exiter.exit()) {
     camera.read(img, t);
 
-    // 获取插值后的四元数并传入 Solver (考虑相机与通信的延迟 3ms)
+    double capture_fps = current_fps.load();
+    if (last_capture_t != std::chrono::steady_clock::time_point{} && t > last_capture_t) {
+      capture_fps = 1.0 / std::chrono::duration<double>(t - last_capture_t).count();
+      current_fps = capture_fps;
+    }
+    last_capture_t = t;
+
+    std::optional<auto_drone::YOLOResult> result;
+    try {
+      result = yolo.detect_async(img, t, frame_id++);
+    } catch (const std::exception & e) {
+      tools::logger()->error("[AutoDroneROS] Inference failed, stopping control: {}", e.what());
+      target_queue.push(std::nullopt);
+      return_code = 1;
+      break;
+    }
+    if (!result) continue;
+
+    img = std::move(result->frame);
+    t = result->timestamp;
+    auto drones = std::move(result->drones);
+
+    detection_window_count++;
+    const auto now = std::chrono::steady_clock::now();
+    const double detection_window_s =
+      std::chrono::duration<double>(now - detection_window_start).count();
+    if (detection_window_s >= 1.0) {
+      detection_fps = detection_window_count / detection_window_s;
+      detection_window_count = 0;
+      detection_window_start = now;
+    }
+    const double latency_ms = std::chrono::duration<double, std::milli>(now - t).count();
+
     auto q = gimbal.q(t);
     solver.set_R_gimbal2world(q);
-
-    // 帧率计算
-    double fps = 1.0 / std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count() * 1000000;
-    last_t = t;
-    current_fps = fps;
 
     // 解析当前云台的真实角度用于显示
     auto ypr = tools::eulers(q, 2, 1, 0);
     float yaw_deg = ypr[0] * 180.0 / M_PI;
     float pitch_deg = ypr[1] * 180.0 / M_PI;
 
-    // 核心视觉与追踪管线
-    auto drones = yolo.detect(img);
     auto targets = tracker.track(drones, t);
 
     // 把目标塞给控制线程
@@ -205,10 +235,18 @@ int main(int argc, char * argv[])
 
     // ---------------------- 画面渲染 (Debug 级别) ----------------------
     // 1. 打印基础信息
-    tools::draw_text(img, fmt::format("FPS: {:.1f}", fps), {40, 40}, {0, 255, 0});
-    tools::draw_text(img, fmt::format("Gimbal Yaw: {:.2f}", yaw_deg), {40, 80}, {0, 128, 255});
-    tools::draw_text(img, fmt::format("Gimbal Pitch: {:.2f}", pitch_deg), {40, 120}, {0, 255, 255});
-    tools::draw_text(img, fmt::format("Tracker State: {}", tracker.state()), {40, 160}, {255, 255, 0});
+    tools::draw_text(img, fmt::format("Capture FPS: {:.1f}", capture_fps), {40, 40}, {0, 255, 0});
+    tools::draw_text(img, fmt::format("Detection FPS: {:.1f}", detection_fps), {40, 80}, {0, 255, 0});
+    tools::draw_text(img, fmt::format("Latency: {:.1f} ms", latency_ms), {40, 120}, {0, 255, 255});
+    tools::draw_text(
+      img,
+      fmt::format(
+        "YOLO: {:.1f}/{:.1f}/{:.1f} ms, {} threads", result->preprocess_ms,
+        result->request_ms, result->postprocess_ms, yolo.inference_threads()),
+      {40, 160}, {255, 255, 0});
+    tools::draw_text(img, fmt::format("Gimbal Yaw: {:.2f}", yaw_deg), {40, 200}, {0, 128, 255});
+    tools::draw_text(img, fmt::format("Gimbal Pitch: {:.2f}", pitch_deg), {40, 240}, {0, 255, 255});
+    tools::draw_text(img, fmt::format("Tracker State: {}", tracker.state()), {40, 280}, {255, 255, 0});
 
     // 2. 绘制 YOLO 检测到的无人机 2D Bbox 和 关键点
     for (const auto& drone : drones) {
@@ -219,34 +257,6 @@ int main(int argc, char * argv[])
       }
       cv::putText(img, fmt::format("{:.2f}", drone.confidence), drone.box.tl(), 
                   cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 0), 2);
-    }
-
-    // 3. 绘制 3D 重投影与预测落点
-    if (!targets.empty()) {
-      auto target = targets.front();
-      
-      // 获取 Planner 记录的真实空间瞄准坐标
-      Eigen::Vector4d aim_xyza = planner.debug_xyza;
-      Eigen::Vector3d aim_xyz = aim_xyza.head(3);
-
-      // (A) 画出预测瞄准的 3D 边框（利用 Solver 的八点重投影）
-      // Eigen::Vector3d zero_ypr = {aim_xyza[3], 0.0, 0.0}; // 假设预测姿态只考虑 Yaw
-      // auto reproj_points = solver.reproject_drone(aim_xyz, zero_ypr);
-      // tools::draw_points(img, reproj_points, {0, 0, 255}); // 红色表示预测位置框
-
-      // (B) 算出瞄准的中心点并画一条连接真实中心和预测中心的射击引导线
-      auto pred_center_img = solver.world2pixel({cv::Point3f(aim_xyz.x(), aim_xyz.y(), aim_xyz.z())});
-      auto real_center_img = solver.world2pixel({cv::Point3f(target.get_xyz().x(), target.get_xyz().y(), target.get_xyz().z())});
-      
-      if (!pred_center_img.empty() && !real_center_img.empty()) {
-        // 画出真实位置中心
-        cv::circle(img, real_center_img[0], 6, cv::Scalar(51, 153, 237), -1);
-        // 画出预测位置中心
-        cv::circle(img, pred_center_img[0], 8, cv::Scalar(0, 0, 255), -1);
-        // 画出提前量引导线
-        cv::line(img, real_center_img[0], pred_center_img[0], cv::Scalar(0, 255, 255), 2);
-        tools::draw_text(img, "AIM", cv::Point(pred_center_img[0].x + 10, pred_center_img[0].y), {0, 0, 255});
-      }
     }
 
     // 缩小一半显示防止撑爆屏幕
@@ -288,5 +298,5 @@ int main(int argc, char * argv[])
   }
   // -----------------------------------------------------
 
-  return 0;
+  return return_code;
 }

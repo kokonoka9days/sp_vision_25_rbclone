@@ -1,202 +1,319 @@
 #include "drone_yolo.hpp"
-#include <fstream>
-#include <algorithm>
-#include <stdexcept>
 
-// 【新增】引入 OpenVINO 预处理模块
-#include <openvino/core/preprocess/pre_post_process.hpp> 
+#include <algorithm>
+#include <cmath>
+#include <stdexcept>
+#include <thread>
+
+#include <openvino/core/preprocess/pre_post_process.hpp>
+#include <openvino/runtime/properties.hpp>
 
 #include "tools/logger.hpp"
 #include "tools/yaml.hpp"
 
 namespace auto_drone
 {
-
-// ==========================================
-// 构造函数: 加载模型，配置硬件级预处理并编译
-// ==========================================
-YOLO::YOLO(const std::string& config_path, bool /*debug*/) 
+namespace
 {
-    auto yaml = tools::load(config_path);
-    std::string model_path = tools::read<std::string>(yaml, "model_path"); 
-    
-    this->input_w_ = 640;
-    this->input_h_ = 640;
-    this->score_threshold_ = 0.70f;
-    this->nms_threshold_ = 0.6f;
-    
-    this->num_classes_ = 1; 
-    this->num_kpts_ = 8;    
-    this->num_boxes_ = 8400; 
-    
+double milliseconds(
+  std::chrono::steady_clock::time_point end, std::chrono::steady_clock::time_point start)
+{
+  return std::chrono::duration<double, std::milli>(end - start).count();
+}
+
+int default_inference_threads()
+{
+  const auto logical_threads = std::max(1U, std::thread::hardware_concurrency());
+  const auto reserved_threads = logical_threads > 2 ? logical_threads - 2 : 1U;
+  return static_cast<int>(std::min(8U, reserved_threads));
+}
+}  // namespace
+
+YOLO::YOLO(const std::string & config_path, bool /*debug*/)
+{
+  auto yaml = tools::load(config_path);
+  const auto model_path = tools::read<std::string>(yaml, "model_path");
+
+  inference_threads_ = default_inference_threads();
+  if (yaml["inference_num_threads"]) {
+    const int configured_threads = yaml["inference_num_threads"].as<int>();
+    if (configured_threads < 0) {
+      throw std::invalid_argument("inference_num_threads must be zero or positive");
+    }
+    if (configured_threads > 0) inference_threads_ = configured_threads;
+  }
+
+  try {
+    auto model = core_.read_model(model_path);
+    ov::preprocess::PrePostProcessor ppp(model);
+
+    auto & input_info = ppp.input(0);
+    input_info.tensor()
+      .set_element_type(ov::element::u8)
+      .set_layout("NHWC")
+      .set_color_format(ov::preprocess::ColorFormat::BGR);
+    input_info.preprocess()
+      .convert_color(ov::preprocess::ColorFormat::RGB)
+      .convert_element_type(ov::element::f32)
+      .scale(255.0F);
+    input_info.model().set_layout("NCHW");
+    model = ppp.build();
+
+    const ov::AnyMap config{
+      ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY),
+      ov::num_streams(ov::streams::Num(1)),
+      ov::inference_num_threads(inference_threads_)};
+    compiled_model_ = core_.compile_model(model, "CPU", config);
+
+    const auto output_shape = compiled_model_.output(0).get_shape();
+    const int expected_channels = 4 + num_classes_ + num_kpts_ * 3;
+    if (
+      output_shape.size() != 3 || output_shape[0] != 1 ||
+      output_shape[1] != static_cast<std::size_t>(expected_channels)) {
+      throw std::runtime_error(
+        "Unexpected YOLO output shape; expected [1,29,num_boxes]");
+    }
+    num_boxes_ = static_cast<int>(output_shape[2]);
+    if (num_boxes_ <= 0) throw std::runtime_error("YOLO output has no candidate boxes");
+
+    for (auto & slot : slots_) {
+      slot.infer_request = compiled_model_.create_infer_request();
+      slot.input.create(input_h_, input_w_, CV_8UC3);
+    }
+
+    const auto devices = compiled_model_.get_property(ov::execution_devices);
+    const auto streams = compiled_model_.get_property(ov::num_streams);
+    const auto optimal_requests =
+      compiled_model_.get_property(ov::optimal_number_of_infer_requests);
+    tools::logger()->info(
+      "auto_drone::YOLO loaded: device={}, streams={}, threads={}, optimal_requests={}, "
+      "output=[1,{},{}]",
+      devices.empty() ? "CPU" : devices.front(), static_cast<int32_t>(streams),
+      inference_threads_, optimal_requests, expected_channels, num_boxes_);
+  } catch (const std::exception & e) {
+    tools::logger()->error("[YOLO] OpenVINO initialization failed: {}", e.what());
+    throw;
+  }
+}
+
+YOLO::~YOLO() { wait_and_discard(); }
+
+void YOLO::prepare_slot(
+  Slot & slot, const cv::Mat & frame, std::chrono::steady_clock::time_point timestamp,
+  std::uint64_t frame_id, bool preserve_frame)
+{
+  if (frame.empty()) throw std::invalid_argument("Cannot run YOLO on an empty frame");
+  if (frame.type() != CV_8UC3) throw std::invalid_argument("YOLO expects a CV_8UC3 frame");
+  if (slot.active) throw std::logic_error("Cannot overwrite an active inference slot");
+
+  const auto preprocess_start = std::chrono::steady_clock::now();
+  slot.letterbox.scale = std::min(
+    static_cast<float>(input_w_) / static_cast<float>(frame.cols),
+    static_cast<float>(input_h_) / static_cast<float>(frame.rows));
+
+  const int resized_w = std::clamp(
+    static_cast<int>(std::lround(frame.cols * slot.letterbox.scale)), 1, input_w_);
+  const int resized_h = std::clamp(
+    static_cast<int>(std::lround(frame.rows * slot.letterbox.scale)), 1, input_h_);
+  slot.letterbox.pad_x = (input_w_ - resized_w) / 2;
+  slot.letterbox.pad_y = (input_h_ - resized_h) / 2;
+
+  slot.input.setTo(cv::Scalar(114, 114, 114));
+  const cv::Rect roi(slot.letterbox.pad_x, slot.letterbox.pad_y, resized_w, resized_h);
+  cv::resize(frame, slot.input(roi), roi.size(), 0.0, 0.0, cv::INTER_LINEAR);
+
+  if (preserve_frame) {
+    slot.frame = frame.clone();
+  } else {
+    slot.frame.release();
+  }
+  slot.timestamp = timestamp;
+  slot.frame_id = frame_id;
+  slot.preprocess_ms = milliseconds(std::chrono::steady_clock::now(), preprocess_start);
+}
+
+void YOLO::start_slot(Slot & slot)
+{
+  if (slot.active) throw std::logic_error("Inference slot is already active");
+
+  ov::Tensor input_tensor(
+    ov::element::u8,
+    {1, static_cast<std::size_t>(input_h_), static_cast<std::size_t>(input_w_), 3},
+    slot.input.data);
+  slot.infer_request.set_input_tensor(input_tensor);
+  slot.submitted_at = std::chrono::steady_clock::now();
+  slot.infer_request.start_async();
+  slot.active = true;
+}
+
+YOLOResult YOLO::finish_slot(Slot & slot)
+{
+  if (!slot.active) throw std::logic_error("Inference slot is not active");
+
+  slot.infer_request.wait();
+  const auto inference_finished = std::chrono::steady_clock::now();
+  auto output_tensor = slot.infer_request.get_output_tensor();
+  if (output_tensor.get_element_type() != ov::element::f32) {
+    throw std::runtime_error("YOLO output tensor is not FP32");
+  }
+
+  const auto output_shape = output_tensor.get_shape();
+  if (
+    output_shape.size() != 3 || output_shape[0] != 1 ||
+    output_shape[1] != static_cast<std::size_t>(4 + num_classes_ + num_kpts_ * 3) ||
+    output_shape[2] != static_cast<std::size_t>(num_boxes_)) {
+    throw std::runtime_error("YOLO output shape changed after model compilation");
+  }
+
+  const auto postprocess_start = std::chrono::steady_clock::now();
+  auto drones = postprocess(output_tensor.data<const float>(), slot.letterbox);
+  const auto postprocess_finished = std::chrono::steady_clock::now();
+
+  YOLOResult result;
+  result.frame = std::move(slot.frame);
+  result.drones = std::move(drones);
+  result.timestamp = slot.timestamp;
+  result.frame_id = slot.frame_id;
+  result.preprocess_ms = slot.preprocess_ms;
+  result.request_ms = milliseconds(inference_finished, slot.submitted_at);
+  result.postprocess_ms = milliseconds(postprocess_finished, postprocess_start);
+
+  slot.active = false;
+  return result;
+}
+
+std::vector<Drone> YOLO::postprocess(const float * output, const Letterbox & letterbox) const
+{
+  std::vector<cv::Rect> boxes;
+  std::vector<float> confidences;
+  std::vector<int> class_ids;
+  std::vector<int> valid_raw_indices;
+  const int keypoint_offset = 4 + num_classes_;
+
+  for (int i = 0; i < num_boxes_; ++i) {
+    float max_confidence = 0.0F;
+    int max_class_id = -1;
+    for (int c = 0; c < num_classes_; ++c) {
+      const float confidence = output[(4 + c) * num_boxes_ + i];
+      if (confidence > max_confidence) {
+        max_confidence = confidence;
+        max_class_id = c;
+      }
+    }
+    if (max_confidence < score_threshold_) continue;
+
+    const float cx = output[i];
+    const float cy = output[num_boxes_ + i];
+    const float width = output[2 * num_boxes_ + i];
+    const float height = output[3 * num_boxes_ + i];
+    const float inverse_scale = 1.0F / letterbox.scale;
+
+    const int raw_w = static_cast<int>(std::lround(width * inverse_scale));
+    const int raw_h = static_cast<int>(std::lround(height * inverse_scale));
+    const int raw_x = static_cast<int>(std::lround(
+      (cx - letterbox.pad_x) * inverse_scale - raw_w / 2.0F));
+    const int raw_y = static_cast<int>(std::lround(
+      (cy - letterbox.pad_y) * inverse_scale - raw_h / 2.0F));
+
+    boxes.emplace_back(raw_x, raw_y, raw_w, raw_h);
+    confidences.push_back(max_confidence);
+    class_ids.push_back(max_class_id);
+    valid_raw_indices.push_back(i);
+  }
+
+  std::vector<int> indices;
+  cv::dnn::NMSBoxes(boxes, confidences, score_threshold_, nms_threshold_, indices);
+
+  std::vector<Drone> results;
+  results.reserve(indices.size());
+  for (const int index : indices) {
+    const int raw_index = valid_raw_indices[index];
+    const float inverse_scale = 1.0F / letterbox.scale;
+    std::vector<cv::Point2f> keypoints;
+    keypoints.reserve(num_kpts_);
+
+    for (int keypoint = 0; keypoint < num_kpts_; ++keypoint) {
+      const float x = output[(keypoint_offset + keypoint * 3) * num_boxes_ + raw_index];
+      const float y = output[(keypoint_offset + keypoint * 3 + 1) * num_boxes_ + raw_index];
+      keypoints.emplace_back(
+        (x - letterbox.pad_x) * inverse_scale,
+        (y - letterbox.pad_y) * inverse_scale);
+    }
+
+    results.emplace_back(class_ids[index], confidences[index], boxes[index], std::move(keypoints));
+  }
+
+  if (results.empty()) return results;
+  const auto best = std::max_element(
+    results.begin(), results.end(),
+    [](const Drone & lhs, const Drone & rhs) { return lhs.confidence < rhs.confidence; });
+  return {*best};
+}
+
+std::vector<Drone> YOLO::detect(const cv::Mat & frame)
+{
+  if (frame.empty()) return {};
+  if (active_slot_) {
+    throw std::logic_error("Cannot call synchronous detect while async inference is active");
+  }
+
+  auto & slot = slots_[0];
+  prepare_slot(slot, frame, std::chrono::steady_clock::now(), 0, false);
+  start_slot(slot);
+  return finish_slot(slot).drones;
+}
+
+std::optional<YOLOResult> YOLO::detect_async(
+  const cv::Mat & frame, std::chrono::steady_clock::time_point timestamp,
+  std::uint64_t frame_id)
+{
+  if (frame.empty()) return std::nullopt;
+
+  if (!active_slot_) {
+    auto & first = slots_[next_slot_];
+    prepare_slot(first, frame, timestamp, frame_id, true);
+    start_slot(first);
+    active_slot_ = next_slot_;
+    next_slot_ = (next_slot_ + 1) % slots_.size();
+    return std::nullopt;
+  }
+
+  const std::size_t finished_index = *active_slot_;
+  const std::size_t prepared_index = next_slot_;
+  auto & prepared = slots_[prepared_index];
+  prepare_slot(prepared, frame, timestamp, frame_id, true);
+
+  auto & finished = slots_[finished_index];
+  finished.infer_request.wait();
+  start_slot(prepared);
+  active_slot_ = prepared_index;
+  next_slot_ = finished_index;
+
+  return finish_slot(finished);
+}
+
+std::optional<YOLOResult> YOLO::flush()
+{
+  if (!active_slot_) return std::nullopt;
+
+  const std::size_t finished_index = *active_slot_;
+  active_slot_.reset();
+  next_slot_ = finished_index;
+  return finish_slot(slots_[finished_index]);
+}
+
+void YOLO::wait_and_discard() noexcept
+{
+  for (auto & slot : slots_) {
+    if (!slot.active) continue;
     try {
-        // 1. 读取 ONNX / OpenVINO IR 模型
-        std::shared_ptr<ov::Model> model = core_.read_model(model_path);
-        
-        // ========================================================
-        // 【新增优化】OpenVINO PrePostProcessor (PPP) 硬件预处理加速
-        // 将耗时的 BGR2RGB、归一化、HWC2CHW 从 CPU for循环 中剥离
-        // ========================================================
-        ov::preprocess::PrePostProcessor ppp(model);
-        
-        // A. 声明输入数据格式 (来自 OpenCV 的 Mat: 类型为 uint8, 布局 NHWC, BGR)
-        ov::preprocess::InputInfo& input_info = ppp.input(0);
-        input_info.tensor()
-            .set_element_type(ov::element::u8)
-            .set_layout("NHWC")
-            .set_color_format(ov::preprocess::ColorFormat::BGR);
-            
-        // B. 声明预处理步骤 (转换为模型需要的 F32，色彩转 RGB，除以 255.0 归一化)
-        input_info.preprocess()
-            .convert_color(ov::preprocess::ColorFormat::RGB)
-            .convert_element_type(ov::element::f32)
-            .scale(255.0f); // 缩放因子：等效于除以 255
-            
-        // C. 声明模型内部实际需要的布局 (YOLO 需要 NCHW)
-        input_info.model().set_layout("NCHW");
-        
-        // 构建带有预处理管线的新模型
-        model = ppp.build();
-        
-        // ========================================================
-        // 【新增优化】配置 Performance Hints 加速推理延迟
-        // ========================================================
-        ov::AnyMap config;
-        config.insert(ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY)); // 追求单次推理的极低延迟
-        
-        // 2. 编译模型：AUTO 会优先选择 GPU (核显)，如果没有再使用 CPU
-        // 使用 "AUTO:GPU,CPU" 明确告知设备优先级
-        this->compiled_model_ = core_.compile_model(model, "AUTO:GPU,CPU", config);
-        
-        // 3. 创建推理请求
-        this->infer_request_ = compiled_model_.create_infer_request();
-        
-        tools::logger()->info("auto_drone::YOLO OpenVINO Engine Loaded ONNX Successfully with PPP optimization.");
-    } 
-    catch (const std::exception& e) {
-        tools::logger()->error("[YOLO] OpenVINO init error: {}", e.what());
-        throw std::runtime_error("Failed to initialize OpenVINO model.");
+      slot.infer_request.wait();
+    } catch (const std::exception & e) {
+      tools::logger()->warn("[YOLO] Failed while draining inference request: {}", e.what());
     }
+    slot.active = false;
+  }
+  active_slot_.reset();
 }
 
-// ==========================================
-// 解码器 (后处理) - 保持不变
-// ==========================================
-std::vector<Drone> YOLO::postprocessing(float* output) {
-    std::vector<cv::Rect> boxes;
-    std::vector<float> confidences;
-    std::vector<int> classIds;
-    std::vector<int> valid_raw_indices;
-
-    int stride = this->num_boxes_; 
-    int kpt_offset = 4 + this->num_classes_; 
-
-    for (int i = 0; i < this->num_boxes_; i++) {
-        float max_conf = 0.0f;
-        int max_id = -1;
-        for (int c = 0; c < this->num_classes_; c++) {
-            float conf = output[(4 + c) * stride + i];
-            if (conf > max_conf) {
-                max_conf = conf;
-                max_id = c;
-            }
-        }
-
-        if (max_conf < this->score_threshold_) continue;
-
-        float cx = output[0 * stride + i];
-        float cy = output[1 * stride + i];
-        float w  = output[2 * stride + i];
-        float h  = output[3 * stride + i];
-
-        float inv_scale = 1.0f / this->scale_;
-        int raw_w = static_cast<int>(w * inv_scale);
-        int raw_h = static_cast<int>(h * inv_scale);
-        int raw_x = static_cast<int>((cx - this->pad_w_) * inv_scale - raw_w / 2.0f);
-        int raw_y = static_cast<int>((cy - this->pad_h_) * inv_scale - raw_h / 2.0f);
-
-        boxes.push_back(cv::Rect(raw_x, raw_y, raw_w, raw_h));
-        confidences.push_back(max_conf);
-        classIds.push_back(max_id);
-        valid_raw_indices.push_back(i);
-    }
-
-    std::vector<int> indices;
-    cv::dnn::NMSBoxes(boxes, confidences, this->score_threshold_, this->nms_threshold_, indices);
-
-    std::vector<Drone> results;
-    for (int idx : indices) {
-        int raw_i = valid_raw_indices[idx];
-        
-        std::vector<cv::Point2f> kpts;
-        kpts.reserve(this->num_kpts_);
-
-        float inv_scale = 1.0f / this->scale_;
-        for (int k = 0; k < this->num_kpts_; ++k) {
-            float kx = output[(kpt_offset + k * 3 + 0) * stride + raw_i];
-            float ky = output[(kpt_offset + k * 3 + 1) * stride + raw_i];
-
-            float raw_kx = (kx - this->pad_w_) * inv_scale;
-            float raw_ky = (ky - this->pad_h_) * inv_scale;
-
-            kpts.push_back(cv::Point2f(raw_kx, raw_ky));
-        }
-
-        results.emplace_back(
-            classIds[idx], 
-            confidences[idx], 
-            boxes[idx], 
-            kpts
-        );
-    }
-
-    if (!results.empty()) {
-        auto best_it = std::max_element(results.begin(), results.end(),
-            [](const Drone& a, const Drone& b) {
-                return a.confidence < b.confidence;
-            });
-        return { *best_it };
-    }
-
-    return results;
-}
-
-// ==========================================
-// 核心推理流程
-// ==========================================
-std::vector<Drone> YOLO::detect(const cv::Mat &frame) {
-    if (frame.empty()) return {};
-
-    // 1. CPU 端完成自适应缩放填充 (Letterbox)
-    this->scale_ = std::min((float)this->input_w_ / frame.cols, (float)this->input_h_ / frame.rows);
-    this->pad_w_ = (this->input_w_ - frame.cols * this->scale_) / 2;
-    this->pad_h_ = (this->input_h_ - frame.rows * this->scale_) / 2;
-
-    cv::Mat resized_img, pad_img;
-    cv::resize(frame, resized_img, cv::Size(), this->scale_, this->scale_);
-    cv::copyMakeBorder(resized_img, pad_img, 
-                       this->pad_h_, this->input_h_ - resized_img.rows - this->pad_h_,
-                       this->pad_w_, this->input_w_ - resized_img.cols - this->pad_w_, 
-                       cv::BORDER_CONSTANT, cv::Scalar(114, 114, 114));
-
-    // ========================================================
-    // 【修改优化】使用 Zero-Copy 机制直接封送 OpenCV 内存
-    // ========================================================
-    // 直接复用 pad_img 的连续内存。因为我们在 init 中配置了 PPP 预处理，
-    // OpenVINO 知道这块内存是 NHWC / BGR / uint8 格式，它会自动帮我们转换为模型需要的格式。
-    ov::Tensor input_tensor(ov::element::u8, 
-                            {1, (size_t)this->input_h_, (size_t)this->input_w_, 3}, 
-                            pad_img.data);
-                            
-    this->infer_request_.set_input_tensor(input_tensor);
-
-    // 3. 执行同步前向推理
-    this->infer_request_.infer();
-
-    // 4. 获取输出 Tensor 并交由后处理解码 
-    ov::Tensor output_tensor = this->infer_request_.get_output_tensor();
-    float* output_data = output_tensor.data<float>();
-
-    return this->postprocessing(output_data);
-}
-}
+}  // namespace auto_drone

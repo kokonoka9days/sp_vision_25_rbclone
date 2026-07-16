@@ -47,7 +47,8 @@ private:
 
   bool set_target(std::vector<Drone> & drones, std::chrono::steady_clock::time_point t);
 
-  bool update_target(std::vector<Drone> & drones, std::chrono::steady_clock::time_point t);
+  bool update_target(
+    std::vector<Drone> & drones, std::chrono::steady_clock::time_point t, double dt);
 };
 
 }  // namespace auto_drone

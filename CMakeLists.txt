@@ -61,6 +61,7 @@ add_subdirectory(tasks/auto_drone)
 #################### src ###################
 add_executable(rb_auto_drone_debug src/rb_auto_drone_debug.cpp)
 add_executable(rb_auto_drone_ros_debug src/rb_auto_drone_ros_debug.cpp)
+add_executable(rb_auto_drone_video_test src/rb_auto_drone_video_test.cpp)
 
 # 【修改 5】: 链接常规依赖，将底部的 ${TRT_LIB} 统一替换为 openvino::runtime
 target_link_libraries(rb_auto_drone_debug 
@@ -80,6 +81,16 @@ target_link_libraries(rb_auto_drone_ros_debug
     auto_drone 
     tools 
     io 
+    openvino::runtime
+)
+
+target_link_libraries(rb_auto_drone_video_test
+    ${OpenCV_LIBS}
+    fmt::fmt
+    yaml-cpp
+    auto_drone
+    tools
+    io
     openvino::runtime
 )
 

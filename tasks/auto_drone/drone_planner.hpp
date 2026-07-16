@@ -2,6 +2,8 @@
 #define AUTO_DRONE__DRONE_PLANNER_HPP
 
 #include <Eigen/Dense>
+#include <algorithm>
+#include <chrono>
 #include <optional>
 
 #include "drone_target.hpp"
@@ -18,16 +20,16 @@ using Trajectory = Eigen::Matrix<double, 4, HORIZON>;  // yaw, yaw_vel, pitch, p
 
 struct Plan
 {
-  bool control;
-  bool fire;
-  float target_yaw;
-  float target_pitch;
-  float yaw;
-  float yaw_vel;
-  float yaw_acc;
-  float pitch;
-  float pitch_vel;
-  float pitch_acc;
+  bool control = false;
+  bool fire = false;
+  float target_yaw = 0.0F;
+  float target_pitch = 0.0F;
+  float yaw = 0.0F;
+  float yaw_vel = 0.0F;
+  float yaw_acc = 0.0F;
+  float pitch = 0.0F;
+  float pitch_vel = 0.0F;
+  float pitch_acc = 0.0F;
 };
 
 class Planner
@@ -43,8 +45,20 @@ public:
   inline Plan plan(std::optional<Target> target, double bullet_speed) {
     if (!target.has_value()) return {false};
 
-    // 无人机逻辑：根据目标当前速度的模长判断高低速预测延迟
-    double delay_time = gimbal_control_delay;
+    const auto now = std::chrono::steady_clock::now();
+    if (
+      target->state_timestamp() == std::chrono::steady_clock::time_point{} ||
+      target->last_observation_timestamp() == std::chrono::steady_clock::time_point{}) {
+      return {false};
+    }
+
+    const double observation_age =
+      std::chrono::duration<double>(now - target->last_observation_timestamp()).count();
+    if (observation_age < 0.0 || observation_age > max_target_age_) return {false};
+
+    const double state_age = std::max(
+      0.0, std::chrono::duration<double>(now - target->state_timestamp()).count());
+    const double delay_time = state_age + gimbal_control_delay;
 
     target->predict(delay_time);
 
@@ -56,6 +70,7 @@ private:
   double pitch_offset_;
   double fire_thresh_;
   double gimbal_control_delay = 0.04;
+  double max_target_age_ = 0.2;
   Eigen::Vector3d xyz_offset_;
 
   TinySolver * yaw_solver_ = nullptr;

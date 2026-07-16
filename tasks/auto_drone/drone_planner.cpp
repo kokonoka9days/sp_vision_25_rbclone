@@ -20,6 +20,7 @@ Planner::Planner(const std::string & config_path)
     xyz_offset_ = Eigen::Vector3d::Zero();
   }
   fire_thresh_ = tools::read<double>(yaml, "fire_thresh");
+  gimbal_control_delay = tools::read<double>(yaml, "gimbal_control_delay");
 
   // 初始化 MPC 求解器矩阵[cite: 1]
   setup_yaw_solver(config_path);

@@ -100,7 +100,7 @@ private:
     size_t stop_collecting_num = 0;
     
     // 数据队列
-    tools::ThreadSafeQueue<CameraData> queue_;
+    tools::ThreadSafeQueue<CameraData, true> queue_;
     
     // SDK状态
     bool sdk_initialized_ = false;
