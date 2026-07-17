@@ -61,16 +61,28 @@ void PhaseDirectionTracker::rebase(double phase, bool preserve_direction)
 {
   has_last_phase_ = true;
   last_phase_ = phase;
-  deltas_.clear();
-  votes_.clear();
   reverse_candidate_direction_ = 0;
   reverse_confirm_count_ = 0;
   if (!preserve_direction) {
+    deltas_.clear();
+    votes_.clear();
     direction_ = 0;
     score_ = 0;
   } else if (direction_ != 0) {
     score_ = direction_ * 6;
   }
+}
+
+void PhaseDirectionTracker::reset()
+{
+  has_last_phase_ = false;
+  last_phase_ = 0.0;
+  direction_ = 0;
+  score_ = 0;
+  reverse_candidate_direction_ = 0;
+  reverse_confirm_count_ = 0;
+  deltas_.clear();
+  votes_.clear();
 }
 
 void PhaseDirectionTracker::shift_reference(double delta)
@@ -90,13 +102,12 @@ void PhaseDirectionTracker::update(double phase)
 
   constexpr double min_direction_delta = CV_PI / 900.0;
   constexpr double max_direction_delta = CV_PI / 5.0;
-  constexpr double confirm_window_delta = CV_PI / 60.0;
-  constexpr int direction_window = 10;
-  constexpr int min_window_samples = 6;
-  constexpr int confirm_vote_margin = 4;
-  constexpr int confirm_score = 6;
+  constexpr double confirm_window_delta = CV_PI / 120.0;
+  constexpr int direction_window = 8;
+  const int min_window_samples = std::max(2, BUFF_DIRECTION_CONFIRM_INTERVALS);
+  const int confirm_vote_margin = min_window_samples;
+  const int confirm_score = min_window_samples;
   constexpr int score_limit = 30;
-  constexpr int reverse_confirm_frames = 16;
 
   if (std::abs(delta) <= min_direction_delta || std::abs(delta) >= max_direction_delta) return;
 
@@ -140,32 +151,48 @@ void PhaseDirectionTracker::update(double phase)
     }
     return;
   }
-
-  if (window_direction == direction_) {
-    reverse_candidate_direction_ = 0;
-    reverse_confirm_count_ = 0;
-    return;
-  }
-
-  if (reverse_candidate_direction_ != window_direction) {
-    reverse_candidate_direction_ = window_direction;
-    reverse_confirm_count_ = 1;
-  } else {
-    reverse_confirm_count_++;
-  }
-
-  if (
-    reverse_confirm_count_ >= reverse_confirm_frames && score_ * direction_ <= -confirm_score) {
-    direction_ = window_direction;
-    score_ = window_direction * confirm_score;
-    reverse_candidate_direction_ = 0;
-    reverse_confirm_count_ = 0;
-  }
+  // The rune does not reverse in one mode session. Opposite votes are treated as outliers.
 }
 
 /// Target
 
 Target::Target() : first_in_(true), unsolvable_(true) {};
+
+void Target::get_target(
+  const std::vector<PowerRune> & observations,
+  std::chrono::steady_clock::time_point & timestamp)
+{
+  if (observations.empty()) {
+    get_target(std::nullopt, timestamp);
+    return;
+  }
+  const auto primary = std::find_if(observations.begin(), observations.end(), [](const PowerRune & p) {
+    return p.primary;
+  });
+  if (primary == observations.end()) {
+    get_target(std::nullopt, timestamp);
+    return;
+  }
+  get_target(*primary, timestamp);
+}
+
+void Target::reset()
+{
+  first_in_ = true;
+  unsolvable_ = true;
+  readiness_ = TargetReadiness::LOST;
+  last_track_id_ = -1;
+  blind_ = false;
+  has_start_timestamp_ = false;
+  has_measurement_timestamp_ = false;
+  has_full_observation_timestamp_ = false;
+  has_plane_basis_ = false;
+  plane_normal_sum_.setZero();
+  plane_normal_weight_ = 0.0;
+  has_pending_phase_recovery_ = false;
+  pending_phase_recovery_hits_ = 0;
+  reset_count_++;
+}
 
 Eigen::Vector3d Target::point_buff2world(const Eigen::Vector3d & point_in_buff) const
 {
@@ -197,12 +224,16 @@ Eigen::Matrix3d Target::rotation_buff2world() const
 
 bool Target::is_unsolve() const { return unsolvable_; }
 
+bool Target::can_control() const { return readiness_ != TargetReadiness::LOST; }
+
+bool Target::prediction_ready() const { return readiness_ == TargetReadiness::PREDICTING; }
+
 bool Target::is_blind() const { return blind_; }
 
 bool Target::can_fire(std::chrono::steady_clock::time_point now) const
 {
   if (
-    unsolvable_ || blind_ || !has_full_observation_timestamp_ ||
+    !prediction_ready() || unsolvable_ || blind_ || !has_full_observation_timestamp_ ||
     last_pose_quality_ != BuffPoseQuality::FULL_8_POINT) {
     return false;
   }
@@ -221,10 +252,22 @@ double Target::relative_time(std::chrono::steady_clock::time_point timestamp)
 
 bool Target::predict_without_measurement(std::chrono::steady_clock::time_point timestamp)
 {
-  if (
-    first_in_ || !has_measurement_timestamp_ ||
-    tools::delta_time(timestamp, last_measurement_timestamp_) > BUFF_BLIND_TIMEOUT_S) {
+  if (first_in_ || !has_measurement_timestamp_) {
     unsolvable_ = true;
+    readiness_ = TargetReadiness::LOST;
+    blind_ = true;
+    return false;
+  }
+
+  const double measurement_age = tools::delta_time(timestamp, last_measurement_timestamp_);
+  if (measurement_age > BUFF_TRACK_RETENTION_S) {
+    reset();
+    blind_ = true;
+    return false;
+  }
+  if (measurement_age > BUFF_BLIND_TIMEOUT_S) {
+    unsolvable_ = true;
+    readiness_ = TargetReadiness::LOST;
     blind_ = true;
     return false;
   }
@@ -255,6 +298,12 @@ Eigen::VectorXd Target::ekf_x() const { return ekf_.x; }
 /// SmallTarget
 
 SmallTarget::SmallTarget() : Target() {}
+
+void SmallTarget::reset()
+{
+  Target::reset();
+  phase_direction_.reset();
+}
 
 double Target::update_plane_basis(const PowerRune & p, bool initialize)
 {
@@ -373,12 +422,15 @@ double Target::measure_phase(const PowerRune & p, double reference) const
 void SmallTarget::get_target(
   const std::optional<PowerRune> & p, std::chrono::steady_clock::time_point & timestamp)
 {
+  if (
+    p.has_value() && has_measurement_timestamp_ &&
+    tools::delta_time(timestamp, last_measurement_timestamp_) > BUFF_TRACK_RETENTION_S) {
+    reset();
+  }
   const double time_gap = relative_time(timestamp);
 
   if (!p.has_value()) {
-    if (!has_stable_small_prediction_direction() || !predict_without_measurement(timestamp)) {
-      unsolvable_ = true;
-    }
+    predict_without_measurement(timestamp);
     return;
   }
 
@@ -390,11 +442,14 @@ void SmallTarget::get_target(
 
   // init
   if (first_in_) {
-    unsolvable_ = true;
     init(time_gap, obs);
     first_in_ = false;
     last_track_id_ = obs.track_id;
     record_measurement(obs, timestamp);
+    readiness_ = has_stable_small_prediction_direction() ? TargetReadiness::PREDICTING
+                                                         : TargetReadiness::TRACKING;
+    unsolvable_ = false;
+    return;
   }
 
   std::string reset_reason;
@@ -416,7 +471,9 @@ void SmallTarget::get_target(
     phase_direction_.rebase(switched_phase, true);
     lasttime_ = time_gap;
     last_track_id_ = obs.track_id;
-    unsolvable_ = !has_stable_small_prediction_direction();
+    readiness_ = has_stable_small_prediction_direction() ? TargetReadiness::PREDICTING
+                                                         : TargetReadiness::TRACKING;
+    unsolvable_ = false;
     record_measurement(obs, timestamp);
     tools::logger()->debug(
       "[Target] 小符切换跟踪 {}->{}, 保留中心状态", old_track_id, obs.track_id);
@@ -426,6 +483,29 @@ void SmallTarget::get_target(
     const double quality_scale = std::sqrt(std::max(1.0, obs.measurement_noise_scale));
     const double phase_error = std::abs(observed_phase - ekf_.x[5]);
     if (phase_error > CV_PI / 9.0 * quality_scale) {
+      const bool consistent_recovery =
+        has_pending_phase_recovery_ &&
+        std::abs(observed_phase - pending_phase_recovery_) <= CV_PI / 12.0;
+      pending_phase_recovery_hits_ = consistent_recovery ? pending_phase_recovery_hits_ + 1 : 1;
+      pending_phase_recovery_ = observed_phase;
+      has_pending_phase_recovery_ = true;
+      if (pending_phase_recovery_hits_ >= 2) {
+        ekf_.x[5] = observed_phase;
+        ekf_.P.row(5).setZero();
+        ekf_.P.col(5).setZero();
+        ekf_.P(5, 5) = 0.02;
+        phase_direction_.rebase(observed_phase, true);
+        lasttime_ = time_gap;
+        last_track_id_ = obs.track_id;
+        record_measurement(obs, timestamp);
+        readiness_ = has_stable_small_prediction_direction() ? TargetReadiness::PREDICTING
+                                                             : TargetReadiness::TRACKING;
+        unsolvable_ = false;
+        has_pending_phase_recovery_ = false;
+        pending_phase_recovery_hits_ = 0;
+        tools::logger()->debug("[Target] 小符连续观测重锚相位");
+        return;
+      }
       reset_reason = fmt::format("phase_err {:.1f}deg", phase_error * 57.3);
       reset_track = true;
     }
@@ -436,6 +516,8 @@ void SmallTarget::get_target(
     return;
   }
   innovation_reject_count_ = 0;
+  has_pending_phase_recovery_ = false;
+  pending_phase_recovery_hits_ = 0;
 
   // kalman update
   unsolvable_ = false;
@@ -449,14 +531,15 @@ void SmallTarget::get_target(
     (std::abs(ekf_.x[6]) > SMALL_W + CV_PI / 18 ||
      std::abs(ekf_.x[6]) < SMALL_W - CV_PI / 18)) {
     unsolvable_ = true;
+    readiness_ = TargetReadiness::LOST;
     tools::logger()->debug("[Target] 小符角度发散spd: {:.2f}", ekf_.x[6] * 180 / CV_PI);
     first_in_ = true;
     return;
   }
 
-  if (!has_stable_small_prediction_direction()) {
-    unsolvable_ = true;
-  }
+  readiness_ = has_stable_small_prediction_direction() ? TargetReadiness::PREDICTING
+                                                       : TargetReadiness::TRACKING;
+  unsolvable_ = false;
 }
 
 void SmallTarget::predict(double dt)
@@ -641,6 +724,16 @@ bool SmallTarget::has_stable_small_prediction_direction() const
 
 BigTarget::BigTarget() : Target(), spd_fitter_(100, 0.25, 1.884, 2.000) {}
 
+void BigTarget::reset()
+{
+  Target::reset();
+  phase_direction_.reset();
+  clear_speed_samples(true);
+  pause_speed_samples_until_ = 0.0;
+  speed_model_direction_ = 0;
+  has_speed_center_ = false;
+}
+
 void BigTarget::clear_speed_samples(bool clear_fitter)
 {
   phase_samples_.clear();
@@ -804,9 +897,14 @@ void BigTarget::add_speed_sample(double nowtime, double observed_phase, const Po
 void BigTarget::get_target(
   const std::optional<PowerRune> & p, std::chrono::steady_clock::time_point & timestamp)
 {
+  if (
+    p.has_value() && has_measurement_timestamp_ &&
+    tools::delta_time(timestamp, last_measurement_timestamp_) > BUFF_TRACK_RETENTION_S) {
+    reset();
+  }
   const double time_gap = relative_time(timestamp);
   if (!p.has_value()) {
-    if (!phase_direction_.ready() || !predict_without_measurement(timestamp)) unsolvable_ = true;
+    predict_without_measurement(timestamp);
     return;
   }
 
@@ -821,6 +919,8 @@ void BigTarget::get_target(
     first_in_ = false;
     last_track_id_ = obs.track_id;
     record_measurement(obs, timestamp);
+    readiness_ = TargetReadiness::TRACKING;
+    unsolvable_ = false;
     return;
   }
 
@@ -846,7 +946,9 @@ void BigTarget::get_target(
     pause_speed_samples_until_ = time_gap + 0.1;
     lasttime_ = time_gap;
     last_track_id_ = obs.track_id;
-    unsolvable_ = !phase_direction_.ready();
+    readiness_ = phase_direction_.ready() ? TargetReadiness::PREDICTING
+                                         : TargetReadiness::TRACKING;
+    unsolvable_ = false;
     record_measurement(obs, timestamp);
     tools::logger()->debug(
       "[Target] 大符切换跟踪 {}->{}, 保留中心和平面状态", old_track_id, obs.track_id);
@@ -857,16 +959,43 @@ void BigTarget::get_target(
   const double quality_scale = std::sqrt(std::max(1.0, obs.measurement_noise_scale));
   const double phase_error = std::abs(observed_phase - ekf_.x[5]);
   if (phase_error > CV_PI / 6.0 * quality_scale) {
+    const bool consistent_recovery =
+      has_pending_phase_recovery_ &&
+      std::abs(observed_phase - pending_phase_recovery_) <= CV_PI / 10.0;
+    pending_phase_recovery_hits_ = consistent_recovery ? pending_phase_recovery_hits_ + 1 : 1;
+    pending_phase_recovery_ = observed_phase;
+    has_pending_phase_recovery_ = true;
+    if (pending_phase_recovery_hits_ >= 2) {
+      ekf_.x[5] = observed_phase;
+      ekf_.P.row(5).setZero();
+      ekf_.P.col(5).setZero();
+      ekf_.P(5, 5) = 0.02;
+      phase_direction_.rebase(observed_phase, true);
+      lasttime_ = time_gap;
+      last_track_id_ = obs.track_id;
+      record_measurement(obs, timestamp);
+      readiness_ = phase_direction_.ready() ? TargetReadiness::PREDICTING
+                                           : TargetReadiness::TRACKING;
+      unsolvable_ = false;
+      has_pending_phase_recovery_ = false;
+      pending_phase_recovery_hits_ = 0;
+      tools::logger()->debug("[Target] 大符连续观测重锚相位");
+      return;
+    }
     tools::logger()->debug(
       "[Target] 大符拒绝异常连续相位: {:.1f}deg", phase_error * 57.3);
     predict_without_measurement(timestamp);
     return;
   }
 
+  has_pending_phase_recovery_ = false;
+  pending_phase_recovery_hits_ = 0;
   update(time_gap, obs);
   last_track_id_ = obs.track_id;
   record_measurement(obs, timestamp);
-  unsolvable_ = !phase_direction_.ready();
+  readiness_ = phase_direction_.ready() ? TargetReadiness::PREDICTING
+                                       : TargetReadiness::TRACKING;
+  unsolvable_ = false;
 }
 
 void BigTarget::predict(double dt)

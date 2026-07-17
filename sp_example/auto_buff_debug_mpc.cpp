@@ -62,8 +62,8 @@ int main(int argc, char * argv[])
 
     solver.set_R_gimbal2world(q);
 
-    auto buff_observation = detector.detect(img, t);
-    auto power_runes = solver.solve(buff_observation);
+    auto buff_observations = detector.detect_tracks(img, auto_buff::BuffMode::SMALL, t);
+    auto power_runes = solver.solve_all(buff_observations);
 
     target.get_target(power_runes, t);
 
@@ -79,15 +79,15 @@ int main(int argc, char * argv[])
     nlohmann::json data;
 
     // buff原始观测数据
-    if (power_runes.has_value()) {
-      const auto & p = power_runes.value();
+    if (!power_runes.empty()) {
+      const auto & p = power_runes.front();
       data["buff_R_yaw"] = p.ypd_in_world[0];
       data["buff_R_pitch"] = p.ypd_in_world[1];
       data["buff_R_dis"] = p.ypd_in_world[2];
     }
 
-    if (!target.is_unsolve()) {
-      auto & p = power_runes.value();
+    if (!target.is_unsolve() && !power_runes.empty()) {
+      auto & p = power_runes.front();
 
       // 显示
       for (int i = 0; i < 4; i++) tools::draw_point(img, p.target().points[i]);

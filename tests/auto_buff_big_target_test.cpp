@@ -43,12 +43,28 @@ bool near(double actual, double expected, double tolerance, const char * name)
 
 int main()
 {
-  auto_buff::BigTarget target;
   const Eigen::Vector3d center(6.2, -0.2, 0.7);
   const Eigen::Vector3d plane_normal = Eigen::Vector3d(-0.88, -0.21, 0.43).normalized();
   const auto start = std::chrono::steady_clock::now();
   constexpr double dt = 0.01;
   constexpr double speed = 1.3;
+  bool ok = true;
+
+  auto_buff::BigTarget startup_target;
+  double startup_phase = 0.3;
+  for (int i = 0; i < 4; ++i) {
+    startup_phase += speed * dt;
+    auto observation = make_observation(startup_phase, 100, center, plane_normal);
+    auto timestamp = start + std::chrono::milliseconds(i * 10);
+    startup_target.get_target(observation, timestamp);
+    if (i == 0) {
+      ok &= startup_target.can_control();
+      ok &= !startup_target.prediction_ready();
+    }
+  }
+  ok &= startup_target.prediction_ready();
+
+  auto_buff::BigTarget target;
   double phase = 2.9;
 
   // Keep the sample count below the sine-fit readiness threshold to test fallback prediction.
@@ -59,7 +75,6 @@ int main()
     target.get_target(observation, timestamp);
   }
 
-  bool ok = true;
   ok &= !target.is_unsolve();
   ok &= target.reset_count() == 0;
   ok &= near(target.ekf_x()[5], phase, 0.04, "continuous phase");

@@ -6,6 +6,8 @@
 #include <Eigen/Dense>  // 必须在opencv2/core/eigen.hpp上面
 #include <opencv2/core/eigen.hpp>
 #include <optional>
+#include <unordered_map>
+#include <vector>
 
 #include "buff_type.hpp"
 #include "tools/math_tools.hpp"
@@ -28,6 +30,8 @@ public:
   std::optional<PowerRune> solve(
     const std::optional<BuffObservation> & observation) const;
 
+  std::vector<PowerRune> solve_all(const std::vector<BuffObservation> & observations) const;
+
   // 调试用
   cv::Point2f point_buff2pixel(cv::Point3f x);
 
@@ -46,8 +50,12 @@ private:
 
   mutable cv::Vec3d rvec_, tvec_;
   mutable bool has_pnp_solution_ = false;
-  mutable bool has_last_pose_ = false;
-  mutable cv::Vec3d last_rvec_, last_tvec_;
+  struct PoseCache
+  {
+    cv::Vec3d rvec;
+    cv::Vec3d tvec;
+  };
+  mutable std::unordered_map<int, PoseCache> pose_cache_;
 
   double full_reprojection_gate_px_ = 6.0;
   double target_center_reprojection_gate_px_ = 6.0;

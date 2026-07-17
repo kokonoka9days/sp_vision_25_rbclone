@@ -130,6 +130,27 @@ std::optional<PowerRune> Solver::solve(
   return solve(*observation);
 }
 
+std::vector<PowerRune> Solver::solve_all(
+  const std::vector<BuffObservation> & observations) const
+{
+  has_pnp_solution_ = false;
+  std::vector<PowerRune> solved;
+  solved.reserve(observations.size());
+  for (const auto & observation : observations) {
+    auto rune = solve(observation);
+    if (rune.has_value()) solved.push_back(std::move(*rune));
+  }
+  if (!solved.empty()) {
+    const auto cache = pose_cache_.find(solved.front().track_id);
+    if (cache != pose_cache_.end()) {
+      rvec_ = cache->second.rvec;
+      tvec_ = cache->second.tvec;
+      has_pnp_solution_ = true;
+    }
+  }
+  return solved;
+}
+
 std::optional<PowerRune> Solver::solve(const BuffObservation & observation) const
 {
   has_pnp_solution_ = false;
@@ -221,9 +242,10 @@ std::optional<PowerRune> Solver::solve(const BuffObservation & observation) cons
     }
 
     double continuity_penalty = 0.0;
-    if (has_last_pose_) {
-      continuity_penalty =
-        0.05 * cv::norm(rvecs[i] - last_rvec_) + 0.05 * cv::norm(tvecs[i] - last_tvec_);
+    const auto cached_pose = pose_cache_.find(observation.track_id);
+    if (cached_pose != pose_cache_.end()) {
+      continuity_penalty = 0.05 * cv::norm(rvecs[i] - cached_pose->second.rvec) +
+                           0.05 * cv::norm(tvecs[i] - cached_pose->second.tvec);
     }
     const double score = error + 0.15 * center_error + 2.0 * angle_error + continuity_penalty;
     if (score < best_score) {
@@ -250,9 +272,16 @@ std::optional<PowerRune> Solver::solve(const BuffObservation & observation) cons
     return std::nullopt;
   }
   has_pnp_solution_ = true;
-  has_last_pose_ = true;
-  last_rvec_ = rvec_;
-  last_tvec_ = tvec_;
+  pose_cache_[observation.track_id] = PoseCache{rvec_, tvec_};
+  if (pose_cache_.size() > 64) {
+    const auto oldest = std::min_element(
+      pose_cache_.begin(), pose_cache_.end(), [](const auto & lhs, const auto & rhs) {
+        return lhs.first < rhs.first;
+      });
+    if (oldest != pose_cache_.end() && oldest->first != observation.track_id) {
+      pose_cache_.erase(oldest);
+    }
+  }
 
   PowerRune p(observation);
   p.pose_quality = pose_quality;
