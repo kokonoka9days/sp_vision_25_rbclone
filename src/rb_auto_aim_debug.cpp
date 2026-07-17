@@ -29,7 +29,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/sb_short.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/sb_long.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -157,7 +157,7 @@ int main(int argc, char * argv[])
     auto q = gimbal.q(t - 3ms);
 
     solver.set_R_gimbal2world(q);
-    auto armors = detector.detect(img);
+    auto armors = yolo.detect(img);
     auto targets = tracker.track(armors, t);
     // recor.record(img, q, t);
 
@@ -268,14 +268,14 @@ int main(int argc, char * argv[])
     }
 
 
-    // cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    // cv::imshow("reprojection", img);
-    // auto key = cv::waitKey(1);
-    // if (key == 'q') break;
-    // if(key == 'r') {//TUDO :右键手动更改
-    //   io::GimbalState* g_demo = gimbal.set_state_();
-    //   g_demo->mode = !g_demo->mode;
-    // }
+    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    cv::imshow("reprojection", img);
+    auto key = cv::waitKey(1);
+    if (key == 'q') break;
+    if(key == 'r') {//TUDO :右键手动更改
+      io::GimbalState* g_demo = gimbal.set_state_();
+      g_demo->mode = !g_demo->mode;
+    }
     // if(key == 's') {
     //   stopkey = !stopkey;
     // }

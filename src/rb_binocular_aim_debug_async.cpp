@@ -54,7 +54,7 @@ int main(int argc, char * argv[])
   io::Camera long_camera(long_camera_config_path);
   io::Gimbal gimbal(short_camera_config_path);
 
-  auto_aim::YOLO yolo(short_camera_config_path, true);
+  auto_aim::YOLO yolo(short_camera_config_path, false);
   auto_aim::Solver short_camera_solver(short_camera_config_path);
   auto_aim::Solver long_camera_solver(long_camera_config_path);
   auto_aim::Tracker tracker(short_camera_config_path, &short_camera_solver);
@@ -84,6 +84,19 @@ int main(int argc, char * argv[])
       auto & planner = use_short_planner ? short_camera_planner : long_camera_planner;
       auto & planner_mutex = use_short_planner ? short_planner_mutex : long_planner_mutex;
 
+      uint8_t name = 0;
+      float tx = 0.0f;
+      float ty = 0.0f;
+
+      if (target.has_value()) {
+          name = static_cast<uint8_t>(target->name) + 1;
+          tx = target->ekf_x()[0]; 
+          ty = target->ekf_x()[2]; 
+
+          // tools::logger()->info("{},{},{}", name,tx,ty);
+
+        }
+
       auto_aim::Plan plan{false};
       {
         std::lock_guard<std::mutex> lock(planner_mutex);
@@ -92,10 +105,17 @@ int main(int argc, char * argv[])
           auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
       }
 
-      gimbal.send(
-        plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch,
-        plan.pitch_vel, plan.pitch_acc);
+    //    if (binocular_aim.force_control_frames > 0) {
+    //     plan.control = true;
+    //     binocular_aim.force_control_frames--;
+    // }
 
+     gimbal.sb_send(
+        plan.control, plan.fire,
+        plan.yaw, plan.yaw_vel, plan.yaw_acc,
+        plan.pitch, plan.pitch_vel, plan.pitch_acc,
+        tx,ty,name
+      );    
       const auto fired = gs.bullet_count > last_bullet_count;
       last_bullet_count = gs.bullet_count;
 
@@ -264,11 +284,11 @@ int main(int argc, char * argv[])
       }
     }
 
-    cv::resize(img, img, {}, 0.5, 0.5);
-    cv::imshow("reprojection", img);
-    const auto key = cv::waitKey(1);
-    if (key == 'q') break;
-    if (key == 'c') binocular_aim.Switch(tracker, true);
+  //   cv::resize(img, img, {}, 0.5, 0.5);
+  //   cv::imshow("reprojection", img);
+  //   const auto key = cv::waitKey(1);
+  //   if (key == 'q') break;
+  //   if (key == 'c') binocular_aim.Switch(tracker, true);
   }
 
   quit = true;
