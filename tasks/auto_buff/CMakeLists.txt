@@ -5,6 +5,7 @@ find_package(OpenVINO REQUIRED)
 find_package(Ceres REQUIRED)
 
 add_library(auto_buff OBJECT 
+    active_fans_detector.cpp
     buff_type.cpp
     buff_detector.cpp
     buff_solver.cpp

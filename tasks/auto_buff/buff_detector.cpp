@@ -856,6 +856,7 @@ std::optional<BuffObservation> Buff_Detector::detect_impl(
 {
   std::vector<YOLO11_BUFF::Object> results = single_candidate ? MODE_.get_onecandidatebox(bgr_img)
                                                               : MODE_.get_multicandidateboxes(bgr_img);
+  // draw_model_outputs(bgr_img, results);
   if (results.empty()) {
     handle_lose();
     return std::nullopt;

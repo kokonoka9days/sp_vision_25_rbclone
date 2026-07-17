@@ -170,33 +170,33 @@ std::vector<YOLO11_BUFF::Object> YOLO11_BUFF::get_multicandidateboxes(cv::Mat & 
     object_result.push_back(obj);
 
     const auto color = color_for_label(obj.label);
-    cv::rectangle(image, obj.rect, color, 1, 8);
+    // cv::rectangle(image, obj.rect, color, 1, 8);
     std::string label = class_names[obj.label] + ":" + std::to_string(obj.prob).substr(0, 4);
     const cv::Size text_size = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.45, 1, nullptr);
     const cv::Point text_org(
       static_cast<int>(obj.rect.x), std::max(12, static_cast<int>(obj.rect.y) - 4));
-    cv::rectangle(
-      image,
-      cv::Rect(text_org.x, text_org.y - text_size.height, text_size.width, text_size.height + 4),
-      color, cv::FILLED);
-    cv::putText(
-      image, label, text_org, cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(0, 0, 0), 1);
+    // cv::rectangle(
+    //   image,
+    //   cv::Rect(text_org.x, text_org.y - text_size.height, text_size.width, text_size.height + 4),
+    //   color, cv::FILLED);
+    // cv::putText(
+    //   image, label, text_org, cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(0, 0, 0), 1);
 
     for (int k = 0; k < NUM_POINTS; ++k) {
       const auto kpt_color =
         obj.kpt_conf[k] >= keypoint_threshold_ ? color : cv::Scalar(80, 80, 80);
-      cv::circle(image, obj.kpt[k], 2, kpt_color, -1, cv::LINE_AA);
-      cv::putText(
-        image, std::to_string(k), obj.kpt[k] + cv::Point2f(4, -4), cv::FONT_HERSHEY_SIMPLEX,
-        0.35, kpt_color, 1, cv::LINE_AA);
+      // cv::circle(image, obj.kpt[k], 2, kpt_color, -1, cv::LINE_AA);
+      // cv::putText(
+      //   image, std::to_string(k), obj.kpt[k] + cv::Point2f(4, -4), cv::FONT_HERSHEY_SIMPLEX,
+      //   0.35, kpt_color, 1, cv::LINE_AA);
     }
     cv::circle(image, rect_center(obj.rect), 2, color, -1, cv::LINE_AA);
   }
 
   const float t = (cv::getTickCount() - start) / static_cast<float>(cv::getTickFrequency());
-  cv::putText(
-    image, cv::format("FPS: %.2f", 1.0f / t), cv::Point(20, 40), cv::FONT_HERSHEY_PLAIN, 2.0,
-    cv::Scalar(255, 0, 0), 2, 8);
+  // cv::putText(
+  //   image, cv::format("FPS: %.2f", 1.0f / t), cv::Point(20, 40), cv::FONT_HERSHEY_PLAIN, 2.0,
+  //   cv::Scalar(255, 0, 0), 2, 8);
   return object_result;
 }
 

@@ -177,7 +177,7 @@ const std::string keys =
   "{print-time    | flase                  | 是否在终端输出各步骤耗时 }"
   "{print-step    | 1                      | 每隔多少帧输出一次 }"
   "{debug-predict-time | -1                | 蓝色调试框预测时间, 负数使用配置 }"
-  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/yolo_buff/123/big_buff_2   | avi和txt文件的路径}";
+  "{@input-path    |    /home/rm/Desktop/gitVV/buff_avi/hik_26bule_dglg   | avi和txt文件的路径}";
 
 int main(int argc, char * argv[])
 {
