@@ -5,9 +5,11 @@
 #include <algorithm>
 #include <chrono>
 #include <optional>
+#include <string>
 
 #include "drone_target.hpp"
-#include "tinympc/tiny_api.hpp" 
+#include "laser_ray_aim.hpp"
+#include "tinympc/tiny_api.hpp"
 #include "tools/logger.hpp"
 
 namespace auto_drone
@@ -32,6 +34,25 @@ struct Plan
   float pitch_acc = 0.0F;
 };
 
+struct PlanDiagnostics
+{
+  bool target_present = false;
+  bool timestamps_valid = false;
+  bool target_age_valid = false;
+  bool aim_valid = false;
+  bool plan_valid = false;
+  double observation_age_s = 0.0;
+  double state_age_s = 0.0;
+  double prediction_horizon_s = 0.0;
+  std::chrono::steady_clock::time_point prediction_target_timestamp{};
+  Eigen::Vector3d input_xyz = Eigen::Vector3d::Zero();
+  Eigen::Vector3d input_velocity = Eigen::Vector3d::Zero();
+  Eigen::Vector3d predicted_xyz = Eigen::Vector3d::Zero();
+  Eigen::Vector2d input_yaw_pitch = Eigen::Vector2d::Zero();
+  Eigen::Vector2d predicted_yaw_pitch = Eigen::Vector2d::Zero();
+  Plan plan;
+};
+
 class Planner
 {
 public:
@@ -41,8 +62,10 @@ public:
   Planner(const std::string & config_path);
 
   Plan plan(Target target, double bullet_speed);
-  
-  inline Plan plan(std::optional<Target> target, double bullet_speed) {
+  PlanDiagnostics plan_diagnostics(std::optional<Target> target, double bullet_speed);
+
+  inline Plan plan(std::optional<Target> target, double bullet_speed)
+  {
     if (!target.has_value()) return {false};
 
     const auto now = std::chrono::steady_clock::now();
@@ -56,8 +79,8 @@ public:
       std::chrono::duration<double>(now - target->last_observation_timestamp()).count();
     if (observation_age < 0.0 || observation_age > max_target_age_) return {false};
 
-    const double state_age = std::max(
-      0.0, std::chrono::duration<double>(now - target->state_timestamp()).count());
+    const double state_age =
+      std::max(0.0, std::chrono::duration<double>(now - target->state_timestamp()).count());
     const double delay_time = state_age + gimbal_control_delay;
 
     target->predict(delay_time);
@@ -72,6 +95,8 @@ private:
   double gimbal_control_delay = 0.04;
   double max_target_age_ = 0.2;
   Eigen::Vector3d xyz_offset_;
+  bool laser_ray_enabled_ = false;
+  LaserRay laser_ray_;
 
   TinySolver * yaw_solver_ = nullptr;
   TinySolver * pitch_solver_ = nullptr;

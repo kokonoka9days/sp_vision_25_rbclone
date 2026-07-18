@@ -41,6 +41,13 @@ t_camera2gimbal: [1.2665948043678106, -0.28739811755958894, 0.33863959648495134]
 camera_matrix: [12433.877199163255, 0, 148.70356141857283, 0, 12392.368692478462, 142.32144121353329, 0, 0, 1]
 distort_coeffs: [-0.18904682042398907, 14.092689630727735, -0.0059381037726841225, -0.02400090838835928, -384.4977019565016]
 
+#####----- 激光射线标定参数 -----#####
+# 标定通过后，将 laser_ray.yaml 中下面两项的真实数值复制到这里并取消注释，
+# 再把 laser_ray_enabled 改为 true；运行时不需要 laser_ray_config_path。
+laser_ray_enabled: false
+# laser_line_origin_in_camera_m: [x, y, z]
+# laser_line_direction_in_camera: [dx, dy, dz]
+
 
 # ==========================================
 # 三、 逻辑与控制配置 (Tracker & Planner)[cite: 1]
@@ -52,9 +59,9 @@ min_detect_count: 3           # 连续识别几帧后从 detecting 进入 tracki
 max_temp_lost_count: 10       # 丢失几帧后从 temp_lost 彻底判定为 lost
 
 #####----- 弹道与预测参数 (Planner) -----#####
-yaw_offset: 3.42               # Yaw 轴硬件偏置补偿 (度)
-pitch_offset: 2.70            # Pitch 轴硬件偏置补偿 (度)
-xyz_offset: [-0.0706, 0.1886, -0.4520]   # PnP 后 xyz 固定偏移 (米), [x, y, z]
+yaw_offset: 0               # Yaw 轴硬件偏置补偿 (度)
+pitch_offset: 0           # Pitch 轴硬件偏置补偿 (度)
+xyz_offset: [0,0,0]   # PnP 后 xyz 固定偏移 (米), [x, y, z]
 fire_thresh: 0.1              # 允许开火的角度误差阈值 (度)
 
 # 高低速判断与预测延迟补偿 (秒)

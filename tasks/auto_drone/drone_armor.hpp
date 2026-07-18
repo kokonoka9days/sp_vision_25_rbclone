@@ -28,29 +28,31 @@ const std::vector<std::string> DRONE_NAMES = {"drone", "not_drone"};
 struct Drone
 {
   Color color;
-  cv::Point2f center;       
-  cv::Point2f center_norm;  
-  std::vector<cv::Point2f> points; 
+  cv::Point2f center;
+  cv::Point2f center_norm;
+  std::vector<cv::Point2f> points;
+  std::vector<float> point_confidences;
 
   DroneName name;
   int class_id;
-  cv::Rect box;             
-  double confidence;        
+  cv::Rect box;
+  double confidence;
 
-  Eigen::Vector3d xyz_in_gimbal;  
-  Eigen::Vector3d xyz_in_world;   
-  Eigen::Vector3d ypr_in_gimbal;  
-  Eigen::Vector3d ypr_in_world;   
-  Eigen::Vector3d ypd_in_world;   
+  Eigen::Vector3d xyz_in_gimbal;
+  Eigen::Vector3d xyz_in_world;
+  Eigen::Vector3d ypr_in_gimbal;
+  Eigen::Vector3d ypr_in_world;
+  Eigen::Vector3d ypd_in_world;
 
   Drone() = default;
 
   Drone(
-    int class_id, float confidence, const cv::Rect & box, std::vector<cv::Point2f> drone_keypoints);
-    
+    int class_id, float confidence, const cv::Rect & box, std::vector<cv::Point2f> drone_keypoints,
+    std::vector<float> keypoint_confidences = {});
+
   Drone(
     int class_id, float confidence, const cv::Rect & box, std::vector<cv::Point2f> drone_keypoints,
-    cv::Point2f offset);
+    cv::Point2f offset, std::vector<float> keypoint_confidences = {});
 };
 
 }  // namespace auto_drone

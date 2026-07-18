@@ -2,11 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
-#include <thread>
-
 #include <openvino/core/preprocess/pre_post_process.hpp>
 #include <openvino/runtime/properties.hpp>
+#include <stdexcept>
+#include <thread>
 
 #include "tools/logger.hpp"
 #include "tools/yaml.hpp"
@@ -61,8 +60,7 @@ YOLO::YOLO(const std::string & config_path, bool /*debug*/)
 
     const ov::AnyMap config{
       ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY),
-      ov::num_streams(ov::streams::Num(1)),
-      ov::inference_num_threads(inference_threads_)};
+      ov::num_streams(ov::streams::Num(1)), ov::inference_num_threads(inference_threads_)};
     compiled_model_ = core_.compile_model(model, "CPU", config);
 
     const auto output_shape = compiled_model_.output(0).get_shape();
@@ -70,8 +68,7 @@ YOLO::YOLO(const std::string & config_path, bool /*debug*/)
     if (
       output_shape.size() != 3 || output_shape[0] != 1 ||
       output_shape[1] != static_cast<std::size_t>(expected_channels)) {
-      throw std::runtime_error(
-        "Unexpected YOLO output shape; expected [1,29,num_boxes]");
+      throw std::runtime_error("Unexpected YOLO output shape; expected [1,29,num_boxes]");
     }
     num_boxes_ = static_cast<int>(output_shape[2]);
     if (num_boxes_ <= 0) throw std::runtime_error("YOLO output has no candidate boxes");
@@ -88,8 +85,8 @@ YOLO::YOLO(const std::string & config_path, bool /*debug*/)
     tools::logger()->info(
       "auto_drone::YOLO loaded: device={}, streams={}, threads={}, optimal_requests={}, "
       "output=[1,{},{}]",
-      devices.empty() ? "CPU" : devices.front(), static_cast<int32_t>(streams),
-      inference_threads_, optimal_requests, expected_channels, num_boxes_);
+      devices.empty() ? "CPU" : devices.front(), static_cast<int32_t>(streams), inference_threads_,
+      optimal_requests, expected_channels, num_boxes_);
   } catch (const std::exception & e) {
     tools::logger()->error("[YOLO] OpenVINO initialization failed: {}", e.what());
     throw;
@@ -111,10 +108,10 @@ void YOLO::prepare_slot(
     static_cast<float>(input_w_) / static_cast<float>(frame.cols),
     static_cast<float>(input_h_) / static_cast<float>(frame.rows));
 
-  const int resized_w = std::clamp(
-    static_cast<int>(std::lround(frame.cols * slot.letterbox.scale)), 1, input_w_);
-  const int resized_h = std::clamp(
-    static_cast<int>(std::lround(frame.rows * slot.letterbox.scale)), 1, input_h_);
+  const int resized_w =
+    std::clamp(static_cast<int>(std::lround(frame.cols * slot.letterbox.scale)), 1, input_w_);
+  const int resized_h =
+    std::clamp(static_cast<int>(std::lround(frame.rows * slot.letterbox.scale)), 1, input_h_);
   slot.letterbox.pad_x = (input_w_ - resized_w) / 2;
   slot.letterbox.pad_y = (input_h_ - resized_h) / 2;
 
@@ -137,8 +134,7 @@ void YOLO::start_slot(Slot & slot)
   if (slot.active) throw std::logic_error("Inference slot is already active");
 
   ov::Tensor input_tensor(
-    ov::element::u8,
-    {1, static_cast<std::size_t>(input_h_), static_cast<std::size_t>(input_w_), 3},
+    ov::element::u8, {1, static_cast<std::size_t>(input_h_), static_cast<std::size_t>(input_w_), 3},
     slot.input.data);
   slot.infer_request.set_input_tensor(input_tensor);
   slot.submitted_at = std::chrono::steady_clock::now();
@@ -210,10 +206,10 @@ std::vector<Drone> YOLO::postprocess(const float * output, const Letterbox & let
 
     const int raw_w = static_cast<int>(std::lround(width * inverse_scale));
     const int raw_h = static_cast<int>(std::lround(height * inverse_scale));
-    const int raw_x = static_cast<int>(std::lround(
-      (cx - letterbox.pad_x) * inverse_scale - raw_w / 2.0F));
-    const int raw_y = static_cast<int>(std::lround(
-      (cy - letterbox.pad_y) * inverse_scale - raw_h / 2.0F));
+    const int raw_x =
+      static_cast<int>(std::lround((cx - letterbox.pad_x) * inverse_scale - raw_w / 2.0F));
+    const int raw_y =
+      static_cast<int>(std::lround((cy - letterbox.pad_y) * inverse_scale - raw_h / 2.0F));
 
     boxes.emplace_back(raw_x, raw_y, raw_w, raw_h);
     confidences.push_back(max_confidence);
@@ -230,17 +226,23 @@ std::vector<Drone> YOLO::postprocess(const float * output, const Letterbox & let
     const int raw_index = valid_raw_indices[index];
     const float inverse_scale = 1.0F / letterbox.scale;
     std::vector<cv::Point2f> keypoints;
+    std::vector<float> keypoint_confidences;
     keypoints.reserve(num_kpts_);
+    keypoint_confidences.reserve(num_kpts_);
 
     for (int keypoint = 0; keypoint < num_kpts_; ++keypoint) {
       const float x = output[(keypoint_offset + keypoint * 3) * num_boxes_ + raw_index];
       const float y = output[(keypoint_offset + keypoint * 3 + 1) * num_boxes_ + raw_index];
+      const float confidence =
+        output[(keypoint_offset + keypoint * 3 + 2) * num_boxes_ + raw_index];
       keypoints.emplace_back(
-        (x - letterbox.pad_x) * inverse_scale,
-        (y - letterbox.pad_y) * inverse_scale);
+        (x - letterbox.pad_x) * inverse_scale, (y - letterbox.pad_y) * inverse_scale);
+      keypoint_confidences.push_back(confidence);
     }
 
-    results.emplace_back(class_ids[index], confidences[index], boxes[index], std::move(keypoints));
+    results.emplace_back(
+      class_ids[index], confidences[index], boxes[index], std::move(keypoints),
+      std::move(keypoint_confidences));
   }
 
   if (results.empty()) return results;
@@ -264,8 +266,7 @@ std::vector<Drone> YOLO::detect(const cv::Mat & frame)
 }
 
 std::optional<YOLOResult> YOLO::detect_async(
-  const cv::Mat & frame, std::chrono::steady_clock::time_point timestamp,
-  std::uint64_t frame_id)
+  const cv::Mat & frame, std::chrono::steady_clock::time_point timestamp, std::uint64_t frame_id)
 {
   if (frame.empty()) return std::nullopt;
 
