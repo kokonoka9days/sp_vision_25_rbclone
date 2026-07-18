@@ -1,5 +1,5 @@
 # auto_buff_center_test 使用的 YOLO 模型配置
-model: "../assets/yolo11_buff_12point_v2.onnx"
+model: "../assets/yolo11_buff_12point_v3.onnx"
 buff_confidence_threshold: 0.6
 buff_iou_threshold: 0.4
 
@@ -7,5 +7,5 @@ buff_iou_threshold: 0.4
 active_fan_detector:
   roi_scale: 20.0
   buff_color: red
-  color_thresh: 43
+  color_thresh: 60
   roi_contour_selection: largest_area

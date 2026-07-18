@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 3.16)
+project(kami_rune_fan_skeleton LANGUAGES CXX)
+
+find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui imgcodecs)
+
+add_library(kami_rune_fan_skeleton fan_skeleton_extractor.cpp)
+target_compile_features(kami_rune_fan_skeleton PUBLIC cxx_std_17)
+target_include_directories(kami_rune_fan_skeleton PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(kami_rune_fan_skeleton PUBLIC ${OpenCV_LIBS})
+
+add_executable(kami_rune_fan_skeleton_test fan_skeleton_extractor_test.cpp)
+target_link_libraries(kami_rune_fan_skeleton_test PRIVATE kami_rune_fan_skeleton)
+
+enable_testing()
+add_test(NAME kami_rune_fan_skeleton_test COMMAND kami_rune_fan_skeleton_test)

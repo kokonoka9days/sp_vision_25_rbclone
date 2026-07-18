@@ -111,9 +111,6 @@ target_link_libraries(auto_buff_big_target_test ${OpenCV_LIBS} fmt::fmt yaml-cpp
 add_executable(auto_buff_center_test tests/auto_buff_center_test.cpp)
 target_link_libraries(auto_buff_center_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
 
-add_executable(active_fans_detector_test tests/active_fans_detector_test.cpp)
-target_link_libraries(
-  active_fans_detector_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
 add_executable(auto_buff_track_bank_test tests/auto_buff_track_bank_test.cpp)
 target_link_libraries(auto_buff_track_bank_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
 

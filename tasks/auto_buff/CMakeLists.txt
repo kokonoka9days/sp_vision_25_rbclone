@@ -13,6 +13,7 @@ add_library(auto_buff OBJECT
     buff_aimer.cpp
     buff_target.cpp
     yolo11_buff.cpp
+    kami_rune/fan_skeleton_extractor.cpp
 )
 
 target_link_libraries(auto_buff auto_aim openvino::runtime ${CERES_LIBRARIES})

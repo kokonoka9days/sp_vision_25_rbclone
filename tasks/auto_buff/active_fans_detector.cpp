@@ -152,7 +152,7 @@ cv::Mat ActiveFanDetector::binarize(const cv::Mat & bgr_img) const
 }
 
 /**
- * @brief 提取并编号轮廓，依次剔除 big ROI 外轮廓和各外部识别框对应的轮廓。
+ * @brief 提取并编号轮廓，依次执行 big ROI、中心轮廓面积和外部识别框过滤。
  *
  * 每个轮廓以质心判断所属区域。外部识别框按输入顺序处理，每个框根据配置选择
  * 面积最大或最靠近框中心的一个轮廓；已经剔除的轮廓不会被后续框重复选择。
@@ -192,11 +192,8 @@ ActiveFanDetector::DetectionResult ActiveFanDetector::detect(
     }
   }
 
-  // 每个外部识别框只选择并剔除一个当前仍保留的轮廓。
-  for (std::size_t roi_index = 0; roi_index < rois.size(); ++roi_index) {
-    const Roi roi = clip_roi(rois[roi_index], bgr_img.size());
-    if (roi.width <= 0.0f || roi.height <= 0.0f) continue;
-
+  // 使用同一策略从指定框内选择一个当前仍保留的轮廓。
+  const auto select_contour = [&](const Roi & roi) {
     const cv::Point2f roi_center(
       roi.x + roi.width * 0.5f, roi.y + roi.height * 0.5f);
     int selected_id = -1;
@@ -222,7 +219,28 @@ ActiveFanDetector::DetectionResult ActiveFanDetector::detect(
       best_area = contour.area;
       best_distance = distance;
     }
+    return selected_id;
+  };
 
+  // rune_center 的真实轮廓面积作为下限；无法在中心框内定位轮廓时不做面积过滤。
+  const Roi clipped_r_roi = clip_roi(r_roi, bgr_img.size());
+  result.rune_center_contour_id = select_contour(clipped_r_roi);
+  if (result.rune_center_contour_id >= 0) {
+    result.rune_center_contour_area = result.detected_contours[
+      static_cast<std::size_t>(result.rune_center_contour_id)].area;
+    for (std::size_t i = 0; i < result.detected_contours.size(); ++i) {
+      if (!keep[i] || result.detected_contours[i].area >= result.rune_center_contour_area) continue;
+      keep[i] = false;
+      result.smaller_than_rune_center_ids.push_back(result.detected_contours[i].id);
+    }
+  }
+
+  // 每个外部识别框只选择并剔除一个当前仍保留的轮廓。
+  for (std::size_t roi_index = 0; roi_index < rois.size(); ++roi_index) {
+    const Roi roi = clip_roi(rois[roi_index], bgr_img.size());
+    if (roi.width <= 0.0f || roi.height <= 0.0f) continue;
+
+    const int selected_id = select_contour(roi);
     result.roi_excluded_ids[roi_index] = selected_id;
     if (selected_id >= 0) keep[static_cast<std::size_t>(selected_id)] = false;
   }
