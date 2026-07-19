@@ -73,41 +73,18 @@ Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t)
 {
   while (true) {
     auto [q_a, t_a] = queue_.pop();
-
-    if (queue_.empty()) {
-      return q_a;
-    }
-
     auto [q_b, t_b] = queue_.front();
-
-    if (t > t_b) {
-      continue;
-    }
-
     auto t_ab = tools::delta_time(t_a, t_b);
     auto t_ac = tools::delta_time(t_a, t);
-    
-    // 【修复1】：防止 t_ab 过小导致的除零错或 K 值爆炸
-    if (t_ab < 1e-4) { 
-      return q_a; // 两次数据间隔小于 0.1ms，直接返回，不插值
-    }
-
     auto k = t_ac / t_ab;
-    
-    // 【修复2】：限制 k 的范围。
-    // 允许合理的稍微外推（比如 -1.0 到 2.0 之间），但是拒绝离谱的疯狂外推
-    k = std::clamp(k, -1.0, 2.0);
-
     Eigen::Quaterniond q_c = q_a.slerp(k, q_b).normalized();
-
-    // 如果目标时间比我们能查到的最老时间还老，就只能认命返回推算值了
     if (t < t_a) return q_c;
-
     if (!(t_a < t && t <= t_b)) continue;
 
     return q_c;
   }
 }
+
 
 void Gimbal::sb_send(io::sb_VisionToGimbal VisionToGimbal)
 {
