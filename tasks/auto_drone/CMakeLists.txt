@@ -11,6 +11,7 @@ add_library(auto_drone OBJECT
     drone_armor.cpp
     drone_solver.cpp
     drone_target.cpp
+    laser_ray_aim.cpp
     drone_planner.cpp
     drone_yolo.cpp     
     drone_tracker.cpp  

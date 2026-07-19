@@ -1,10 +1,11 @@
 #include "gimbal.hpp"
 
+#include <opencv2/opencv.hpp>
+
 #include "tools/crc.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/yaml.hpp"
-#include <opencv2/opencv.hpp>
 
 namespace io
 {
@@ -20,7 +21,7 @@ Gimbal::Gimbal(const std::string & config_path)
   try {
     serial_.setPort(com_port);
     serial_.setBaudrate(115200);
-    auto timeout = serial::Timeout::simpleTimeout(2); 
+    auto timeout = serial::Timeout::simpleTimeout(2);
     serial_.setTimeout(timeout);
     serial_.open();
   } catch (const std::exception & e) {
@@ -69,8 +70,12 @@ std::string Gimbal::str(GimbalMode mode) const
   }
 }
 
-Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t)
+Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t) { return q_diagnostic(t).q; }
+
+PoseQueryDiagnostics Gimbal::q_diagnostic(std::chrono::steady_clock::time_point t)
 {
+  PoseQueryDiagnostics diagnostics;
+  diagnostics.requested_time = t;
   while (true) {
     auto [q_a, t_a] = queue_.pop();
     auto [q_b, t_b] = queue_.front();
@@ -81,8 +86,17 @@ Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t)
     if (t < t_a) return q_c;
     if (!(t_a < t && t <= t_b)) continue;
 
-    return q_c;
+    diagnostics.q = q_c;
+    diagnostics.interpolated = true;
+    diagnostics.used_sample_time = t;
+    return diagnostics;
   }
+}
+
+DroneSendDiagnostics Gimbal::last_drone_send_diagnostics() const
+{
+  std::lock_guard<std::mutex> lock(send_diagnostics_mutex_);
+  return last_drone_send_diagnostics_;
 }
 
 
@@ -96,9 +110,9 @@ void Gimbal::sb_send(io::sb_VisionToGimbal VisionToGimbal)
   sb_tx_data_.pitch = VisionToGimbal.pitch;
   sb_tx_data_.pitch_vel = VisionToGimbal.pitch_vel;
   sb_tx_data_.pitch_acc = VisionToGimbal.pitch_acc;
-      reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
+  reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_);
   // sb_tx_data_.crc16 = tools::get_crc16(
-    // reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
+  // reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
 
   try {
     serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
@@ -116,7 +130,7 @@ void Gimbal::send(io::VisionToGimbal VisionToGimbal)
   tx_data_.pitch = VisionToGimbal.pitch;
   // tx_data_.pitch_vel = VisionToGimbal.pitch_vel;
   // tx_data_.pitch_acc = VisionToGimbal.pitch_acc;
-      // reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
+  // reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
   // tx_data_.crc16 = tools::get_crc16(
   //   reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
 
@@ -138,7 +152,7 @@ void Gimbal::send(
   tx_data_.pitch = pitch;
   // tx_data_.pitch_vel = pitch_vel;
   // tx_data_.pitch_acc = pitch_acc;
-      // reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
+  // reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
   // tx_data_.crc16 = tools::get_crc16(
   //   reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
 
@@ -160,9 +174,27 @@ void Gimbal::drone_send(
   drone_tx_date.pitch = pitch;
   // tx_data_.pitch_vel = pitch_vel;
   // tx_data_.pitch_acc = pitch_acc;
-      // reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
+  // reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
   drone_tx_date.crc16 = tools::get_crc16(
-    reinterpret_cast<uint8_t *>(&drone_tx_date), sizeof(drone_tx_date) - sizeof(drone_tx_date.crc16));
+    reinterpret_cast<uint8_t *>(&drone_tx_date),
+    sizeof(drone_tx_date) - sizeof(drone_tx_date.crc16));
+
+  DroneSendDiagnostics diagnostics;
+  diagnostics.timestamp = std::chrono::steady_clock::now();
+  diagnostics.control_requested = control;
+  diagnostics.fire_requested = fire;
+  diagnostics.argument_yaw = yaw;
+  diagnostics.argument_pitch = pitch;
+  diagnostics.serialized_yaw = drone_tx_date.yaw;
+  diagnostics.serialized_pitch = drone_tx_date.pitch;
+  diagnostics.crc16 = drone_tx_date.crc16;
+  diagnostics.packet_size = sizeof(drone_tx_date);
+  diagnostics.crc_valid =
+    tools::check_crc16(reinterpret_cast<uint8_t *>(&drone_tx_date), sizeof(drone_tx_date));
+  {
+    std::lock_guard<std::mutex> lock(send_diagnostics_mutex_);
+    last_drone_send_diagnostics_ = diagnostics;
+  }
 
   try {
     serial_.write(reinterpret_cast<uint8_t *>(&drone_tx_date), sizeof(drone_tx_date));
@@ -229,14 +261,14 @@ void Gimbal::read_thread()
     uint8_t header_byte = 0;
     if (!read(&header_byte, 1)) {
       error_count++;
-      continue; // 读不到数据，继续等
+      continue;  // 读不到数据，继续等
     }
 
     if (header_byte != 0x5a) {
       // 读到的不是帧头，说明当前处于数据包中间。
       // 我们什么都不做，进入下一次循环继续读下一个字节，直到碰见 0x5A 为止。
-      // 【注意】：这里绝对不要加 serial_.flushInput(); 
-      continue; 
+      // 【注意】：这里绝对不要加 serial_.flushInput();
+      continue;
     }
 
     // 2. 既然找到了帧头 0x5A，把它存进结构体的第一个字节
@@ -246,7 +278,7 @@ void Gimbal::read_thread()
     size_t remaining_size = sizeof(rx_data_) - 1;
     if (!read(reinterpret_cast<uint8_t *>(&rx_data_) + 1, remaining_size)) {
       error_count++;
-      continue; // 如果剩下的没读够，说明包不完整，跳过
+      continue;  // 如果剩下的没读够，说明包不完整，跳过
     }
 
     // 4. 记录时间戳
@@ -258,19 +290,17 @@ void Gimbal::read_thread()
       // 因为四元数的 float 数据里碰巧也可能包含值为 0x5A 的字节。
       // 此时把它当成帧头读出来的包自然是错的，CRC 校验会帮你过滤掉这种“伪帧头”。
       // 过滤掉后继续下一次循环找真实的帧头即可。
-      // tools::logger()->debug("[Gimbal] CRC16 check failed."); 
+      // tools::logger()->debug("[Gimbal] CRC16 check failed.");
       error_count++;
       continue;
     }
-
-    
 
     error_count = 0;
     frame_count++;
     Eigen::Quaterniond q_(rx_data_.q[0], rx_data_.q[1], rx_data_.q[2], rx_data_.q[3]);
     auto ypr = tools::eulers(q_, 2, 1, 0);
-    
-    float yaw = ypr[abs(gimbal_yaw2vision) -  1];
+
+    float yaw = ypr[abs(gimbal_yaw2vision) - 1];
     float pitch = ypr[abs(gimbal_pitch2vision) - 1];
     float roll = ypr[abs(gimbal_roll2vision) - 1];
 
@@ -278,10 +308,9 @@ void Gimbal::read_thread()
     pitch = gimbal_pitch2vision > 0 ? pitch : -pitch;
     roll = gimbal_roll2vision > 0 ? roll : -roll;
 
-    Eigen::Quaterniond q = 
-        Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) * // 绕Z轴旋转yaw
-        Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) * // 绕Y轴旋转pitch
-        Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX());   // 绕X轴旋转roll
+    Eigen::Quaterniond q = Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *    // 绕Z轴旋转yaw
+                           Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) *  // 绕Y轴旋转pitch
+                           Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX());  // 绕X轴旋转roll
 
     queue_.push({q, t});
 
@@ -289,32 +318,32 @@ void Gimbal::read_thread()
     auto ypr_now = tools::eulers(q, 2, 1, 0);
     state_.yaw = ypr[0];
     state_.pitch = ypr[1];
-    
-  //   state_.mode = rx_data_.mode;
-  //   state_.enemy_color = !rx_data_.color;
-  //   state_.bullet_speed = rx_data_.bullet_speed;
-  //   state_.bullet_count = rx_data_.bullet_count;
-  //   // rx_data_.mode = 2;
-  //   state_.mode = rx_data_.mode;
 
-  //   switch (rx_data_.mode) {
-  //     case 0:
-  //       mode_ = GimbalMode::IDLE;
-  //       break;
-  //     case 1:
-  //       mode_ = GimbalMode::AUTO_AIM;
-  //       break;
-  //     case 2:
-  //       mode_ = GimbalMode::SMALL_BUFF;
-  //       break;
-  //     case 3:
-  //       mode_ = GimbalMode::BIG_BUFF;
-  //       break;
-  //     default:
-  //       mode_ = GimbalMode::IDLE;
-  //       tools::logger()->warn("[Gimbal] Invalid mode: {}", rx_data_.mode);
-  //       break;
-  //   }
+    //   state_.mode = rx_data_.mode;
+    //   state_.enemy_color = !rx_data_.color;
+    //   state_.bullet_speed = rx_data_.bullet_speed;
+    //   state_.bullet_count = rx_data_.bullet_count;
+    //   // rx_data_.mode = 2;
+    //   state_.mode = rx_data_.mode;
+
+    //   switch (rx_data_.mode) {
+    //     case 0:
+    //       mode_ = GimbalMode::IDLE;
+    //       break;
+    //     case 1:
+    //       mode_ = GimbalMode::AUTO_AIM;
+    //       break;
+    //     case 2:
+    //       mode_ = GimbalMode::SMALL_BUFF;
+    //       break;
+    //     case 3:
+    //       mode_ = GimbalMode::BIG_BUFF;
+    //       break;
+    //     default:
+    //       mode_ = GimbalMode::IDLE;
+    //       tools::logger()->warn("[Gimbal] Invalid mode: {}", rx_data_.mode);
+    //       break;
+    //   }
   }
 
   tools::logger()->info("[Gimbal] read_thread stopped.");

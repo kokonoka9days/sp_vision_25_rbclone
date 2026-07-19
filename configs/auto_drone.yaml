@@ -52,8 +52,8 @@ min_detect_count: 3           # 连续识别几帧后从 detecting 进入 tracki
 max_temp_lost_count: 10       # 丢失几帧后从 temp_lost 彻底判定为 lost
 
 #####----- 弹道与预测参数 (Planner) -----#####
-yaw_offset: 0.7              # Yaw 轴硬件偏置补偿 (度)
-pitch_offset: 3.5           # Pitch 轴硬件偏置补偿 (度)
+yaw_offset: 0               # Yaw 轴硬件偏置补偿 (度)
+pitch_offset: 0           # Pitch 轴硬件偏置补偿 (度)
 xyz_offset: [0,0,0]   # PnP 后 xyz 固定偏移 (米), [x, y, z]
 fire_thresh: 0.1              # 允许开火的角度误差阈值 (度)
 

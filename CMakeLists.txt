@@ -60,6 +60,7 @@ add_subdirectory(tasks/auto_drone)
 
 #################### src ###################
 add_executable(rb_auto_drone_debug src/rb_auto_drone_debug.cpp)
+add_executable(rb_auto_drone_diagnostics src/rb_auto_drone_diagnostics.cpp)
 add_executable(rb_auto_drone_ros_debug src/rb_auto_drone_ros_debug.cpp)
 add_executable(rb_auto_drone_video_test src/rb_auto_drone_video_test.cpp)
 
@@ -71,6 +72,16 @@ target_link_libraries(rb_auto_drone_debug
     auto_drone 
     tools 
     io 
+    openvino::runtime
+)
+
+target_link_libraries(rb_auto_drone_diagnostics
+    ${OpenCV_LIBS}
+    fmt::fmt
+    yaml-cpp
+    auto_drone
+    tools
+    io
     openvino::runtime
 )
 
@@ -99,6 +110,16 @@ ament_target_dependencies(rb_auto_drone_debug rclcpp std_msgs)
 ament_target_dependencies(rb_auto_drone_ros_debug rclcpp std_msgs)
 
 ################## calibration ################
+add_library(laser_ray_calibration STATIC calibration/laser_ray_calibration.cpp)
+add_executable(calibrate_camera_laser_ray calibration/calibrate_camera_laser_ray.cpp)
+add_executable(laser_ray_calibration_test calibration/laser_ray_calibration_test.cpp)
+add_executable(
+  drone_planner_laser_test
+  tasks/auto_drone/laser_ray_aim_test.cpp
+  tasks/auto_drone/laser_ray_aim.cpp)
+add_executable(
+  drone_planner_inline_config_test
+  tasks/auto_drone/drone_planner_inline_config_test.cpp)
 add_executable(capture calibration/capture.cpp)
 add_executable(calibrate_camera calibration/calibrate_camera.cpp)
 add_executable(calibrate_handeye calibration/calibrate_handeye.cpp)
@@ -108,6 +129,20 @@ add_executable(test_simple calibration/test_simple.cpp)
 add_executable(run_calibration calibration/run_calibration.cpp)
 
 target_link_libraries(capture ${OpenCV_LIBS} fmt::fmt tools io)
+target_link_libraries(laser_ray_calibration PUBLIC ${OpenCV_LIBS} Ceres::ceres)
+target_link_libraries(
+  calibrate_camera_laser_ray
+  ${OpenCV_LIBS} fmt::fmt yaml-cpp laser_ray_calibration tools io Ceres::ceres)
+target_link_libraries(
+  laser_ray_calibration_test ${OpenCV_LIBS} fmt::fmt laser_ray_calibration Ceres::ceres)
+target_link_libraries(drone_planner_laser_test ${OpenCV_LIBS} fmt::fmt tools)
+target_link_libraries(
+  drone_planner_inline_config_test
+  ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_drone tools io openvino::runtime)
+enable_testing()
+add_test(NAME laser_ray_calibration_test COMMAND laser_ray_calibration_test)
+add_test(NAME drone_planner_laser_test COMMAND drone_planner_laser_test)
+add_test(NAME drone_planner_inline_config_test COMMAND drone_planner_inline_config_test)
 # 【修改 6】: 校准工具同样将 ${TRT_LIB} 替换为 openvino::runtime
 target_link_libraries(run_calibration ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_drone tools io openvino::runtime)
 target_link_libraries(calibrate_camera ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)

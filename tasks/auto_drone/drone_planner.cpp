@@ -1,13 +1,69 @@
 #include "drone_planner.hpp"
 
-#include <vector>
-#include <cmath> // 需要使用 std::atan2 和 std::hypot
+#include <yaml-cpp/yaml.h>
 
+#include <cmath>  // 需要使用 std::atan2 和 std::hypot
+#include <filesystem>
+#include <stdexcept>
+#include <vector>
+
+#include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/yaml.hpp"
 
 namespace auto_drone
 {
+namespace
+{
+
+Eigen::Vector3d read_vector3(const YAML::Node & yaml, const std::string & key)
+{
+  if (!yaml[key]) throw std::runtime_error("Missing laser calibration key: " + key);
+  const auto values = yaml[key].as<std::vector<double>>();
+  if (values.size() != 3)
+    throw std::runtime_error("Laser calibration key must have 3 values: " + key);
+  const Eigen::Vector3d result(values[0], values[1], values[2]);
+  if (!result.array().isFinite().all()) {
+    throw std::runtime_error("Laser calibration key contains non-finite values: " + key);
+  }
+  return result;
+}
+
+Eigen::Matrix3d read_rotation3(const YAML::Node & yaml, const std::string & key)
+{
+  if (!yaml[key]) throw std::runtime_error("Missing transform key: " + key);
+  const auto values = yaml[key].as<std::vector<double>>();
+  if (values.size() != 9) throw std::runtime_error("Transform key must have 9 values: " + key);
+  return Eigen::Map<const Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(values.data());
+}
+
+YAML::Node load_runtime_laser_ray(
+  const YAML::Node & runtime_yaml, const std::string & config_path, bool & from_external_file,
+  std::string & source)
+{
+  from_external_file = runtime_yaml["laser_ray_config_path"] &&
+                       !runtime_yaml["laser_ray_config_path"].as<std::string>().empty();
+  if (!from_external_file) {
+    source = config_path;
+    return runtime_yaml;
+  }
+
+  namespace fs = std::filesystem;
+  fs::path ray_path = runtime_yaml["laser_ray_config_path"].as<std::string>();
+  if (ray_path.is_relative()) {
+    const fs::path relative_to_config = fs::absolute(config_path).parent_path() / ray_path;
+    ray_path = fs::exists(relative_to_config) ? relative_to_config : fs::absolute(ray_path);
+  }
+  source = ray_path.lexically_normal().string();
+  const YAML::Node ray_yaml = YAML::LoadFile(source);
+  if (!ray_yaml["quality"] || ray_yaml["quality"].as<std::string>() != "passed") {
+    throw std::runtime_error("Laser ray file did not pass quality gate: " + source);
+  }
+  return ray_yaml;
+}
+
+}  // namespace
+
 Planner::Planner(const std::string & config_path)
 {
   auto yaml = tools::load(config_path);
@@ -22,6 +78,52 @@ Planner::Planner(const std::string & config_path)
   fire_thresh_ = tools::read<double>(yaml, "fire_thresh");
   gimbal_control_delay = tools::read<double>(yaml, "gimbal_control_delay");
 
+  const bool has_inline_ray =
+    yaml["laser_line_origin_in_camera_m"] && yaml["laser_line_direction_in_camera"];
+  const bool has_ray_path =
+    yaml["laser_ray_config_path"] && !yaml["laser_ray_config_path"].as<std::string>().empty();
+  laser_ray_enabled_ = yaml["laser_ray_enabled"] ? yaml["laser_ray_enabled"].as<bool>()
+                                                 : has_inline_ray || has_ray_path;
+  if (laser_ray_enabled_) {
+    bool from_external_file = false;
+    std::string source;
+    const YAML::Node ray_yaml =
+      load_runtime_laser_ray(yaml, config_path, from_external_file, source);
+    if (!from_external_file && !has_inline_ray) {
+      throw std::runtime_error(
+        "laser_ray_enabled is true but no inline ray or laser_ray_config_path was provided");
+    }
+
+    const Eigen::Vector3d origin_camera = read_vector3(ray_yaml, "laser_line_origin_in_camera_m");
+    const Eigen::Vector3d direction_camera =
+      read_vector3(ray_yaml, "laser_line_direction_in_camera");
+    const Eigen::Matrix3d R_camera2gimbal = read_rotation3(yaml, "R_camera2gimbal");
+    const Eigen::Vector3d t_camera2gimbal = read_vector3(yaml, "t_camera2gimbal");
+
+    laser_ray_.direction_in_gimbal = R_camera2gimbal * direction_camera;
+    const double direction_norm = laser_ray_.direction_in_gimbal.norm();
+    if (!std::isfinite(direction_norm) || direction_norm < 1e-9) {
+      throw std::runtime_error("Invalid laser line direction after camera-to-gimbal transform");
+    }
+    laser_ray_.direction_in_gimbal /= direction_norm;
+    const Eigen::Vector3d transformed_origin = R_camera2gimbal * origin_camera + t_camera2gimbal;
+    laser_ray_.origin_in_gimbal_m =
+      transformed_origin -
+      laser_ray_.direction_in_gimbal * laser_ray_.direction_in_gimbal.dot(transformed_origin);
+    if (laser_ray_.direction_in_gimbal.x() <= 0.0) {
+      throw std::runtime_error("Calibrated laser direction does not point toward gimbal +X");
+    }
+    tools::logger()->info(
+      "[Planner] Laser ray enabled from {}: origin_g=[{:.6f}, {:.6f}, {:.6f}]m, "
+      "direction_g=[{:.6f}, {:.6f}, {:.6f}]",
+      source, laser_ray_.origin_in_gimbal_m.x(), laser_ray_.origin_in_gimbal_m.y(),
+      laser_ray_.origin_in_gimbal_m.z(), laser_ray_.direction_in_gimbal.x(),
+      laser_ray_.direction_in_gimbal.y(), laser_ray_.direction_in_gimbal.z());
+  } else {
+    tools::logger()->warn(
+      "[Planner] Laser ray calibration disabled; using the legacy +X ray through gimbal origin");
+  }
+
   // 初始化 MPC 求解器矩阵[cite: 1]
   setup_yaw_solver(config_path);
   setup_pitch_solver(config_path);
@@ -29,7 +131,6 @@ Planner::Planner(const std::string & config_path)
 
 Plan Planner::plan(Target target, double bullet_speed)
 {
-
   // 1. Get trajectory
   double yaw0;
   Trajectory traj;
@@ -78,6 +179,52 @@ Plan Planner::plan(Target target, double bullet_speed)
         pitch_solver_->work->x(0, HALF_HORIZON + shoot_offset_)) < fire_thresh_;
 
   return plan;
+}
+
+PlanDiagnostics Planner::plan_diagnostics(std::optional<Target> target, double bullet_speed)
+{
+  PlanDiagnostics diagnostics;
+  diagnostics.target_present = target.has_value();
+  if (!target.has_value()) return diagnostics;
+
+  diagnostics.input_xyz = target->get_xyz();
+  diagnostics.input_velocity = target->get_v();
+  try {
+    diagnostics.input_yaw_pitch = aim(*target, bullet_speed);
+    diagnostics.aim_valid = true;
+  } catch (const std::exception &) {
+    return diagnostics;
+  }
+  diagnostics.timestamps_valid =
+    target->state_timestamp() != std::chrono::steady_clock::time_point{} &&
+    target->last_observation_timestamp() != std::chrono::steady_clock::time_point{};
+  if (!diagnostics.timestamps_valid) return diagnostics;
+
+  const auto now = std::chrono::steady_clock::now();
+  diagnostics.observation_age_s =
+    std::chrono::duration<double>(now - target->last_observation_timestamp()).count();
+  diagnostics.target_age_valid =
+    diagnostics.observation_age_s >= 0.0 && diagnostics.observation_age_s <= max_target_age_;
+  if (!diagnostics.target_age_valid) return diagnostics;
+
+  diagnostics.state_age_s =
+    std::max(0.0, std::chrono::duration<double>(now - target->state_timestamp()).count());
+  diagnostics.prediction_horizon_s = diagnostics.state_age_s + gimbal_control_delay;
+  diagnostics.prediction_target_timestamp =
+    target->state_timestamp() + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                                  std::chrono::duration<double>(diagnostics.prediction_horizon_s));
+
+  target->predict(diagnostics.prediction_horizon_s);
+  diagnostics.predicted_xyz = target->get_xyz();
+  try {
+    diagnostics.predicted_yaw_pitch = aim(*target, bullet_speed);
+  } catch (const std::exception &) {
+    diagnostics.aim_valid = false;
+    return diagnostics;
+  }
+  diagnostics.plan = plan(*target, bullet_speed);
+  diagnostics.plan_valid = diagnostics.plan.control;
+  return diagnostics;
 }
 
 void Planner::setup_yaw_solver(const std::string & config_path)
@@ -129,15 +276,18 @@ void Planner::setup_pitch_solver(const std::string & config_path)
 Eigen::Matrix<double, 2, 1> Planner::aim(const Target & target, double /*bullet_speed*/)
 {
   Eigen::Vector3d xyz = target.get_xyz() + xyz_offset_;
-  auto min_dist = xyz.head<2>().norm();
 
   // 无人机无额外 Yaw 朝向，调试用赋值 0.0[cite: 1]
   debug_xyza = Eigen::Vector4d(xyz.x(), xyz.y(), xyz.z(), 0.0);
 
-  auto azim = std::atan2(xyz.y(), xyz.x());
-  
-  // 激光直线传播，无需抛物线解算，直接根据空间高度(Z)和水平距离(XY)计算直线几何仰角
-  auto pitch = std::atan2(xyz.z(), min_dist);
+  double azim = std::atan2(xyz.y(), xyz.x());
+  double pitch = std::atan2(xyz.z(), xyz.head<2>().norm());
+  if (laser_ray_enabled_) {
+    const auto solution = solve_laser_ray_aim(xyz, laser_ray_);
+    if (!solution) throw std::runtime_error("Target is unreachable by the calibrated laser ray");
+    azim = solution->yaw;
+    pitch = solution->pitch;
+  }
 
   return {tools::limit_rad(azim + yaw_offset_), pitch + pitch_offset_};
 }
