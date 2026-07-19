@@ -74,23 +74,48 @@ Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t) { return q
 
 PoseQueryDiagnostics Gimbal::q_diagnostic(std::chrono::steady_clock::time_point t)
 {
-  PoseQueryDiagnostics diagnostics;
-  diagnostics.requested_time = t;
-  while (true) {
-    auto [q_a, t_a] = queue_.pop();
-    auto [q_b, t_b] = queue_.front();
-    auto t_ab = tools::delta_time(t_a, t_b);
-    auto t_ac = tools::delta_time(t_a, t);
-    auto k = t_ac / t_ab;
-    Eigen::Quaterniond q_c = q_a.slerp(k, q_b).normalized();
-    if (t < t_a) return q_c;
-    if (!(t_a < t && t <= t_b)) continue;
+    PoseQueryDiagnostics diagnostics;
+    diagnostics.requested_time = t;
 
-    diagnostics.q = q_c;
-    diagnostics.interpolated = true;
-    diagnostics.used_sample_time = t;
-    return diagnostics;
-  }
+    while (true) {
+        auto [q_a, t_a] = queue_.pop();          // 获取最早样本（阻塞等待）
+        auto [q_b, t_b] = queue_.front();        // 获取下一个样本（队列至少有两个元素）
+
+        double t_ab = tools::delta_time(t_a, t_b);
+        double t_ac = tools::delta_time(t_a, t);
+        double k = t_ac / t_ab;                  // 插值因子，可能为负（外推）或大于1
+
+        Eigen::Quaterniond q_c = q_a.slerp(k, q_b).normalized();
+
+        // 情况1：请求时间早于第一个样本 → 外推（或返回最近值）
+        if (t < t_a) {
+            diagnostics.q = q_c;
+            diagnostics.interpolated = false;                // 不是插值，是外推
+            diagnostics.used_sample_time = t_a;              // 实际参考样本时间
+            diagnostics.requested_before_oldest = true;      // 标记
+            diagnostics.sample_before_time = t_a;
+            diagnostics.sample_after_time = t_b;
+            diagnostics.interpolation_factor = k;
+            return diagnostics;
+        }
+
+        // 情况2：请求时间不在 [t_a, t_b] 区间内（即 t > t_b）→ 等待新数据
+        if (!(t_a < t && t <= t_b)) {
+            continue;   // 不返回，继续下一轮循环，期待新数据进入队列
+        }
+
+        // 情况3：请求时间在区间内 → 插值结果
+        diagnostics.q = q_c;
+        diagnostics.interpolated = true;
+        diagnostics.used_sample_time = t;                  // 插值得到的时间点
+        diagnostics.sample_before_time = t_a;
+        diagnostics.sample_after_time = t_b;
+        diagnostics.interpolation_factor = k;
+        diagnostics.has_after_sample = true;
+        diagnostics.bracketed = true;
+        // 其他字段可按需设置
+        return diagnostics;
+    }
 }
 
 DroneSendDiagnostics Gimbal::last_drone_send_diagnostics() const
@@ -167,7 +192,7 @@ void Gimbal::drone_send(
   bool control, bool fire, float yaw, float yaw_vel, float yaw_acc, float pitch, float pitch_vel,
   float pitch_acc)
 {
-  // tx_data_.mode = control ? (fire ? 2 : 1) : 0;
+  drone_tx_date.mode = control;
   drone_tx_date.yaw = yaw;
   // tx_data_.yaw_vel = yaw_vel;
   // tx_data_.yaw_acc = yaw_acc;
@@ -246,7 +271,7 @@ void Gimbal::read_thread()
   while (!quit_) {
     auto now = std::chrono::steady_clock::now();
     if (std::chrono::duration_cast<std::chrono::seconds>(now - last_print_time).count() >= 1) {
-      tools::logger()->info("[Gimbal] 每秒成功接收帧数: {}", frame_count);
+      // tools::logger()->info("[Gimbal] 每秒成功接收帧数: {}", frame_count);
       frame_count = 0;
       last_print_time = now;
     }

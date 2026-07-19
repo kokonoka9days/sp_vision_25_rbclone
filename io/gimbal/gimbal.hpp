@@ -59,9 +59,10 @@ struct __attribute__((packed)) VisionToGimbal
 struct __attribute__((packed)) drone_VisionToGimbal
 {
   uint8_t head = {0x38};
-  uint8_t len = 8;
+  uint8_t len = 9;
   float pitch = 0;
   float yaw = 0;
+   uint8_t mode;
   uint16_t crc16;
 };
 

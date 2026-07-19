@@ -51,7 +51,7 @@ int main(int argc, char * argv[])
   auto_drone::Tracker tracker(config_path, &solver);
   tracker.set_gimbal(&gimbal); // 传入云台以获取敌方颜色状态
   auto_drone::Planner planner(config_path);
-  tools::Recorder record;
+  // tools::Recorder record;
 
   // 4. 多线程通信队列 (容量设为1，保证规划线程总是拿到最新的目标)
   tools::ThreadSafeQueue<std::optional<auto_drone::Target>, true> target_queue(1);
@@ -235,7 +235,7 @@ int main(int argc, char * argv[])
     }
 
     // 缩小一半显示防止撑爆屏幕
-    record.record(img,q,t);
+    // record.record(img,q,t);
     
     cv::resize(img, img, {}, 0.5, 0.5);  
     cv::imshow("Auto Drone System", img);

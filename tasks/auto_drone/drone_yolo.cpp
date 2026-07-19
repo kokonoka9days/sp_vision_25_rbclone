@@ -266,7 +266,7 @@ std::vector<Drone> YOLO::detect(const cv::Mat & frame)
 }
 
 std::optional<YOLOResult> YOLO::detect_async(
-  const cv::Mat & frame, std::chrono::steady_clock::time_point timestamp, std::uint64_t frame_id)
+  const cv::Mat & frame, std::chrono::steady_clock::time_point timestamp, std::uint64_t frame_id,bool drop_if_busy)
 {
   if (frame.empty()) return std::nullopt;
 
