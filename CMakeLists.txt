@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.16.3)
 
 project(sp_vision)
 
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_BUILD_TYPE Release)
 
@@ -98,9 +100,21 @@ target_link_libraries(calibrate ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
 target_link_libraries(calibrate_input ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
 
 ##################tests##################
+if(BUILD_TESTING)
+add_executable(auto_aim_estimation_test tests/auto_aim_estimation_test.cpp)
+target_link_libraries(
+    auto_aim_estimation_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim Ceres::ceres)
+target_compile_definitions(
+    auto_aim_estimation_test PRIVATE SP_VISION_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+add_test(NAME auto_aim_estimation COMMAND auto_aim_estimation_test)
+endif()
+
 if(OPENVINO_MAKE)
 add_executable(auto_aim_test tests/auto_aim_test.cpp)
 target_link_libraries(auto_aim_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+
+add_executable(auto_aim_video_test tests/auto_aim_video_test.cpp)
+target_link_libraries(auto_aim_video_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
 add_executable(auto_buff_test tests/auto_buff_test.cpp)
 target_link_libraries(auto_buff_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
@@ -164,6 +178,9 @@ if(TENSOR_RT_MAKE)
 
     add_executable(auto_aim_test_async tests/auto_aim_test_async.cpp)
     target_link_libraries(auto_aim_test_async ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+
+    add_executable(auto_aim_video_test tests/auto_aim_video_test.cpp)
+    target_link_libraries(auto_aim_video_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
     
 

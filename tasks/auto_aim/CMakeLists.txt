@@ -25,7 +25,7 @@ if(OPENVINO_MAKE)
         planner/planner.cpp
     )
     add_subdirectory(planner/tinympc)
-    target_link_libraries(auto_aim io openvino::runtime tinympcstatic)
+    target_link_libraries(auto_aim PUBLIC io openvino::runtime tinympcstatic Ceres::ceres)
 
     message(STATUS "--------------------OpenVINO_MAKE is ON--------------------")
 endif()
@@ -70,7 +70,8 @@ if(TENSOR_RT_MAKE)
                                     ${OpenCV_LIBS}
                                     nvinfer
                                     CUDA::cudart  
-                                    pthread)
+                                    pthread
+                                    Ceres::ceres)
 
     message(STATUS "--------------------TENSOR_RT_MAKE is ON--------------------")
 endif()
@@ -89,6 +90,6 @@ if(NOT OPENVINO_MAKE AND NOT TENSOR_RT_MAKE)
         planner/planner.cpp
     )
     add_subdirectory(planner/tinympc)
-    target_link_libraries(auto_aim io tinympcstatic)
+    target_link_libraries(auto_aim PUBLIC io tinympcstatic Ceres::ceres)
     message(STATUS "------------------OpenVINO_MAKE is OFF  TENSOR_RT_MAKE is OFF----------------------")
 endif()

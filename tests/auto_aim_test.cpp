@@ -1,6 +1,8 @@
 #include <fmt/core.h>
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
@@ -21,7 +23,8 @@ const std::string keys =
   "{config-path c  | ../configs/xiaohei.yaml | yaml配置文件的路径}"
   "{start-index s  | 0                 | 视频起始帧下标    }"
   "{end-index e    | 0                 | 视频结束帧下标    }"
-  "{@input-path    | ../assets/demo/demo  | avi和txt文件的路径}";
+  "{headless       | false             | 无窗口健康检查模式 }"
+  "{@input-path    | ../快/2026-04-04_19-58-26 | avi和txt文件的路径}";
 
 int main(int argc, char * argv[])
 {
@@ -35,6 +38,11 @@ int main(int argc, char * argv[])
   auto config_path = cli.get<std::string>("config-path");
   auto start_index = cli.get<int>("start-index");
   auto end_index = cli.get<int>("end-index");
+  auto headless = cli.get<bool>("headless");
+  if (!cli.check()) {
+    cli.printErrors();
+    return 2;
+  }
 
   tools::Plotter plotter;
   tools::Exiter exiter;
@@ -43,6 +51,10 @@ int main(int argc, char * argv[])
   auto text_path = fmt::format("{}.txt", input_path);
   cv::VideoCapture video(video_path);
   std::ifstream text(text_path);
+  if (!video.isOpened() || !text.is_open()) {
+    tools::logger()->error("Cannot open demo input {}(.avi/.txt)", input_path);
+    return 2;
+  }
 
   auto_aim::YOLO yolo(config_path);
   // auto_aim::Detector traditional(config_path, true);
@@ -55,7 +67,11 @@ int main(int argc, char * argv[])
 
   auto_aim::Target last_target;
   io::Command last_command;
-  double last_t = -1;
+  bool tracking_seen = false;
+  bool health_ok = true;
+  int processed_frames = 0;
+  int eligible_update_frames = 0;
+  int matched_update_frames = 0;
 
   video.set(cv::CAP_PROP_POS_FRAMES, start_index);
   for (int i = 0; i < start_index; i++) {
@@ -70,8 +86,13 @@ int main(int argc, char * argv[])
     if (img.empty()) break;
 
     double t, w, x, y, z;
-    text >> t >> w >> x >> y >> z;
+    if (!(text >> t >> w >> x >> y >> z)) {
+      tools::logger()->error("Demo pose stream ended before video at frame {}", frame_count);
+      health_ok = false;
+      break;
+    }
     auto timestamp = t0 + std::chrono::microseconds(int(t * 1e6));
+    ++processed_frames;
 
     /// 自瞄核心逻辑
 
@@ -82,6 +103,11 @@ int main(int argc, char * argv[])
     // auto traditional_start = std::chrono::steady_clock::now();
     // auto armors = traditional.detect(img, frame_count);
 
+    const std::string tracker_state_before = tracker.state();
+    const bool has_expected_detection = last_target.checkinit() &&
+      std::any_of(armors.begin(), armors.end(), [&](const auto_aim::Armor & armor) {
+        return armor.name == last_target.name && armor.type == last_target.armor_type;
+      });
     auto tracker_start = std::chrono::steady_clock::now();
     auto targets = tracker.test_track(armors, timestamp);
 
@@ -97,11 +123,13 @@ int main(int argc, char * argv[])
     /// 调试输出
 
     auto finish = std::chrono::steady_clock::now();
-    tools::logger()->info(
-      "[{}] yolo: {:.1f}ms, tracker: {:.1f}ms, aimer: {:.1f}ms", frame_count,
-      tools::delta_time(tracker_start, yolo_start) * 1e3,
-      tools::delta_time(aimer_start, tracker_start) * 1e3,
-      tools::delta_time(finish, aimer_start) * 1e3);
+    if (!headless) {
+      tools::logger()->info(
+        "[{}] yolo: {:.1f}ms, tracker: {:.1f}ms, aimer: {:.1f}ms", frame_count,
+        tools::delta_time(tracker_start, yolo_start) * 1e3,
+        tools::delta_time(aimer_start, tracker_start) * 1e3,
+        tools::delta_time(finish, aimer_start) * 1e3);
+    }
 
     tools::draw_text(
       img,
@@ -123,10 +151,12 @@ int main(int argc, char * argv[])
     data["armor_num"] = armors.size();
     if (!armors.empty()) {
       const auto & armor = armors.front();
-      data["armor_x"] = armor.xyz_in_world[0];
-      data["armor_y"] = armor.xyz_in_world[1];
-      data["armor_yaw"] = armor.ypr_in_world[0] * 57.3;
-      data["armor_yaw_raw"] = armor.yaw_raw * 57.3;
+      if (armor.pnp_valid) {
+        data["armor_x"] = armor.xyz_in_world[0];
+        data["armor_y"] = armor.xyz_in_world[1];
+        data["armor_yaw"] = armor.ypr_in_world[0] * 57.3;
+        data["armor_yaw_raw"] = armor.yaw_raw * 57.3;
+      }
       data["armor_center_x"] = armor.center_norm.x;
       data["armor_center_y"] = armor.center_norm.y;
     }
@@ -137,22 +167,45 @@ int main(int argc, char * argv[])
     data["cmd_yaw"] = command.yaw * 57.3;
     data["shoot"] = command.shoot;
 
+    const bool eligible_candidate = tracker_state_before != "lost" && has_expected_detection;
+
     if (!targets.empty()) {
       auto target = targets.front();
+      const bool eligible_update = eligible_candidate && target.update_count_ > 0;
+      if (eligible_update) ++eligible_update_frames;
+      tracking_seen = tracking_seen || tracker.state() == "tracking";
 
-      if (last_t == -1) {
-        last_target = target;
-        last_t = t;
-        continue;
+      const bool finite_target = target.center().allFinite() && target.velocity().allFinite() &&
+        target.rotation().allFinite() && std::isfinite(target.yaw()) &&
+        std::isfinite(target.yaw_rate()) && target.covariance().allFinite();
+      if (!finite_target || target.diverged()) health_ok = false;
+      for (int id = 0; id < target.armor_count(); ++id) {
+        const double radius = target.radius(id);
+        if (!std::isfinite(radius) ||
+            (target.name != auto_aim::ArmorName::base &&
+             (radius < auto_aim::motion_model::MIN_RADIUS ||
+              radius > auto_aim::motion_model::MAX_RADIUS))) {
+          health_ok = false;
+        }
+      }
+      for (const auto & pose : target.armor_pose_list()) {
+        if (!pose.matrix().allFinite()) health_ok = false;
       }
 
-      std::vector<Eigen::Vector4d> armor_xyza_list;
+      const auto diagnostics = target.estimator_diagnostics();
+      if (
+        !std::isfinite(diagnostics.residual_norm) || !std::isfinite(diagnostics.nis) ||
+        !std::isfinite(diagnostics.normalized_nis)) {
+        health_ok = false;
+      }
+      if (eligible_update) {
+        if (diagnostics.observation_dim > 0) ++matched_update_frames;
+        else health_ok = false;
+      }
 
       // 当前帧target更新后
-      armor_xyza_list = target.armor_xyza_list();
-      for (const Eigen::Vector4d & xyza : armor_xyza_list) {
-        auto image_points =
-          solver.reproject_armor(xyza.head(3), xyza[3], target.armor_type, target.name);
+      for (const auto & pose : target.armor_pose_list()) {
+        auto image_points = solver.reproject_pose(pose, target.armor_type);
         tools::draw_points(img, image_points, {0, 255, 0});
       }
 
@@ -173,32 +226,46 @@ int main(int argc, char * argv[])
       data["vz"] = x[5];
       data["a"] = x[6] * 57.3;
       data["w"] = x[7];
-      data["r"] = x[8];
+      data["r"] = target.radius(0);
       data["l"] = x[9];
       data["h"] = x[10];
       data["last_id"] = target.last_id;
 
-      // 卡方检验数据
-      data["residual_yaw"] = target.ekf().data.at("residual_yaw");
-      data["residual_pitch"] = target.ekf().data.at("residual_pitch");
-      data["residual_distance"] = target.ekf().data.at("residual_distance");
-      data["residual_angle"] = target.ekf().data.at("residual_angle");
-      data["nis"] = target.ekf().data.at("nis");
-      data["nees"] = target.ekf().data.at("nees");
-      data["nis_fail"] = target.ekf().data.at("nis_fail");
-      data["nees_fail"] = target.ekf().data.at("nees_fail");
-      data["recent_nis_failures"] = target.ekf().data.at("recent_nis_failures");
+      data["residual_norm"] = diagnostics.residual_norm;
+      data["nis"] = diagnostics.nis;
+      data["observation_dim"] = diagnostics.observation_dim;
+      data["normalized_nis"] = diagnostics.normalized_nis;
+      last_target = target;
+    } else if (eligible_candidate && last_target.update_count_ > 0) {
+      ++eligible_update_frames;
+      health_ok = false;
     }
-    
-    plotter.plot(data);
 
-    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    cv::imshow("reprojection", img);
-    auto key = cv::waitKey(10);
+    if (!headless) {
+      plotter.plot(data);
+      cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+      cv::imshow("reprojection", img);
+       int key = cv::waitKey(100);
     if (key == 'q') break;
+    while (key == ' ') {
+      int y = cv::waitKey(30);
+      if (y == 'q') break;
+    }
+    }
 
     //  tools::logger()->info(
     //     "imshow : {:.1f}ms",  tools::delta_time(std::chrono::steady_clock::now(), inshow_start) * 1e3);
+  }
+
+  if (headless) {
+    if (processed_frames == 0 || !tracking_seen || eligible_update_frames == 0 ||
+        matched_update_frames != eligible_update_frames) {
+      health_ok = false;
+    }
+    tools::logger()->info(
+      "Headless replay: frames={}, tracking={}, matched_updates={}/{}", processed_frames,
+      tracking_seen, matched_update_frames, eligible_update_frames);
+    if (!health_ok) return 3;
   }
 
   return 0;

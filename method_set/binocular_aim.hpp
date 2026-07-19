@@ -159,9 +159,7 @@ struct BinocularAim{
     if (elapsed_time < 1000) {
         return; // 在冷却时间内，直接退出，不执行切换判断
     }
-    const auto x_est = target.getEKFXest();
-    const double x = x_est(0), y = x_est(2), z = x_est(4);
-    double dis = sqrt( x*x + y*y + z*z);
+    double dis = target.center().norm();
 
     // if(is_short ) dis -= 1.16;
 

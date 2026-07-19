@@ -36,14 +36,6 @@ Planner::Planner(const std::string & config_path)
 
 Plan Planner::plan(Target target, double bullet_speed)
 {
-  // std::cout<<target.getEKFXest()[0]<<std::endl;
-  // std::cout<<target.getEKFXest()[0]<<std::endl;
-
-  // std::cout<<"x:"<<target.getEKFXest()[0]<<std::endl;
-  // std::cout<<"y:"<<target.getEKFXest()[2]<<std::endl;
-  // std::cout<<"z:"<<target.getEKFXest()[4]<<std::endl;
-
-
   // 0. Check bullet speed
   if (bullet_speed < 10 || bullet_speed > 25) {
     bullet_speed = 22;
@@ -117,14 +109,6 @@ Plan Planner::plan(Target target, double bullet_speed)
 
 Plan Planner::sbplan(Target target, double bullet_speed, double gimbal_yaw)
 {
-  // std::cout<<target.getEKFXest()[0]<<std::endl;
-  // std::cout<<target.getEKFXest()[0]<<std::endl;
-
-  // std::cout<<"x:"<<target.getEKFXest()[0]<<std::endl;
-  // std::cout<<"y:"<<target.getEKFXest()[2]<<std::endl;
-  // std::cout<<"z:"<<target.getEKFXest()[4]<<std::endl;
-
-
   // 0. Check bullet speed
   if (bullet_speed < 10 || bullet_speed > 25) {
     bullet_speed = 22;
@@ -197,7 +181,7 @@ Plan Planner::sbplan(Target target, double bullet_speed, double gimbal_yaw)
 
   // 前哨站迭代限制
   if (target.name == ArmorName::outpost) {
-      double vz = target.ekf_x()(5); // 获取当前前哨站中心Z轴坐标
+      double vz = target.velocity().z();
       // double delta_z = std::abs(current_z - outpost_z_baseline_);
       auto now = std::chrono::steady_clock::now();
 
@@ -259,12 +243,6 @@ Plan Planner::sbplan(Target target, double bullet_speed, double gimbal_yaw)
 
 bool Planner::rbShoot(Target target, double gimbal_yaw, bool tower_fixed_pitch){
     bool suggest_fire = 1;
-    // auto x_est = target.getEKFXest();
-    // double est_x =  x_est(0);
-    // double est_y = x_est(2);
-    // double est_yaw = x_est(6);
-
-
   Eigen::Vector4d target_armor_xyza;
   auto min_dist = 1e10;
   for (auto & xyza : target.armor_xyza_list()) {
@@ -302,7 +280,7 @@ bool Planner::rbShoot(Target target, double gimbal_yaw, bool tower_fixed_pitch){
 
   // pitch
   bool suggest_pitch = true;
-  if(tower_fixed_pitch && abs(target.ekf_x()(4) - target_armor_xyza(2)) > 0.001){
+  if(tower_fixed_pitch && abs(target.center().z() - target_armor_xyza(2)) > 0.001){
     suggest_pitch = false;
   }
 
@@ -326,14 +304,6 @@ bool Planner::rbShoot(Target target, double gimbal_yaw, bool tower_fixed_pitch){
 
 Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
 {
-  // std::cout<<target.getEKFXest()[0]<<std::endl;
-  // std::cout<<target.getEKFXest()[0]<<std::endl;
-
-  // std::cout<<"x:"<<target.getEKFXest()[0]<<std::endl;
-  // std::cout<<"y:"<<target.getEKFXest()[2]<<std::endl;
-  // std::cout<<"z:"<<target.getEKFXest()[4]<<std::endl;
-
-
   // 0. Check bullet speed
   if (bullet_speed < 10 || bullet_speed > 25) {
     bullet_speed = 22;
@@ -405,7 +375,7 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
 
   // 前哨站迭代限制
   if (target.name == ArmorName::outpost) {
-      double vz = target.ekf_x()(5); // 获取当前前哨站中心Z轴坐标
+      double vz = target.velocity().z();
       // double delta_z = std::abs(current_z - outpost_z_baseline_);
       auto now = std::chrono::steady_clock::now();
 
@@ -531,7 +501,7 @@ Plan Planner::rbHeroplan(Target target, double bullet_speed, double gimbal_yaw){
 
   // 前哨站迭代限制
   if (target.name == ArmorName::outpost) {
-      double vz = target.ekf_x()(5); // 获取当前前哨站中心Z轴坐标
+      double vz = target.velocity().z();
       // double delta_z = std::abs(current_z - outpost_z_baseline_);
       auto now = std::chrono::steady_clock::now();
 
@@ -565,21 +535,6 @@ Plan Planner::rbHeroplan(Target target, double bullet_speed, double gimbal_yaw){
 
   return plan;
 }
-
-// Plan Planner::plan(std::optional<Target> target, double bullet_speed, double gimbal_yaw)
-// {
-//   if (!target.has_value()) return {false};
-
-//   double delay_time =
-//     std::abs(target->ekf_x()[7]) > decision_speed_ ? high_speed_delay_time_ : low_speed_delay_time_;
-
-//   auto future = std::chrono::steady_clock::now() + std::chrono::microseconds(int(delay_time * 1e6));
-
-//   target->predict(future);
-
-//   // return plan(*target, bullet_speed);
-//   return rbplan(*target, bullet_speed, gimbal_yaw);
-// }
 
 void Planner::setup_yaw_solver(const std::string & config_path)
 {
@@ -658,7 +613,7 @@ Eigen::Matrix<double, 2, 1> Planner::rbaim(const Target & target, double bullet_
   double yaw;
   auto min_dist = 1e10;
 
-  Eigen::VectorXd ekf_x = target.ekf_x();
+  const Eigen::Vector3d target_center = target.center();
   // 如果delta_angle为0，则该装甲板中心和整车中心的连线在世界坐标系的xy平面过原点
   static std::vector<std::pair<int ,double>> armorId_delta_list;  
   if(!armorId_delta_list.empty()) armorId_delta_list.clear();
@@ -669,7 +624,7 @@ Eigen::Matrix<double, 2, 1> Planner::rbaim(const Target & target, double bullet_
   // if (!target.jumped) return {true, armor_xyza_list[0]};
 
   // 整车旋转中心的球坐标yaw
-  auto center_yaw = std::atan2(ekf_x[2], ekf_x[0]);
+  auto center_yaw = std::atan2(target_center.y(), target_center.x());
 
   for (int i = 0; i < armor_num; i++) {
     auto delta_angle = tools::limit_rad(armor_xyza_list[i][3] - center_yaw);
@@ -686,7 +641,7 @@ Eigen::Matrix<double, 2, 1> Planner::rbaim(const Target & target, double bullet_
     }
   }
 
-  double abs_vyaw = abs(ekf_x(7));
+  double abs_vyaw = abs(target.yaw_rate());
   if(abs_vyaw < 90./57.3 
     && armorId_delta_list[target.last_id].second < 60./57.3){// 判断当前看到的装甲板在预测时间之后是否还在视野内
     min_dist = armor_xyza_list[target.last_id].head<2>().norm();
@@ -718,7 +673,7 @@ Eigen::Matrix<double, 2, 1> Planner::heroaim(const Target & target, double bulle
   double yaw;
   auto min_dist = 1e10;
 
-  Eigen::VectorXd ekf_x = target.ekf_x();
+  const Eigen::Vector3d target_center = target.center();
   // 如果delta_angle为0，则该装甲板中心和整车中心的连线在世界坐标系的xy平面过原点
   static std::vector<std::pair<int ,double>> armorId_delta_list;  
   if(!armorId_delta_list.empty()) armorId_delta_list.clear();
@@ -729,7 +684,7 @@ Eigen::Matrix<double, 2, 1> Planner::heroaim(const Target & target, double bulle
   // if (!target.jumped) return {true, armor_xyza_list[0]};
 
   // 整车旋转中心的球坐标yaw
-  auto center_yaw = std::atan2(ekf_x[2], ekf_x[0]);
+  auto center_yaw = std::atan2(target_center.y(), target_center.x());
 
   for (int i = 0; i < armor_num; i++) {
     auto delta_angle = tools::limit_rad(armor_xyza_list[i][3] - center_yaw);
@@ -746,7 +701,7 @@ Eigen::Matrix<double, 2, 1> Planner::heroaim(const Target & target, double bulle
     }
   }
 
-  double abs_vyaw = abs(ekf_x(7));
+  double abs_vyaw = abs(target.yaw_rate());
   if(abs_vyaw < 90./57.3 
     && armorId_delta_list[target.last_id].second < 60./57.3){// 判断当前看到的装甲板在预测时间之后是否还在视野内
     min_dist = armor_xyza_list[target.last_id].head<2>().norm();
@@ -756,12 +711,12 @@ Eigen::Matrix<double, 2, 1> Planner::heroaim(const Target & target, double bulle
 
 
 
-  auto r = target.ekf_x()(8);
-  auto v_yaw = target.ekf_x()(7);
+  auto r = target.radius(0);
+  auto v_yaw = target.yaw_rate();
 
     // 旋转中心的坐标
-  auto center_x = target.ekf_x()(0);
-  auto center_y = target.ekf_x()(2);
+  auto center_x = target.center().x();
+  auto center_y = target.center().y();
 
   auto direction_yaw = atan2(center_y, center_x);
   auto aim_point_x = center_x - r*std::cos(direction_yaw);
@@ -813,8 +768,6 @@ Eigen::Matrix<double, 2, 1> Planner::heroaim(const Target & target, double bulle
     for(int i = 0; i < 3; i++){
       if(min_armor_id != i && max_armor_id != i ) middle_armor_id = i;
     }
-    // if(abs(max_h_armor - target.ekf_x()(4)) < 0.05) aim_point_z = 
-    // else aim_point_z = target.ekf_x()(4);
     aim_point_z = target.armor_xyza_list()[middle_armor_id](2);
   }
   
@@ -887,69 +840,6 @@ Trajectory Planner::rbget_trajectory(Target target, double yaw0, double bullet_s
   }
 
   return traj;
-
-  
-  // Trajectory traj;
-    
-  // auto armors = target.armor_xyza_list();
-  // if (armors.empty()) throw std::runtime_error("无装甲板");
-  
-  // // 1. 调用 aim 确定本轮预测所锁定的装甲板
-  // this->rbaim(target, bullet_speed); 
-  // int locked_id = this->last_selected_idx;
-  
-  // // 2. 提取车辆中心状态与锁定装甲板的相对几何关系
-  // double center_x = target.ekf_x()(0);
-  // double center_y = target.ekf_x()(2);
-  // double center_z = target.ekf_x()(4);
-  
-  // double armor_x = armors[locked_id][0];
-  // double armor_y = armors[locked_id][1];
-  // double armor_z = armors[locked_id][2];
-
-  // // 计算装甲板相对于车辆中心的固联 Yaw 偏角和高度差
-  // double relative_angle = std::atan2(armor_y - center_y, armor_x - center_x) - target.ekf_x()(6);
-  // double z_offset = armor_z - center_z; // 保留装甲板的独立高度
-
-  // auto get_aim_for_locked = [&](Target& t) -> Eigen::Vector2d {
-  //     double c_x = t.ekf_x()(0);
-  //     double c_y = t.ekf_x()(2);
-  //     double c_z = t.ekf_x()(4);
-  //     double v_yaw = t.ekf_x()(6);
-  //     double r = t.ekf_x()(8); // 取出半径
-      
-  //     double pred_armor_x = c_x + r * std::cos(v_yaw + relative_angle);
-  //     double pred_armor_y = c_y + r * std::sin(v_yaw + relative_angle);
-  //     double pred_armor_z = c_z + z_offset; 
-      
-  //     auto azim = std::atan2(pred_armor_y, pred_armor_x);
-  //     double dist = std::hypot(pred_armor_x, pred_armor_y);
-  //     auto bullet_traj = tools::Trajectory(bullet_speed, dist, pred_armor_z);
-      
-  //     return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + pitch_offset_};
-  // };
-
-  // // 4. 生成轨迹
-  // target.predict(-DT * (HALF_HORIZON + 1));
-  // auto yaw_pitch_last = get_aim_for_locked(target);
-  
-  // target.predict(DT);
-  // auto yaw_pitch = get_aim_for_locked(target);
-
-  // for (int i = 0; i < HORIZON; i++) {
-  //   target.predict(DT);
-  //   auto yaw_pitch_next = get_aim_for_locked(target);
-
-  //   auto yaw_vel = tools::limit_rad(yaw_pitch_next(0) - yaw_pitch_last(0)) / (2 * DT);
-  //   auto pitch_vel = (yaw_pitch_next(1) - yaw_pitch_last(1)) / (2 * DT);
-
-  //   traj.col(i) << tools::limit_rad(yaw_pitch(0) - yaw0), yaw_vel, yaw_pitch(1), pitch_vel;
-
-  //   yaw_pitch_last = yaw_pitch;
-  //   yaw_pitch = yaw_pitch_next;
-  // }
-
-  // return traj;
 }
 
 }  // namespace auto_aim

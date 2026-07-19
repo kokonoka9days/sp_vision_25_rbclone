@@ -53,9 +53,9 @@ public:
     if (!target.has_value()) return {false};
 
     double delay_time =
-      (std::abs(target->ekf_x()[7]) > decision_speed_ ? high_speed_delay_time_ : low_speed_delay_time_) + gimbal_delay_;
+      (std::abs(target->yaw_rate()) > decision_speed_ ? high_speed_delay_time_ : low_speed_delay_time_) + gimbal_delay_;
 
-    if(std::abs(target->ekf_x()[7]) > decision_speed_) tools::logger()->warn("std::abs(target->ekf_x()[7]) > {}", decision_speed_);
+    if(std::abs(target->yaw_rate()) > decision_speed_) tools::logger()->warn("std::abs(target yaw rate) > {}", decision_speed_);
 
     auto future = std::chrono::steady_clock::now() + std::chrono::microseconds(int(delay_time * 1e6));
     
@@ -78,8 +78,7 @@ public:
       // tools::logger()->warn("planner model error!");
       break;
     }
-    
-    
+    return {false};
   }
   Plan rbplan(Target target, double bullet_speed, double gimbal_yaw);
   Plan sbplan(Target target, double bullet_speed, double gimbal_yaw);

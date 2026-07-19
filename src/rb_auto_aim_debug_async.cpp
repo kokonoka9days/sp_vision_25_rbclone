@@ -92,10 +92,10 @@ int main(int argc, char * argv[])
         const auto ekf = target->ekf_x();
         data["target_z"] = ekf[4];
         data["target_vz"] = ekf[5];
-        data["tower_h1"] = target->tower_armor_hs[0];
-        data["tower_h2"] = target->tower_armor_hs[1];
-        data["tower_h3"] = target->tower_armor_hs[2];
-        data["tower_armor_h"] = target->tower_armor_h;
+        data["tower_h1"] = target->armor_height(0);
+        data["tower_h2"] = target->armor_height(1);
+        data["tower_h3"] = target->armor_height(2);
+        data["tower_armor_h"] = target->center().z();
         data["ekf_x"] = ekf(0);
         data["ekf_vx"] = ekf(1);
         data["ekf_y"] = ekf(2);
@@ -104,7 +104,7 @@ int main(int argc, char * argv[])
         data["ekf_vz"] = ekf(5);
         data["ekf_yaw"] = ekf(6) * 57.3;
         data["ekf_vyaw"] = ekf(7) * 57.3;
-        data["ekf_r"] = ekf(8);
+        data["ekf_r"] = target->radius(0);
       }
 
       plotter.plot(data);
@@ -156,13 +156,11 @@ int main(int argc, char * argv[])
 
     target_queue.push(targets.front());
     auto & target = targets.front();
-    auto ekf_x = target.getEKFXest();
-
-    Eigen::Vector3d center_world(ekf_x[0], ekf_x[2], ekf_x[4]);
-    Eigen::Vector3d velocity(ekf_x[1], ekf_x[3], ekf_x[5]);
+    Eigen::Vector3d center_world = target.center();
+    Eigen::Vector3d velocity = target.velocity();
     Eigen::Vector3d pred_center = center_world + velocity * 0.5;
     Eigen::Vector3d v_yaw_axis_tvec = center_world;
-    v_yaw_axis_tvec[2] += ekf_x[7] * 0.1;
+    v_yaw_axis_tvec[2] += target.yaw_rate() * 0.1;
 
     auto center_img = solver.reproject_armor(center_world, 0.0, target.armor_type, target.name);
     auto pred_point_img = solver.reproject_armor(pred_center, 0.0, target.armor_type, target.name);
@@ -178,9 +176,8 @@ int main(int argc, char * argv[])
       }
     }
 
-    for (const auto & xyza : target.armor_xyza_list()) {
-      auto image_points =
-        solver.reproject_armor(xyza.head(3), xyza[3], target.armor_type, target.name);
+    for (const auto & pose : target.armor_pose_list()) {
+      auto image_points = solver.reproject_pose(pose, target.armor_type);
       tools::draw_points(img, image_points, {235, 206, 135});
     }
 

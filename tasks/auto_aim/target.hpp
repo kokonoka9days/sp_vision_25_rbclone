@@ -2,14 +2,15 @@
 #define AUTO_AIM__TARGET_HPP
 
 #include <Eigen/Dense>
+#include <Eigen/Geometry>
+
 #include <chrono>
 #include <optional>
-#include <queue>
-#include <string>
+#include <utility>
 #include <vector>
 
 #include "armor.hpp"
-#include "tools/extended_kalman_filter.hpp"
+#include "motion_model.hpp"
 
 namespace auto_aim
 {
@@ -17,74 +18,70 @@ namespace auto_aim
 class Target
 {
 public:
-  ArmorName name;
-  ArmorType armor_type;
-  ArmorPriority priority;
-  bool jumped;
-  int last_id;  // debug only
-  Eigen::Vector3d xyz_in_world;
+  ArmorName name = ArmorName::not_armor;
+  ArmorType armor_type = ArmorType::small;
+  ArmorPriority priority = ArmorPriority::fifth;
+  bool jumped = false;
+  int last_id = 0;
+  Eigen::Vector3d xyz_in_world = Eigen::Vector3d::Zero();
+  bool cam_is_short = true;
+  bool last_cam_is_short = true;
+  int update_count_ = 0;
 
   Target() = default;
   Target(
-    const Armor & armor, std::chrono::steady_clock::time_point t, double radius, int armor_num,
-    Eigen::VectorXd P0_dig);
-  Target(double x, double vyaw, double radius, double h);
+    const Armor & armor, std::chrono::steady_clock::time_point time,
+    const EstimatorConfig & config = {});
 
-  void predict(std::chrono::steady_clock::time_point t);
+  // Compatibility constructor retained for external tests and tools.
+  Target(
+    const Armor & armor, std::chrono::steady_clock::time_point time, double radius,
+    int armor_num, Eigen::VectorXd initial_covariance_diagonal);
+  Target(double x, double vyaw, double radius, double height);
+
+  void predict(std::chrono::steady_clock::time_point time);
   void predict(double dt);
-  void update(const Armor & armor);
+
+  int update(
+    const std::vector<std::pair<int, Armor>> & matched_armors, int primary_id,
+    const CameraContext & camera, std::chrono::steady_clock::time_point time);
 
   Eigen::VectorXd ekf_x() const;
-  const tools::ExtendedKalmanFilter & ekf() const; 
+  Eigen::VectorXd getEKFXest() const { return ekf_x(); }
+  std::chrono::steady_clock::time_point getTimePoint() const { return time_; }
+  const motion_model::Covariance & covariance() const;
+  tools::EstimatorDiagnostics estimator_diagnostics() const;
+
+  Eigen::Vector3d center() const;
+  Eigen::Vector3d velocity() const;
+  Eigen::Matrix3d rotation() const;
+  double yaw() const;
+  double yaw_rate() const;
+  double radius(int id) const;
+  double armor_height(int id) const;
+  int armor_count() const;
+  std::vector<Eigen::Isometry3d> armor_pose_list() const;
   std::vector<Eigen::Vector4d> armor_xyza_list() const;
 
-  Eigen::Vector3d h_armor_xyz(const Eigen::VectorXd & x, int id) const;
-
+  bool matching_initialized() const;
   bool diverged() const;
-
   bool convergened();
-
-  bool isinit = false;
-
-  bool checkinit();
-
-  inline Eigen::VectorXd getEKFXest() {
-    return ekf_.x;
-  }
-
-  inline std::chrono::steady_clock::time_point getTimePoint() {
-    return t_;
-  }
-
-  //前哨站
-  std::pair<bool, double> tower_armor_hs[3] = {std::pair<bool, double>(false, 0), std::pair<bool, double>(false, 0), std::pair<bool, double>(false, 0)};
-  // double tower_armor_hs[3] = {0,0,0};  
-  double tower_armor_h;
-  double tower_armor_hs_datas[3] = {0,0,0}; 
-  double last_tower_armor_h[3] = {0,0,0};
-  int tower_armor_hs_datas_ptr[3] = {0, 0, 0};
-
-  //长短焦
-  bool cam_is_short = true;
-  bool last_cam_is_short = true;
-  std::chrono::steady_clock::time_point cam_is_switch_time_point; //相机切换时间点；
-  
-  int update_count_;
+  bool checkinit() const { return initialized_; }
 
 private:
-  int armor_num_;
-  int switch_count_;
-  
+  EstimatorConfig config_;
+  std::optional<motion_model::RobotESEKF> estimator_;
+  std::chrono::steady_clock::time_point time_{};
+  motion_model::DirectionVoter voter_;
+  std::vector<bool> observed_ids_;
+  bool initialized_ = false;
+  bool converged_ = false;
 
-  bool is_switch_, is_converged_;
-
-  // 单一 EKF 实例
-  tools::ExtendedKalmanFilter ekf_; 
-
-  std::chrono::steady_clock::time_point t_;
-
-  void update_ypda(const Armor & armor, int id);  // yaw pitch distance angle
-  Eigen::MatrixXd h_jacobian(const Eigen::VectorXd & x, int id) const;
+  void initialize(
+    const Armor & armor, std::chrono::steady_clock::time_point time, double initial_radius,
+    const std::optional<Eigen::VectorXd> & covariance_diagonal = std::nullopt);
+  motion_model::Covariance process_noise(double dt) const;
+  void clamp_nominal_state();
 };
 
 }  // namespace auto_aim

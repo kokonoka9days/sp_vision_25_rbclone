@@ -2,7 +2,10 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <algorithm>
+#include <cmath>
 #include <tuple>
+#include <vector>
 
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
@@ -26,6 +29,55 @@ Tracker::Tracker(const std::string & config_path, Solver * solver)
   max_temp_lost_count_ = yaml["max_temp_lost_count"].as<int>();
   outpost_max_temp_lost_count_ = yaml["outpost_max_temp_lost_count"].as<int>();
   normal_temp_lost_count_ = max_temp_lost_count_;
+
+  const auto estimator = yaml["estimator"];
+  const auto read_double = [&](const char * key, double fallback) {
+    return estimator && estimator[key] ? estimator[key].as<double>() : fallback;
+  };
+  const auto read_int = [&](const char * key, int fallback) {
+    return estimator && estimator[key] ? estimator[key].as<int>() : fallback;
+  };
+  const auto read_vector = [&](const char * key, const Eigen::Vector3d & fallback) {
+    if (!estimator || !estimator[key]) return fallback;
+    const auto values = estimator[key].as<std::vector<double>>();
+    if (values.size() != 3) return fallback;
+    return Eigen::Vector3d(values[0], values[1], values[2]);
+  };
+  estimator_config_.iterations = read_int("iterations", estimator_config_.iterations);
+  estimator_config_.common_acceleration =
+    read_vector("common_acceleration", estimator_config_.common_acceleration);
+  estimator_config_.outpost_acceleration =
+    read_vector("outpost_acceleration", estimator_config_.outpost_acceleration);
+  estimator_config_.common_yaw_acceleration =
+    read_double("common_yaw_acceleration", estimator_config_.common_yaw_acceleration);
+  estimator_config_.outpost_yaw_acceleration =
+    read_double("outpost_yaw_acceleration", estimator_config_.outpost_yaw_acceleration);
+  estimator_config_.radius_random_walk =
+    read_double("radius_random_walk", estimator_config_.radius_random_walk);
+  estimator_config_.height_random_walk =
+    read_double("height_random_walk", estimator_config_.height_random_walk);
+  estimator_config_.roll_pitch_random_walk =
+    read_double("roll_pitch_random_walk", estimator_config_.roll_pitch_random_walk);
+  estimator_config_.outpost_height_random_walk =
+    read_double("outpost_height_random_walk", estimator_config_.outpost_height_random_walk);
+  estimator_config_.armor_match_gate =
+    read_double("armor_match_gate", estimator_config_.armor_match_gate);
+  estimator_config_.armor_match_gate_not_all_init = read_double(
+    "armor_match_gate_not_all_init", estimator_config_.armor_match_gate_not_all_init);
+  estimator_config_.armor_match_center_weight =
+    read_double("armor_match_center_weight", estimator_config_.armor_match_center_weight);
+  estimator_config_.armor_match_angle_weight =
+    read_double("armor_match_angle_weight", estimator_config_.armor_match_angle_weight);
+  estimator_config_.armor_match_perimeter_weight =
+    read_double("armor_match_perimeter_weight", estimator_config_.armor_match_perimeter_weight);
+  estimator_config_.uvl_pixel_sigma_ratio =
+    read_double("uvl_pixel_sigma_ratio", estimator_config_.uvl_pixel_sigma_ratio);
+  estimator_config_.uvl_length_sigma_ratio =
+    read_double("uvl_length_sigma_ratio", estimator_config_.uvl_length_sigma_ratio);
+  estimator_config_.uvl_angle_sigma =
+    read_double("uvl_angle_sigma", estimator_config_.uvl_angle_sigma);
+  estimator_config_.depth_difference_sigma =
+    read_double("depth_difference_sigma", estimator_config_.depth_difference_sigma);
 
   last_cam_is_short = true;
 }
@@ -93,15 +145,6 @@ std::list<Target> Tracker::sb_track(
     return {};
   }
 
-  if (
-  std::accumulate(
-    target_.ekf().recent_nis_failures.begin(), target_.ekf().recent_nis_failures.end(), 0) >=
-  (0.4 * target_.ekf().window_size)) {
-      tools::logger()->debug("[Target] Bad Converge Found!");
-      state_ = "lost";
-      return {};
-  }
-
   if (state_ == "lost") return {};
 
   std::list<Target> targets = {target_};
@@ -167,6 +210,9 @@ std::list<Target> Tracker::track(
     if (state_ == "lost") {
         found = set_target(armors, t);
     }
+    else if (armors.empty()) {
+      found = update_target(armors, t);
+    }
     else {
       if(target_.name == armors.front().name 
         && target_.armor_type == armors.front().type)
@@ -192,15 +238,6 @@ std::list<Target> Tracker::track(
     // tools::logger()->debug("[Tracker] Target diverged!");
     state_ = "lost";
     return {};
-  }
-
-  if (
-  std::accumulate(
-    target_.ekf().recent_nis_failures.begin(), target_.ekf().recent_nis_failures.end(), 0) >=
-  (0.4 * target_.ekf().window_size)) {
-      tools::logger()->debug("[Target] Bad Converge Found!");
-      state_ = "lost";
-      return {};
   }
 
   if (state_ == "lost") return {};
@@ -267,15 +304,6 @@ std::list<Target> Tracker::test_track(
     // tools::logger()->debug("[Tracker] Target diverged!");
     state_ = "lost";
     return {};
-  }
-
-  if (
-  std::accumulate(
-    target_.ekf().recent_nis_failures.begin(), target_.ekf().recent_nis_failures.end(), 0) >=
-  (0.4 * target_.ekf().window_size)) {
-      tools::logger()->debug("[Target] Bad Converge Found!");
-      state_ = "lost";
-      return {};
   }
 
   if (state_ == "lost") return {};
@@ -422,55 +450,120 @@ void Tracker::state_machine(bool found)
 bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t)
 {
   if (armors.empty()) return false;
-
-  auto & armor = armors.front();
-  solver_->solve(armor);
-
-  // 根据兵种优化初始化参数
-  auto is_balance = (armor.type == ArmorType::big) &&
-                    (armor.name == ArmorName::three || armor.name == ArmorName::four ||
-                     armor.name == ArmorName::five);
-
-  if (is_balance) {
-    Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1}};
-    target_ = Target(armor, t, 0.2, 2, P0_dig);
+  const auto context = solver_->camera_context();
+  const cv::Point2f principal_point(
+    context.camera_matrix(0, 2), context.camera_matrix(1, 2));
+  armors.sort([&](const Armor & left, const Armor & right) {
+    if (left.priority != right.priority) return left.priority < right.priority;
+    return cv::norm(left.center - principal_point) < cv::norm(right.center - principal_point);
+  });
+  for (auto & armor : armors) {
+    if (!solver_->solve(armor)) continue;
+    target_ = Target(armor, t, estimator_config_);
+    return true;
   }
-
-  else if (armor.name == ArmorName::outpost) {
-    Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 81, 0.4, 100, 1e-4, 0, 0}};
-    target_ = Target(armor, t, 0.2765, 3, P0_dig);
-  }
-
-  else if (armor.name == ArmorName::base) {
-    Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 64, 0.4, 100, 1e-4, 0, 0}};
-    target_ = Target(armor, t, 0.3205, 3, P0_dig);
-  }
-
-  else {
-    Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1}};
-    target_ = Target(armor, t, 0.2, 4, P0_dig);
-  }
-
-  return true;
+  return false;
 }
 bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t)
 {
   target_.predict(t);
-  
-  bool found = false;
+  const auto context = solver_->camera_context();
 
-  // 由于 armors 在 track/sb_track 中已经按距离图像中心的远近排序
-  // 遍历找到的第一个匹配目标的装甲板，即为视野中最居中、畸变最小的装甲板
+  struct VisibleArmor
+  {
+    int id;
+    double facing;
+    std::array<cv::Point2f, 4> points;
+  };
+  std::vector<VisibleArmor> visible;
+  const auto poses = target_.armor_pose_list();
+  for (int id = 0; id < static_cast<int>(poses.size()); ++id) {
+    const Eigen::Isometry3d pose_in_camera = context.T_camera_world.inverse() * poses[id];
+    const double facing = (-pose_in_camera.linear().col(0)).dot(-pose_in_camera.translation());
+    if (!std::isfinite(facing) || facing <= 0) continue;
+    const auto projected = solver_->reproject_pose(poses[id], target_.armor_type);
+    if (projected.size() != 4) continue;
+    visible.push_back({id, facing, {projected[0], projected[1], projected[2], projected[3]}});
+  }
+  std::sort(visible.begin(), visible.end(), [](const auto & left, const auto & right) {
+    return left.facing > right.facing;
+  });
+  if (visible.size() > 3) visible.resize(3);
+  if (visible.empty()) return false;
+
+  std::vector<Armor *> candidates;
   for (auto & armor : armors) {
-    if (armor.name == target_.name && armor.type == target_.armor_type) {
-      solver_->solve(armor);
-      target_.update(armor);
-      found = true;
-      break; // 找到最优匹配后立即退出
+    const bool finite_points = armor.points.size() == 4 &&
+      std::all_of(armor.points.begin(), armor.points.end(), [](const cv::Point2f & point) {
+        return std::isfinite(point.x) && std::isfinite(point.y);
+      });
+    if (armor.name == target_.name && armor.type == target_.armor_type && finite_points) {
+      candidates.push_back(&armor);
     }
   }
+  if (candidates.empty()) return false;
 
-  return found;
+  const double gate = target_.matching_initialized()
+                        ? estimator_config_.armor_match_gate
+                        : estimator_config_.armor_match_gate_not_all_init;
+  struct CandidatePair
+  {
+    double cost;
+    int detection;
+    int prediction;
+  };
+  std::vector<CandidatePair> pairs;
+  const auto edge_angle = [](const cv::Point2f & from, const cv::Point2f & to) {
+    return std::atan2(to.y - from.y, to.x - from.x);
+  };
+  for (int detection = 0; detection < static_cast<int>(candidates.size()); ++detection) {
+    const auto & measured = candidates[detection]->points;
+    for (int prediction = 0; prediction < static_cast<int>(visible.size()); ++prediction) {
+      const auto & projected = visible[prediction].points;
+      cv::Point2f measured_center(0, 0);
+      cv::Point2f projected_center(0, 0);
+      double angle_error = 0;
+      double measured_perimeter = 0;
+      double projected_perimeter = 0;
+      for (int corner = 0; corner < 4; ++corner) {
+        measured_center += measured[corner];
+        projected_center += projected[corner];
+        const int next = (corner + 1) % 4;
+        angle_error += std::abs(tools::limit_rad(
+          edge_angle(projected[corner], projected[next]) -
+          edge_angle(measured[corner], measured[next])));
+        measured_perimeter += cv::norm(measured[corner] - measured[next]);
+        projected_perimeter += cv::norm(projected[corner] - projected[next]);
+      }
+      measured_center *= 0.25f;
+      projected_center *= 0.25f;
+      const double center_error = cv::norm(measured_center - projected_center);
+      const double perimeter_error = std::abs(projected_perimeter - measured_perimeter) /
+                                     std::max(projected_perimeter, 1e-6);
+      const double cost = estimator_config_.armor_match_center_weight * center_error +
+                          estimator_config_.armor_match_angle_weight * angle_error +
+                          estimator_config_.armor_match_perimeter_weight * perimeter_error;
+      if (std::isfinite(cost) && cost < gate) pairs.push_back({cost, detection, prediction});
+    }
+  }
+  std::sort(pairs.begin(), pairs.end(), [](const auto & left, const auto & right) {
+    return left.cost < right.cost;
+  });
+  std::vector<bool> used_detections(candidates.size(), false);
+  std::vector<bool> used_predictions(visible.size(), false);
+  std::vector<std::pair<int, Armor>> matches;
+  int primary_id = -1;
+  for (const auto & pair : pairs) {
+    if (used_detections[pair.detection] || used_predictions[pair.prediction]) continue;
+    used_detections[pair.detection] = true;
+    used_predictions[pair.prediction] = true;
+    const int id = visible[pair.prediction].id;
+    if (primary_id < 0) primary_id = id;
+    matches.emplace_back(id, *candidates[pair.detection]);
+  }
+  if (matches.empty()) return false;
+  if (matches.size() == 1) solver_->solve(matches.front().second);
+  return target_.update(matches, primary_id, context, t) > 0;
 }
 
 }  // namespace auto_aim

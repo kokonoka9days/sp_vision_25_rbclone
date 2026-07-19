@@ -36,9 +36,8 @@ io::Command Aimer::aim(
   if (targets.empty()) return {false, false, 0, 0};
   auto target = targets.front();
 
-  auto ekf = target.ekf();
   double delay_time =
-    target.ekf_x()[7] > decision_speed_ ? high_speed_delay_time_ : low_speed_delay_time_;
+    std::abs(target.yaw_rate()) > decision_speed_ ? high_speed_delay_time_ : low_speed_delay_time_;
 
   if (bullet_speed < 14) bullet_speed = 23;
 
@@ -145,14 +144,14 @@ io::Command Aimer::aim(
 
 AimPoint Aimer::choose_aim_point(const Target & target)
 {
-  Eigen::VectorXd ekf_x = target.ekf_x();
   std::vector<Eigen::Vector4d> armor_xyza_list = target.armor_xyza_list();
   auto armor_num = armor_xyza_list.size();
   // 如果装甲板未发生过跳变，则只有当前装甲板的位置已知
   if (!target.jumped) return {true, armor_xyza_list[0]};
 
   // 整车旋转中心的球坐标yaw
-  auto center_yaw = std::atan2(ekf_x[2], ekf_x[0]);
+  const auto target_center = target.center();
+  auto center_yaw = std::atan2(target_center.y(), target_center.x());
 
   // 如果delta_angle为0，则该装甲板中心和整车中心的连线在世界坐标系的xy平面过原点
   std::vector<double> delta_angle_list;
@@ -162,7 +161,7 @@ AimPoint Aimer::choose_aim_point(const Target & target)
   }
 
   // 不考虑小陀螺
-  if (std::abs(target.ekf_x()[8]) <= 2 && target.name != ArmorName::outpost) {
+  if (target.radius(0) <= 2 && target.name != ArmorName::outpost) {
     // 选择在可射击范围内的装甲板
     std::vector<int> id_list;
     for (int i = 0; i < armor_num; i++) {
@@ -203,8 +202,8 @@ AimPoint Aimer::choose_aim_point(const Target & target)
   // 在小陀螺时，一侧的装甲板不断出现，另一侧的装甲板不断消失，显然前者被打中的概率更高
   for (int i = 0; i < armor_num; i++) {
     if (std::abs(delta_angle_list[i]) > coming_angle) continue;
-    if (ekf_x[7] > 0 && delta_angle_list[i] < leaving_angle) return {true, armor_xyza_list[i]};
-    if (ekf_x[7] < 0 && delta_angle_list[i] > -leaving_angle) return {true, armor_xyza_list[i]};
+    if (target.yaw_rate() > 0 && delta_angle_list[i] < leaving_angle) return {true, armor_xyza_list[i]};
+    if (target.yaw_rate() < 0 && delta_angle_list[i] > -leaving_angle) return {true, armor_xyza_list[i]};
   }
 
   return {false, armor_xyza_list[0]};

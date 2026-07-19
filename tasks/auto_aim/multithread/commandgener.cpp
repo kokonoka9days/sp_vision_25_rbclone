@@ -51,9 +51,7 @@ void CommandGener::generate_command()
       command.shoot = shooter_.shoot(command, aimer_, input->targets_, input->gimbal_pos);
       command.horizon_distance = input->targets_.empty()
                                    ? 0
-                                   : std::sqrt(
-                                       tools::square(input->targets_.front().ekf_x()[0]) +
-                                       tools::square(input->targets_.front().ekf_x()[2]));
+                                   : input->targets_.front().center().head<2>().norm();
       cboard_.send(command);
       if (debug_) {
         nlohmann::json data;

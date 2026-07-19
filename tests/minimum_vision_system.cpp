@@ -85,11 +85,12 @@ int main(int argc, char * argv[])
           armor = a;
         }
       }  //always left
-      solver.solve(armor);
-      data["armor_x"] = armor.xyz_in_world[0];
-      data["armor_y"] = armor.xyz_in_world[1];
-      data["armor_yaw"] = armor.ypr_in_world[0] * 57.3;
-      data["armor_yaw_raw"] = armor.yaw_raw * 57.3;
+      if (solver.solve(armor)) {
+        data["armor_x"] = armor.xyz_in_world[0];
+        data["armor_y"] = armor.xyz_in_world[1];
+        data["armor_yaw"] = armor.ypr_in_world[0] * 57.3;
+        data["armor_yaw_raw"] = armor.yaw_raw * 57.3;
+      }
     }
 
     if (!targets.empty()) {
@@ -97,10 +98,8 @@ int main(int argc, char * argv[])
       tools::draw_text(img, fmt::format("[{}]", tracker.state()), {10, 30}, {255, 255, 255});
 
       // 当前帧target更新后
-      std::vector<Eigen::Vector4d> armor_xyza_list = target.armor_xyza_list();
-      for (const Eigen::Vector4d & xyza : armor_xyza_list) {
-        auto image_points =
-          solver.reproject_armor(xyza.head(3), xyza[3], target.armor_type, target.name);
+      for (const auto & pose : target.armor_pose_list()) {
+        auto image_points = solver.reproject_pose(pose, target.armor_type);
         tools::draw_points(img, image_points, {0, 255, 0});
       }
 
@@ -124,22 +123,17 @@ int main(int argc, char * argv[])
       data["vz"] = x[5];
       data["a"] = x[6] * 57.3;
       data["w"] = x[7];
-      data["r"] = x[8];
+      data["r"] = target.radius(0);
       data["l"] = x[9];
       data["h"] = x[10];
       data["last_id"] = target.last_id;
       data["distance"] = std::sqrt(x[0] * x[0] + x[2] * x[2] + x[4] * x[4]);
 
-      // 卡方检验数据
-      data["residual_yaw"] = target.ekf().data.at("residual_yaw");
-      data["residual_pitch"] = target.ekf().data.at("residual_pitch");
-      data["residual_distance"] = target.ekf().data.at("residual_distance");
-      data["residual_angle"] = target.ekf().data.at("residual_angle");
-      data["nis"] = target.ekf().data.at("nis");
-      data["nees"] = target.ekf().data.at("nees");
-      data["nis_fail"] = target.ekf().data.at("nis_fail");
-      data["nees_fail"] = target.ekf().data.at("nees_fail");
-      data["recent_nis_failures"] = target.ekf().data.at("recent_nis_failures");
+      const auto diagnostics = target.estimator_diagnostics();
+      data["residual_norm"] = diagnostics.residual_norm;
+      data["nis"] = diagnostics.nis;
+      data["observation_dim"] = diagnostics.observation_dim;
+      data["normalized_nis"] = diagnostics.normalized_nis;
     }
     cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
     cv::imshow("reprojection", img);

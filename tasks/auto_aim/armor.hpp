@@ -2,12 +2,17 @@
 #define AUTO_AIM__ARMOR_HPP
 
 #include <Eigen/Dense>
+#include <Eigen/Geometry>
+#include <array>
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <vector>
 
 namespace auto_aim
 {
+inline constexpr double LIGHTBAR_LENGTH = 56e-3;
+inline constexpr double BIG_ARMOR_WIDTH = 230e-3;
+inline constexpr double SMALL_ARMOR_WIDTH = 135e-3;
 enum Color
 {
   red,
@@ -23,6 +28,17 @@ enum ArmorType
   small
 };
 const std::vector<std::string> ARMOR_TYPES = {"big", "small"};
+
+inline std::array<Eigen::Vector3d, 4> armor_object_points(ArmorType type)
+{
+  const double half_width =
+    ((type == ArmorType::big) ? BIG_ARMOR_WIDTH : SMALL_ARMOR_WIDTH) / 2.0;
+  const double half_height = LIGHTBAR_LENGTH / 2.0;
+  return {{{0, half_width, half_height},
+           {0, -half_width, half_height},
+           {0, -half_width, -half_height},
+           {0, half_width, -half_height}}};
+}
 
 enum ArmorName
 {
@@ -79,33 +95,36 @@ struct Lightbar
 
 struct Armor
 {
-  Color color;
+  Color color = extinguish;
   Lightbar left, right;     //used to be const
   cv::Point2f center;       // 不是对角线交点，不能作为实际中心！
   cv::Point2f center_norm;  // 归一化坐标
   std::vector<cv::Point2f> points;
 
-  double ratio;              // 两灯条的中点连线与长灯条的长度之比
-  double side_ratio;         // 长灯条与短灯条的长度之比
-  double rectangular_error;  // 灯条和中点连线所成夹角与π/2的差值
+  double ratio = 0;
+  double side_ratio = 0;
+  double rectangular_error = 0;
 
-  ArmorType type;
-  ArmorName name;
-  ArmorPriority priority;
-  int class_id;
+  ArmorType type = small;
+  ArmorName name = not_armor;
+  ArmorPriority priority = fifth;
+  int class_id = -1;
   cv::Rect box;
   cv::Mat pattern;
-  double confidence;
-  bool duplicated;
+  double confidence = 0;
+  bool duplicated = false;
 
-  Eigen::Vector3d xyz_in_gimbal;  // 单位：m
-  Eigen::Vector3d xyz_in_world;   // 单位：m
-  Eigen::Vector3d ypr_in_gimbal;  // 单位：rad
-  Eigen::Vector3d ypr_in_world;   // 单位：rad
-  Eigen::Vector3d ypd_in_world;   // 球坐标系
+  Eigen::Vector3d xyz_in_gimbal = Eigen::Vector3d::Zero();
+  Eigen::Vector3d xyz_in_world = Eigen::Vector3d::Zero();
+  Eigen::Vector3d ypr_in_gimbal = Eigen::Vector3d::Zero();
+  Eigen::Vector3d ypr_in_world = Eigen::Vector3d::Zero();
+  Eigen::Vector3d ypd_in_world = Eigen::Vector3d::Zero();
+  Eigen::Isometry3d pose_in_world = Eigen::Isometry3d::Identity();
+  bool pnp_valid = false;
 
-  double yaw_raw;  // rad
+  double yaw_raw = 0;
 
+  Armor() = default;
   Armor(const Lightbar & left, const Lightbar & right);
   Armor(
     int class_id, float confidence, const cv::Rect & box, std::vector<cv::Point2f> armor_keypoints);

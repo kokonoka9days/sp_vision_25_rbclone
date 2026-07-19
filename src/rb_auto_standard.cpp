@@ -115,12 +115,12 @@ int main(int argc, char * argv[])
         data["fired"] = fired ? 1 : 0;
 
         if (target.has_value()) {
-          data["target_z"] = target->ekf_x()[4];   //z
-          data["target_vz"] = target->ekf_x()[5];  //vz
-          data["tower_h1"] = target->tower_armor_hs[0].second;
-          data["tower_h2"] = target->tower_armor_hs[1].second;
-          data["tower_h3"] = target->tower_armor_hs[2].second;
-          data["tower_armor_h"] = target->tower_armor_h;
+          data["target_z"] = target->center().z();
+          data["target_vz"] = target->velocity().z();
+          data["tower_h1"] = target->armor_height(0);
+          data["tower_h2"] = target->armor_height(1);
+          data["tower_h3"] = target->armor_height(2);
+          data["tower_armor_h"] = target->center().z();
 
           const auto ekf_satic = target->ekf_x();
           data["ekf_x"] = ekf_satic(0);
@@ -131,7 +131,7 @@ int main(int argc, char * argv[])
           data["ekf_vz"] = ekf_satic(5);
           data["ekf_yaw"] = ekf_satic(6) * 57.3;
           data["ekf_vyaw"] = ekf_satic(7) * 57.3;
-          data["ekf_r"] = ekf_satic(8);        
+          data["ekf_r"] = target->radius(0);
         }
 
         plotter.plot(data);

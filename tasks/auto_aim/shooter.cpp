@@ -22,8 +22,9 @@ bool Shooter::shoot(
 {
   if (!command.control || targets.empty() || !auto_fire_) return false;
 
-  auto target_x = targets.front().ekf_x()[0];
-  auto target_y = targets.front().ekf_x()[2];
+  const auto target_center = targets.front().center();
+  auto target_x = target_center.x();
+  auto target_y = target_center.y();
   auto tolerance = std::sqrt(tools::square(target_x) + tools::square(target_y)) > judge_distance_
                      ? second_tolerance_
                      : first_tolerance_;
@@ -48,8 +49,9 @@ bool Shooter::shoot_g(
   // 当不控制或不开火时，直接返回false
   if (vision_cmd.mode == 0 || vision_cmd.mode == 1 || targets.empty() || !auto_fire_) return false;
 
-  auto target_x = targets.front().ekf_x()[0];
-  auto target_y = targets.front().ekf_x()[2];
+  const auto target_center = targets.front().center();
+  auto target_x = target_center.x();
+  auto target_y = target_center.y();
   auto tolerance = std::sqrt(tools::square(target_x) + tools::square(target_y)) > judge_distance_
                      ? second_tolerance_
                      : first_tolerance_;

@@ -61,6 +61,7 @@ private:
   std::chrono::steady_clock::time_point last_timestamp_;
   ArmorPriority omni_target_priority_;
   bool cam_is_switch = false, last_cam_is_short = true;
+  EstimatorConfig estimator_config_;
 
   void state_machine(bool found);
 

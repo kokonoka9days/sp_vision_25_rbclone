@@ -120,12 +120,12 @@ int main(int argc, char * argv[])
         data["fired"] = fired ? 1 : 0;
 
         if (target.has_value()) {
-          data["target_z"] = target->ekf_x()[4];   //z
-          data["target_vz"] = target->ekf_x()[5];  //vz
-          data["tower_h1"] = target->tower_armor_hs[0];
-          data["tower_h2"] = target->tower_armor_hs[1];
-          data["tower_h3"] = target->tower_armor_hs[2];
-          data["tower_armor_h"] = target->tower_armor_h;
+          data["target_z"] = target->center().z();
+          data["target_vz"] = target->velocity().z();
+          data["tower_h1"] = target->armor_height(0);
+          data["tower_h2"] = target->armor_height(1);
+          data["tower_h3"] = target->armor_height(2);
+          data["tower_armor_h"] = target->center().z();
 
           const auto ekf_satic = target->ekf_x();
           data["ekf_x"] = ekf_satic(0);
@@ -136,7 +136,7 @@ int main(int argc, char * argv[])
           data["ekf_vz"] = ekf_satic(5);
           data["ekf_yaw"] = ekf_satic(6) * 57.3;
           data["ekf_vyaw"] = ekf_satic(7) * 57.3;
-          data["ekf_r"] = ekf_satic(8);        
+          data["ekf_r"] = target->radius(0);
         }
 
         plotter.plot(data);
@@ -325,23 +325,22 @@ int main(int argc, char * argv[])
         auto& target = targets.front();
       
         // 获取EKF状态向量
-        Eigen::VectorXd ekf_x = target.getEKFXest();
         
         // 1. 计算旋转中心的世界坐标
-        Eigen::Vector3d center_world(ekf_x[0], ekf_x[2], ekf_x[4]);
+        Eigen::Vector3d center_world = target.center();
         
         // 2. 计算速度终点（预测0.5秒后的位置）
         double dt = 0.5; // 预测时间
         double scale_factor = 1.0; // 放大2倍
-        Eigen::Vector3d velocity(ekf_x[1], ekf_x[3], ekf_x[5]);
+        Eigen::Vector3d velocity = target.velocity();
         Eigen::Vector3d pred_center = center_world + velocity * dt * scale_factor ;
         
         // 3. 计算角速度方向终点
-        double w = ekf_x[7]; // 角速度
+        double w = target.yaw_rate();
         Eigen::Vector3d v_yaw_axis_tvec = center_world;
         v_yaw_axis_tvec[2] += w * 0.1; // 在y方向加上角速度的影响
 
-        double speed_magnitude = std::sqrt(ekf_x[1]*ekf_x[1] + ekf_x[3]*ekf_x[3] + ekf_x[5]*ekf_x[5]);
+        double speed_magnitude = velocity.norm();
 
         auto center_img = solver.reproject_armor(center_world, 0.0, target.armor_type, target.name);
         auto pred_point_img = solver.reproject_armor(pred_center, 0.0, target.armor_type, target.name);
@@ -372,10 +371,8 @@ int main(int argc, char * argv[])
         auto target = targets.front();
 
         // 当前帧target更新后
-        std::vector<Eigen::Vector4d> armor_xyza_list = target.armor_xyza_list();
-        for (const Eigen::Vector4d & xyza : armor_xyza_list) {
-          auto image_points =
-            solver.reproject_armor(xyza.head(3), xyza[3], target.armor_type, target.name);
+        for (const auto & pose : target.armor_pose_list()) {
+          auto image_points = solver.reproject_pose(pose, target.armor_type);
           tools::draw_points(img, image_points, {235, 206, 135});
         }
 
