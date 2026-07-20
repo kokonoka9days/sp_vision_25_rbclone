@@ -13,8 +13,10 @@
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
+#include "tools/prediction_cadence.hpp"
 #include "tools/thread_safe_queue.hpp"
 #include "tools/recorder.hpp"
+#include "tools/yaml.hpp"
 
 // 无人机自瞄算法模块
 #include "tasks/auto_drone/drone_yolo.hpp"
@@ -41,6 +43,16 @@ int main(int argc, char * argv[])
     return 0;
   }
 
+  const auto config = tools::load(config_path);
+  const int prediction_frames_between_detections =
+    config["prediction_frames_between_detections"]
+      ? config["prediction_frames_between_detections"].as<int>()
+      : 1;
+  if (prediction_frames_between_detections < 0) {
+    tools::logger()->error("prediction_frames_between_detections must be zero or positive");
+    return 2;
+  }
+
   // 2. 硬件 IO 初始化
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
@@ -59,6 +71,7 @@ int main(int argc, char * argv[])
 
   std::atomic<bool> quit = false;
   std::atomic<double> current_fps(0.0);
+  tools::PredictionCadence prediction_cadence(prediction_frames_between_detections);
   int return_code = 0;
 
   // =================================================================
@@ -70,6 +83,7 @@ int main(int argc, char * argv[])
     int plot_count = 0;
     auto last_plot_time = std::chrono::steady_clock::now();
     int current_freq = 0;
+    auto next_control_time = std::chrono::steady_clock::now();
 
     while (!quit) {
       // 获取最新目标与云台状态
@@ -137,8 +151,12 @@ int main(int argc, char * argv[])
 
       plotter.plot(data);
 
-      // 控制频率：~100Hz
-      std::this_thread::sleep_for(5ms);
+      const auto control_period = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+        std::chrono::duration<double>(prediction_cadence.control_period_s()));
+      next_control_time += control_period;
+      const auto after_control = std::chrono::steady_clock::now();
+      if (next_control_time <= after_control) next_control_time = after_control + control_period;
+      std::this_thread::sleep_until(next_control_time);
     }
   });
 
@@ -177,6 +195,7 @@ int main(int argc, char * argv[])
     img = std::move(result->frame);
     t = result->timestamp;
     auto drones = std::move(result->drones);
+    prediction_cadence.observe(t);
 
     detection_window_count++;
     const auto now = std::chrono::steady_clock::now();

@@ -120,6 +120,7 @@ add_executable(
 add_executable(
   drone_planner_inline_config_test
   tasks/auto_drone/drone_planner_inline_config_test.cpp)
+add_executable(prediction_cadence_test tools/prediction_cadence_test.cpp)
 add_executable(capture calibration/capture.cpp)
 add_executable(calibrate_camera calibration/calibrate_camera.cpp)
 add_executable(calibrate_handeye calibration/calibrate_handeye.cpp)
@@ -143,6 +144,7 @@ enable_testing()
 add_test(NAME laser_ray_calibration_test COMMAND laser_ray_calibration_test)
 add_test(NAME drone_planner_laser_test COMMAND drone_planner_laser_test)
 add_test(NAME drone_planner_inline_config_test COMMAND drone_planner_inline_config_test)
+add_test(NAME prediction_cadence_test COMMAND prediction_cadence_test)
 # 【修改 6】: 校准工具同样将 ${TRT_LIB} 替换为 openvino::runtime
 target_link_libraries(run_calibration ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_drone tools io openvino::runtime)
 target_link_libraries(calibrate_camera ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)

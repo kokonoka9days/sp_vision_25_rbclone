@@ -59,6 +59,8 @@ fire_thresh: 0.1              # 允许开火的角度误差阈值 (度)
 
 # 高低速判断与预测延迟补偿 (秒)
 gimbal_control_delay: 0.02    # 云台控制通信延迟补偿
+# 两次真实视觉结果之间插入的卡尔曼预测控制帧数；0=不额外插帧，1=插入1帧，2=插入2帧
+prediction_frames_between_detections: 1
 
 #####----- MPC 求解器参数 (TinyMPC) -----#####
 max_yaw_acc: 50.0             # Yaw 轴最大加速度限制
@@ -76,7 +78,6 @@ square_size_mm: 30   # 棋盘格方块大小（毫米）
 laser_ray_enabled: true
 laser_line_origin_in_camera_m: [0.0021629600260757455, -0.018669016304689534, -0.00014189876847028134]
 laser_line_direction_in_camera: [0.014838799668094262, -0.005880596981455357, 0.9998726061871842]
-
 
 
 

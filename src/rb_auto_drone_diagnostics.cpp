@@ -30,7 +30,9 @@
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
+#include "tools/prediction_cadence.hpp"
 #include "tools/thread_safe_queue.hpp"
+#include "tools/yaml.hpp"
 
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
@@ -365,6 +367,16 @@ int main(int argc, char * argv[])
     return 0;
   }
 
+  const auto config = tools::load(config_path);
+  const int prediction_frames_between_detections =
+    config["prediction_frames_between_detections"]
+      ? config["prediction_frames_between_detections"].as<int>()
+      : 1;
+  if (prediction_frames_between_detections < 0) {
+    tools::logger()->error("prediction_frames_between_detections must be zero or positive");
+    return 2;
+  }
+
   fs::path csv_path = cli.get<std::string>("output");
   if (csv_path.empty()) csv_path = default_csv_path();
 
@@ -384,6 +396,7 @@ int main(int argc, char * argv[])
   ControlSnapshot control_snapshot;
   std::atomic<bool> quit{false};
   std::atomic<uint64_t> reset_generation{0};
+  tools::PredictionCadence prediction_cadence(prediction_frames_between_detections);
 
   auto control_thread = std::thread([&]() {
     const auto start_time = std::chrono::steady_clock::now();
@@ -395,6 +408,7 @@ int main(int argc, char * argv[])
     double previous_command_yaw = nan_value();
     double previous_command_pitch = nan_value();
     auto command_stable_since = std::chrono::steady_clock::now();
+    auto next_control_time = std::chrono::steady_clock::now();
 
     while (!quit.load()) {
       const auto now = std::chrono::steady_clock::now();
@@ -609,7 +623,12 @@ int main(int argc, char * argv[])
         control_snapshot = snapshot;
       }
 
-      std::this_thread::sleep_for(7ms);
+      const auto control_period = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+        std::chrono::duration<double>(prediction_cadence.control_period_s()));
+      next_control_time += control_period;
+      const auto after_control = std::chrono::steady_clock::now();
+      if (next_control_time <= after_control) next_control_time = after_control + control_period;
+      std::this_thread::sleep_until(next_control_time);
     }
   });
 
@@ -654,6 +673,7 @@ int main(int argc, char * argv[])
     image = std::move(result->frame);
     timestamp = result->timestamp;
     auto drones = std::move(result->drones);
+    prediction_cadence.observe(timestamp);
     const auto now = std::chrono::steady_clock::now();
     ++detection_window_count;
     const double window_s = std::chrono::duration<double>(now - detection_window_start).count();
