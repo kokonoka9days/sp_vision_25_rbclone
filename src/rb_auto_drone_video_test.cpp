@@ -20,7 +20,7 @@ namespace
 const std::string keys =
   "{help h usage ? |                         | 输出命令行参数说明}"
   "{config-path c  | ../configs/auto_drone.yaml | yaml配置文件路径}"
-  "{mode m         | async                  | 推理模式: async 或 sync}"
+  "{mode m         | async                  | 推理模式: async、latest 或 sync}"
   "{display        | true                   | 是否显示标注画面}"
   "{output-path o  |                        | 可选的标注视频输出路径}"
   "{start-frame s  | 1                     | 从输入视频第几帧开始识别（从1开始）}"
@@ -321,8 +321,8 @@ int main(int argc, char * argv[])
     tools::logger()->error("Input video path is required");
     return 2;
   }
-  if (mode != "async" && mode != "sync") {
-    tools::logger()->error("Invalid mode '{}'; expected async or sync", mode);
+  if (mode != "async" && mode != "latest" && mode != "sync") {
+    tools::logger()->error("Invalid mode '{}'; expected async, latest or sync", mode);
     return 2;
   }
   if (
@@ -471,7 +471,7 @@ int main(int argc, char * argv[])
       }
     }
 
-    if (mode == "async") {
+    if (mode == "async" || mode == "latest") {
       while (auto result = yolo.flush()) consume(std::move(*result), false);
     }
   } catch (const std::exception & e) {
@@ -495,18 +495,20 @@ int main(int argc, char * argv[])
   fmt::print(
     "Video: {}x{} @ {:.2f} FPS\n"
     "Mode: {}, inference threads: {}\n"
-    "Submitted: {}, completed: {}, detections: {}\n"
+    "Submitted: {}, completed: {}, dropped: {}, detections: {}\n"
     "Throughput: {:.2f} FPS total, {:.2f} FPS after warmup\n"
     "End-to-end latency: mean {:.2f} ms, P50 {:.2f} ms, P95 {:.2f} ms, max {:.2f} ms\n"
     "Stages mean: preprocess {:.2f} ms, request {:.2f} ms, postprocess {:.2f} ms\n",
     width, height, source_fps, mode, yolo.inference_threads(), submitted, completed,
-    total_detections, total_fps, steady_fps, latency_samples.mean(), latency_samples.percentile(0.50),
-    latency_samples.percentile(0.95), latency_samples.maximum(), preprocess_samples.mean(),
-    request_samples.mean(), postprocess_samples.mean());
+    yolo.dropped_frames(), total_detections, total_fps, steady_fps, latency_samples.mean(),
+    latency_samples.percentile(0.50), latency_samples.percentile(0.95),
+    latency_samples.maximum(), preprocess_samples.mean(), request_samples.mean(),
+    postprocess_samples.mean());
 
-  if (submitted != completed) {
+  if (submitted != completed + yolo.dropped_frames()) {
     tools::logger()->error(
-      "Submitted/completed mismatch: {}/{}", submitted, completed);
+      "Submitted/completed/dropped mismatch: {}/{}/{}", submitted, completed,
+      yolo.dropped_frames());
     return 1;
   }
   return 0;

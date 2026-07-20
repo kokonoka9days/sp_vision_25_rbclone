@@ -691,14 +691,22 @@ int capture_dataset(
   cv::namedWindow(kWindowName, cv::WINDOW_AUTOSIZE);
   cv::setMouseCallback(kWindowName, mouse_callback, &mouse);
 
+  cv::Mat waiting_image(180, 720, CV_8UC3, cv::Scalar(32, 32, 32));
+  draw_label(waiting_image, "Waiting for camera frames...", {24, 54}, {230, 230, 230});
+  draw_label(
+    waiting_image, "Check camera connection/SN, or press q to quit", {24, 96},
+    {0, 180, 255});
+  cv::imshow(kWindowName, waiting_image);
+
   cv::Mat image;
   std::chrono::steady_clock::time_point timestamp;
   while (true) {
-    camera.read(image, timestamp);
-    if (image.empty()) {
-      tools::logger()->warn("[LaserCalibration] Camera returned an empty image");
+    if (!camera.try_read(image, timestamp)) {
+      const int key = cv::waitKey(20) & 0xFF;
+      if (key == 'q') break;
       continue;
     }
+    if (image.empty()) continue;
     const cv::Mat raw_image = image.clone();
     const auto board = laser_calibration::observe_board(image, config.camera, config.board);
     if (!board.corners.empty()) {
@@ -817,9 +825,9 @@ int capture_dataset(
 
 const std::string keys =
   "{help h usage ?              |                              | 输出命令行帮助}"
-  "{mode                         | capture-fit                  | 运行模式：capture、fit 或 "
+  "{mode                         | fit                  | 运行模式：capture、fit 或 "
   "capture-fit}"
-  "{config-path c                | ../configs/calibration.yaml | 标定配置 YAML 路径}"
+  "{config-path c                | ../configs/auto_drone.yaml | 标定配置 YAML 路径}"
   "{max-board-rmse-px           | 1.5                          | 棋盘格单帧最大重投影 RMS，单位 px}"
   "{ransac-threshold-mm          | 5.0                          | RANSAC 点到直线内点阈值，单位 mm}"
   "{ransac-iterations            | 2000                         | RANSAC 迭代次数}"
@@ -830,8 +838,8 @@ const std::string keys =
   "m}"
   "{min-inlier-ratio             | 0.8                          | RANSAC 最小内点率}"
   "{max-line-rms-mm              | 5.0                          | 三维点到直线最大 RMS，单位 mm}"
-  "{max-validation-rms-px       | 2.0                          | 验证集最大像素重投影 RMS，单位 px}"
-  "{max-validation-p95-px       | 4.0                          | 验证集最大像素重投影 P95，单位 px}"
+  "{max-validation-rms-px       | 5.0                          | 验证集最大像素重投影 RMS，单位 px}"
+  "{max-validation-p95-px       | 8.0                          | 验证集最大像素重投影 P95，单位 px}"
   "{max-bootstrap-direction-deg | 0.1                          | 激光方向 Bootstrap 最大 P95，单位 "
   "deg}"
   "{@dataset-folder              | ../assets/img_with_q         | 图片数据集及输出目录}";

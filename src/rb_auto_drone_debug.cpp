@@ -14,6 +14,7 @@
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
 #include "tools/thread_safe_queue.hpp"
+#include "tools/recorder.hpp"
 
 // 无人机自瞄算法模块
 #include "tasks/auto_drone/drone_yolo.hpp"
@@ -50,6 +51,7 @@ int main(int argc, char * argv[])
   auto_drone::Tracker tracker(config_path, &solver);
   tracker.set_gimbal(&gimbal); // 传入云台以获取敌方颜色状态
   auto_drone::Planner planner(config_path);
+  // tools::Recorder record;
 
   // 4. 多线程通信队列 (容量设为1，保证规划线程总是拿到最新的目标)
   tools::ThreadSafeQueue<std::optional<auto_drone::Target>, true> target_queue(1);
@@ -135,8 +137,8 @@ int main(int argc, char * argv[])
 
       plotter.plot(data);
 
-      // 控制频率：~200Hz
-      std::this_thread::sleep_for(7ms);
+      // 控制频率：~100Hz
+      std::this_thread::sleep_for(5ms);
     }
   });
 
@@ -213,8 +215,9 @@ int main(int argc, char * argv[])
     tools::draw_text(
       img,
       fmt::format(
-        "YOLO: {:.1f}/{:.1f}/{:.1f} ms, {} threads", result->preprocess_ms,
-        result->request_ms, result->postprocess_ms, yolo.inference_threads()),
+        "YOLO: {:.1f}/{:.1f}/{:.1f} ms, {} streams, {} threads, {} dropped",
+        result->preprocess_ms, result->request_ms, result->postprocess_ms,
+        yolo.inference_streams(), yolo.inference_threads(), yolo.dropped_frames()),
       {40, 160}, {255, 255, 0});
     tools::draw_text(img, fmt::format("Gimbal Yaw: {:.2f}", yaw_deg), {40, 200}, {0, 128, 255});
     tools::draw_text(img, fmt::format("Gimbal Pitch: {:.2f}", pitch_deg), {40, 240}, {0, 255, 255});
@@ -232,6 +235,8 @@ int main(int argc, char * argv[])
     }
 
     // 缩小一半显示防止撑爆屏幕
+    // record.record(img,q,t);
+    
     cv::resize(img, img, {}, 0.5, 0.5);  
     cv::imshow("Auto Drone System", img);
 

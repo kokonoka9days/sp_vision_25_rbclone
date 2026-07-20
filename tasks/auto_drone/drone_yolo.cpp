@@ -24,7 +24,7 @@ int default_inference_threads()
 {
   const auto logical_threads = std::max(1U, std::thread::hardware_concurrency());
   const auto reserved_threads = logical_threads > 2 ? logical_threads - 2 : 1U;
-  return static_cast<int>(std::min(8U, reserved_threads));
+  return static_cast<int>(std::min(12U, reserved_threads));
 }
 }  // namespace
 
@@ -255,7 +255,7 @@ std::vector<Drone> YOLO::postprocess(const float * output, const Letterbox & let
 std::vector<Drone> YOLO::detect(const cv::Mat & frame)
 {
   if (frame.empty()) return {};
-  if (active_slot_) {
+  if (oldest_active_slot()) {
     throw std::logic_error("Cannot call synchronous detect while async inference is active");
   }
 
@@ -266,41 +266,62 @@ std::vector<Drone> YOLO::detect(const cv::Mat & frame)
 }
 
 std::optional<YOLOResult> YOLO::detect_async(
-  const cv::Mat & frame, std::chrono::steady_clock::time_point timestamp, std::uint64_t frame_id)
+  const cv::Mat & frame, std::chrono::steady_clock::time_point timestamp, std::uint64_t frame_id,bool drop_if_busy)
 {
   if (frame.empty()) return std::nullopt;
 
-  if (!active_slot_) {
-    auto & first = slots_[next_slot_];
-    prepare_slot(first, frame, timestamp, frame_id, true);
-    start_slot(first);
-    active_slot_ = next_slot_;
-    next_slot_ = (next_slot_ + 1) % slots_.size();
+  auto oldest_index = oldest_active_slot();
+  if (!oldest_index) {
+    auto & slot = slots_[*free_slot()];
+    prepare_slot(slot, frame, timestamp, frame_id, true);
+    start_slot(slot);
     return std::nullopt;
   }
 
-  const std::size_t finished_index = *active_slot_;
-  const std::size_t prepared_index = next_slot_;
-  auto & prepared = slots_[prepared_index];
-  prepare_slot(prepared, frame, timestamp, frame_id, true);
+  auto & oldest = slots_[*oldest_index];
+  if (!oldest.infer_request.wait_for(std::chrono::milliseconds{0})) {
+    if (const auto available_index = free_slot()) {
+      auto & available = slots_[*available_index];
+      prepare_slot(available, frame, timestamp, frame_id, true);
+      start_slot(available);
+      return std::nullopt;
+    }
+    if (drop_if_busy) {
+      ++dropped_frames_;
+      return std::nullopt;
+    }
+  }
 
-  auto & finished = slots_[finished_index];
-  finished.infer_request.wait();
-  start_slot(prepared);
-  active_slot_ = prepared_index;
-  next_slot_ = finished_index;
-
-  return finish_slot(finished);
+  auto result = finish_slot(oldest);
+  prepare_slot(oldest, frame, timestamp, frame_id, true);
+  start_slot(oldest);
+  return result;
 }
 
 std::optional<YOLOResult> YOLO::flush()
 {
-  if (!active_slot_) return std::nullopt;
+  const auto oldest_index = oldest_active_slot();
+  if (!oldest_index) return std::nullopt;
 
-  const std::size_t finished_index = *active_slot_;
-  active_slot_.reset();
-  next_slot_ = finished_index;
-  return finish_slot(slots_[finished_index]);
+  return finish_slot(slots_[*oldest_index]);
+}
+
+std::optional<std::size_t> YOLO::free_slot() const
+{
+  for (std::size_t i = 0; i < slots_.size(); ++i) {
+    if (!slots_[i].active) return i;
+  }
+  return std::nullopt;
+}
+
+std::optional<std::size_t> YOLO::oldest_active_slot() const
+{
+  std::optional<std::size_t> oldest;
+  for (std::size_t i = 0; i < slots_.size(); ++i) {
+    if (!slots_[i].active) continue;
+    if (!oldest || slots_[i].frame_id < slots_[*oldest].frame_id) oldest = i;
+  }
+  return oldest;
 }
 
 void YOLO::wait_and_discard() noexcept
@@ -314,7 +335,6 @@ void YOLO::wait_and_discard() noexcept
     }
     slot.active = false;
   }
-  active_slot_.reset();
 }
 
 }  // namespace auto_drone

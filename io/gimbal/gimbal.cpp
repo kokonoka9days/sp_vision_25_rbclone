@@ -74,68 +74,48 @@ Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t) { return q
 
 PoseQueryDiagnostics Gimbal::q_diagnostic(std::chrono::steady_clock::time_point t)
 {
-  PoseQueryDiagnostics diagnostics;
-  diagnostics.requested_time = t;
-  while (true) {
-    auto [q_a, t_a] = queue_.pop();
-    diagnostics.sample_before_time = t_a;
+    PoseQueryDiagnostics diagnostics;
+    diagnostics.requested_time = t;
 
-    if (queue_.empty()) {
-      diagnostics.q = q_a;
-      diagnostics.used_sample_time = t_a;
-      diagnostics.returned_latest = true;
-      diagnostics.used_sample_age_ms = tools::delta_time(t, t_a) * 1e3;
-      return diagnostics;
+    while (true) {
+        auto [q_a, t_a] = queue_.pop();          // 获取最早样本（阻塞等待）
+        auto [q_b, t_b] = queue_.front();        // 获取下一个样本（队列至少有两个元素）
+
+        double t_ab = tools::delta_time(t_a, t_b);
+        double t_ac = tools::delta_time(t_a, t);
+        double k = t_ac / t_ab;                  // 插值因子，可能为负（外推）或大于1
+
+        Eigen::Quaterniond q_c = q_a.slerp(k, q_b).normalized();
+
+        // 情况1：请求时间早于第一个样本 → 外推（或返回最近值）
+        if (t < t_a) {
+            diagnostics.q = q_c;
+            diagnostics.interpolated = false;                // 不是插值，是外推
+            diagnostics.used_sample_time = t_a;              // 实际参考样本时间
+            diagnostics.requested_before_oldest = true;      // 标记
+            diagnostics.sample_before_time = t_a;
+            diagnostics.sample_after_time = t_b;
+            diagnostics.interpolation_factor = k;
+            return diagnostics;
+        }
+
+        // 情况2：请求时间不在 [t_a, t_b] 区间内（即 t > t_b）→ 等待新数据
+        if (!(t_a < t && t <= t_b)) {
+            continue;   // 不返回，继续下一轮循环，期待新数据进入队列
+        }
+
+        // 情况3：请求时间在区间内 → 插值结果
+        diagnostics.q = q_c;
+        diagnostics.interpolated = true;
+        diagnostics.used_sample_time = t;                  // 插值得到的时间点
+        diagnostics.sample_before_time = t_a;
+        diagnostics.sample_after_time = t_b;
+        diagnostics.interpolation_factor = k;
+        diagnostics.has_after_sample = true;
+        diagnostics.bracketed = true;
+        // 其他字段可按需设置
+        return diagnostics;
     }
-
-    auto [q_b, t_b] = queue_.front();
-
-    if (t > t_b) {
-      continue;
-    }
-
-    diagnostics.has_after_sample = true;
-    diagnostics.sample_after_time = t_b;
-    diagnostics.bracketed = t_a < t && t <= t_b;
-    diagnostics.requested_before_oldest = t < t_a;
-    diagnostics.sample_span_ms = tools::delta_time(t_b, t_a) * 1e3;
-
-    auto t_ab = tools::delta_time(t_a, t_b);
-    auto t_ac = tools::delta_time(t_a, t);
-
-    // 【修复1】：防止 t_ab 过小导致的除零错或 K 值爆炸
-    if (t_ab < 1e-4) {
-      diagnostics.q = q_a;
-      diagnostics.used_sample_time = t_a;
-      diagnostics.legacy_early_return = true;
-      diagnostics.used_sample_age_ms = tools::delta_time(t, t_a) * 1e3;
-      return diagnostics;  // 保留现有行为，诊断程序负责标记这个提前返回
-    }
-
-    auto k = t_ac / t_ab;
-    diagnostics.interpolation_factor = k;
-
-    // 【修复2】：限制 k 的范围。
-    // 允许合理的稍微外推（比如 -1.0 到 2.0 之间），但是拒绝离谱的疯狂外推
-    k = std::clamp(k, -1.0, 2.0);
-
-    Eigen::Quaterniond q_c = q_a.slerp(k, q_b).normalized();
-
-    // 如果目标时间比我们能查到的最老时间还老，就只能认命返回推算值了
-    if (t < t_a) {
-      diagnostics.q = q_c;
-      diagnostics.interpolated = true;
-      diagnostics.used_sample_time = t;
-      return diagnostics;
-    }
-
-    if (!(t_a < t && t <= t_b)) continue;
-
-    diagnostics.q = q_c;
-    diagnostics.interpolated = true;
-    diagnostics.used_sample_time = t;
-    return diagnostics;
-  }
 }
 
 DroneSendDiagnostics Gimbal::last_drone_send_diagnostics() const
@@ -143,6 +123,7 @@ DroneSendDiagnostics Gimbal::last_drone_send_diagnostics() const
   std::lock_guard<std::mutex> lock(send_diagnostics_mutex_);
   return last_drone_send_diagnostics_;
 }
+
 
 void Gimbal::sb_send(io::sb_VisionToGimbal VisionToGimbal)
 {
@@ -211,7 +192,7 @@ void Gimbal::drone_send(
   bool control, bool fire, float yaw, float yaw_vel, float yaw_acc, float pitch, float pitch_vel,
   float pitch_acc)
 {
-  // tx_data_.mode = control ? (fire ? 2 : 1) : 0;
+  drone_tx_date.mode = control;
   drone_tx_date.yaw = yaw;
   // tx_data_.yaw_vel = yaw_vel;
   // tx_data_.yaw_acc = yaw_acc;
@@ -290,7 +271,7 @@ void Gimbal::read_thread()
   while (!quit_) {
     auto now = std::chrono::steady_clock::now();
     if (std::chrono::duration_cast<std::chrono::seconds>(now - last_print_time).count() >= 1) {
-      tools::logger()->info("[Gimbal] 每秒成功接收帧数: {}", frame_count);
+      // tools::logger()->info("[Gimbal] 每秒成功接收帧数: {}", frame_count);
       frame_count = 0;
       last_print_time = now;
     }

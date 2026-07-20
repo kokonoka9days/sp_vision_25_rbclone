@@ -360,8 +360,8 @@ BoardObservation observe_board(
     cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
   }
   const cv::Size pattern_size(board.pattern_cols, board.pattern_rows);
-  const int flags = cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE;
-  if (!cv::findChessboardCorners(gray, pattern_size, observation.corners, flags)) {
+  if (!cv::findChessboardCornersSB(
+        gray, pattern_size, observation.corners, cv::CALIB_CB_NORMALIZE_IMAGE)) {
     observation.rejection_reason = "board_not_found";
     return observation;
   }

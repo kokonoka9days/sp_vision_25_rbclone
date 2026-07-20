@@ -14,7 +14,7 @@
 
 const std::string keys =
   "{help h usage ?  |                          | 输出命令行参数说明}"
-  "{@config-path c  | ../configs/calibration.yaml | yaml配置文件路径 }"
+  "{@config-path c  | ../configs/auto_drone.yaml | yaml配置文件路径 }"
   "{output-folder o |      ../assets/img_with_q   | 输出文件夹路径   }";
  
 void write_q(const std::string q_path, const Eigen::Quaterniond & q)
@@ -76,7 +76,7 @@ void capture_loop(
     }
     
 
-    cv::resize(img_with_ypr, img_with_ypr, {}, 0.2, 0.2);  // 显示时缩小图片尺寸
+    cv::resize(img_with_ypr, img_with_ypr, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
 
     // 按"s"保存图片和对应四元数，按"q"退出程序
     cv::imshow("Press s to save, q to quit", img_with_ypr);
