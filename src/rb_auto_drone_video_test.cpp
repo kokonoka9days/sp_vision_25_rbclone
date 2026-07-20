@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <deque>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -22,9 +23,11 @@ const std::string keys =
   "{mode m         | async                  | 推理模式: async 或 sync}"
   "{display        | true                   | 是否显示标注画面}"
   "{output-path o  |                        | 可选的标注视频输出路径}"
-  "{start-frame s  | 0                      | 起始帧下标}"
-  "{end-frame e    | 0                      | 结束帧下标，0表示直到EOF}"
-  "{@input-video   |  ../yolo_buff/123/蓝.mp4                      | 输入视频文件路径}";
+  "{start-frame s  | 1                     | 从输入视频第几帧开始识别（从1开始）}"
+  "{end-frame e    | 0                      | 识别到输入视频第几帧，0表示直到EOF}"
+  "{kalman-trajectory | true                 | 是否绘制卡尔曼滤波及预测轨迹}"
+  "{prediction-frames | 15                   | 卡尔曼轨迹向前预测的帧数}"
+  "{@input-video   |  ../快/6.avi                      | 输入视频文件路径}";
 
 struct Samples
 {
@@ -53,6 +56,220 @@ struct Samples
   double maximum() const
   {
     return values.empty() ? 0.0 : *std::max_element(values.begin(), values.end());
+  }
+};
+
+class ImageKalmanTrajectory
+{
+public:
+  explicit ImageKalmanTrajectory(int prediction_frames, std::size_t history_size = 60)
+  : filter_(4, 2, 0, CV_32F),
+    prediction_frames_(prediction_frames),
+    history_size_(history_size)
+  {
+    filter_.measurementMatrix = cv::Mat::zeros(2, 4, CV_32F);
+    filter_.measurementMatrix.at<float>(0, 0) = 1.0F;
+    filter_.measurementMatrix.at<float>(1, 1) = 1.0F;
+    cv::setIdentity(filter_.measurementNoiseCov, cv::Scalar::all(25.0));
+    cv::setIdentity(filter_.errorCovPost, cv::Scalar::all(1.0));
+  }
+
+  void update(const std::vector<auto_drone::Drone> & drones, std::uint64_t frame_number)
+  {
+    const auto observation = select_observation(drones);
+    if (!initialized_) {
+      if (observation) initialize(*observation, frame_number);
+      return;
+    }
+
+    const auto frame_delta = static_cast<float>(std::max<std::uint64_t>(
+      1, frame_number > last_frame_number_ ? frame_number - last_frame_number_ : 1));
+    configure_prediction(frame_delta);
+    filter_.predict();
+    last_frame_number_ = frame_number;
+
+    if (observation) {
+      cv::Mat observed(2, 1, CV_32F);
+      observed.at<float>(0) = observation->center.x;
+      observed.at<float>(1) = observation->center.y;
+      filter_.correct(observed);
+      constexpr float box_smoothing = 0.2F;
+      box_size_ = box_size_ * (1.0F - box_smoothing) + observation->box_size * box_smoothing;
+      missing_frames_ = 0;
+    } else {
+      missing_frames_ += static_cast<int>(std::lround(frame_delta));
+      if (missing_frames_ > max_missing_frames_) {
+        reset();
+        return;
+      }
+    }
+
+    append_current_position();
+  }
+
+  void draw(cv::Mat & frame) const
+  {
+    if (!initialized_ || history_.empty()) return;
+
+    const cv::Scalar history_color(0, 215, 255);
+    const cv::Scalar prediction_color(255, 0, 255);
+    for (std::size_t i = 1; i < history_.size(); ++i) {
+      draw_clipped_line(frame, history_[i - 1], history_[i], history_color, 2);
+    }
+
+    const auto current = history_.back();
+    cv::circle(frame, to_pixel(current), 5, history_color, -1, cv::LINE_AA);
+    cv::putText(
+      frame, "KF", to_pixel(current + cv::Point2f(8.0F, -8.0F)), cv::FONT_HERSHEY_SIMPLEX,
+      0.55, history_color, 2, cv::LINE_AA);
+
+    if (prediction_frames_ <= 0) return;
+    const cv::Point2f velocity(
+      filter_.statePost.at<float>(2), filter_.statePost.at<float>(3));
+    const cv::Point2f predicted = current + velocity * static_cast<float>(prediction_frames_);
+    draw_dashed_line(frame, current, predicted, prediction_color, 2);
+    draw_predicted_box(frame, predicted, box_size_, prediction_color);
+    cv::drawMarker(
+      frame, to_pixel(predicted), prediction_color, cv::MARKER_DIAMOND, 12, 2, cv::LINE_AA);
+    cv::putText(
+      frame, fmt::format("+{}f", prediction_frames_),
+      to_pixel(predicted + cv::Point2f(8.0F, -8.0F)), cv::FONT_HERSHEY_SIMPLEX, 0.55,
+      prediction_color, 2, cv::LINE_AA);
+  }
+
+private:
+  struct Observation
+  {
+    cv::Point2f center;
+    cv::Size2f box_size;
+  };
+
+  static constexpr int max_missing_frames_ = 30;
+  cv::KalmanFilter filter_;
+  int prediction_frames_;
+  std::size_t history_size_;
+  bool initialized_ = false;
+  int missing_frames_ = 0;
+  std::uint64_t last_frame_number_ = 0;
+  cv::Size2f box_size_;
+  std::deque<cv::Point2f> history_;
+
+  static std::optional<Observation> select_observation(
+    const std::vector<auto_drone::Drone> & drones)
+  {
+    if (drones.empty()) return std::nullopt;
+    const auto best = std::max_element(
+      drones.begin(), drones.end(), [](const auto & lhs, const auto & rhs) {
+        return lhs.confidence < rhs.confidence;
+      });
+    if (!std::isfinite(best->center.x) || !std::isfinite(best->center.y)) return std::nullopt;
+    if (best->box.width <= 0 || best->box.height <= 0) return std::nullopt;
+    return Observation{
+      best->center,
+      cv::Size2f(static_cast<float>(best->box.width), static_cast<float>(best->box.height))};
+  }
+
+  void initialize(const Observation & observation, std::uint64_t frame_number)
+  {
+    filter_.statePost =
+      (cv::Mat_<float>(4, 1) << observation.center.x, observation.center.y, 0.0F, 0.0F);
+    filter_.errorCovPost = cv::Mat::zeros(4, 4, CV_32F);
+    filter_.errorCovPost.at<float>(0, 0) = 25.0F;
+    filter_.errorCovPost.at<float>(1, 1) = 25.0F;
+    filter_.errorCovPost.at<float>(2, 2) = 100.0F;
+    filter_.errorCovPost.at<float>(3, 3) = 100.0F;
+    initialized_ = true;
+    missing_frames_ = 0;
+    last_frame_number_ = frame_number;
+    box_size_ = observation.box_size;
+    history_.clear();
+    history_.push_back(observation.center);
+  }
+
+  void configure_prediction(float dt)
+  {
+    filter_.transitionMatrix = (cv::Mat_<float>(4, 4) <<
+      1.0F, 0.0F, dt, 0.0F,
+      0.0F, 1.0F, 0.0F, dt,
+      0.0F, 0.0F, 1.0F, 0.0F,
+      0.0F, 0.0F, 0.0F, 1.0F);
+
+    const float dt2 = dt * dt;
+    const float dt3 = dt2 * dt;
+    const float dt4 = dt2 * dt2;
+    constexpr float acceleration_noise = 4.0F;
+    filter_.processNoiseCov = acceleration_noise * (cv::Mat_<float>(4, 4) <<
+      0.25F * dt4, 0.0F, 0.5F * dt3, 0.0F,
+      0.0F, 0.25F * dt4, 0.0F, 0.5F * dt3,
+      0.5F * dt3, 0.0F, dt2, 0.0F,
+      0.0F, 0.5F * dt3, 0.0F, dt2);
+  }
+
+  void append_current_position()
+  {
+    history_.emplace_back(filter_.statePost.at<float>(0), filter_.statePost.at<float>(1));
+    while (history_.size() > history_size_) history_.pop_front();
+  }
+
+  void reset()
+  {
+    initialized_ = false;
+    missing_frames_ = 0;
+    box_size_ = {};
+    history_.clear();
+  }
+
+  static cv::Point to_pixel(const cv::Point2f & point)
+  {
+    constexpr float coordinate_limit = 1000000.0F;
+    return {
+      cvRound(std::clamp(point.x, -coordinate_limit, coordinate_limit)),
+      cvRound(std::clamp(point.y, -coordinate_limit, coordinate_limit))};
+  }
+
+  static void draw_clipped_line(
+    cv::Mat & frame, const cv::Point2f & start, const cv::Point2f & end,
+    const cv::Scalar & color, int thickness)
+  {
+    auto clipped_start = to_pixel(start);
+    auto clipped_end = to_pixel(end);
+    if (cv::clipLine(frame.size(), clipped_start, clipped_end)) {
+      cv::line(frame, clipped_start, clipped_end, color, thickness, cv::LINE_AA);
+    }
+  }
+
+  static void draw_dashed_line(
+    cv::Mat & frame, const cv::Point2f & start, const cv::Point2f & end,
+    const cv::Scalar & color, int thickness)
+  {
+    const cv::Point2f delta = end - start;
+    const float length = std::sqrt(delta.dot(delta));
+    if (length < 1.0F) return;
+
+    constexpr float dash_length = 10.0F;
+    constexpr float gap_length = 7.0F;
+    const cv::Point2f direction = delta * (1.0F / length);
+    for (float offset = 0.0F; offset < length; offset += dash_length + gap_length) {
+      const auto dash_start = start + direction * offset;
+      const auto dash_end = start + direction * std::min(offset + dash_length, length);
+      draw_clipped_line(frame, dash_start, dash_end, color, thickness);
+    }
+  }
+
+  static void draw_predicted_box(
+    cv::Mat & frame, const cv::Point2f & center, const cv::Size2f & size,
+    const cv::Scalar & color)
+  {
+    if (size.width < 1.0F || size.height < 1.0F) return;
+    const cv::Point2f half_size(size.width * 0.5F, size.height * 0.5F);
+    const cv::Point2f top_left = center - half_size;
+    const cv::Point2f top_right(center.x + half_size.x, center.y - half_size.y);
+    const cv::Point2f bottom_left(center.x - half_size.x, center.y + half_size.y);
+    const cv::Point2f bottom_right = center + half_size;
+    draw_clipped_line(frame, top_left, top_right, color, 2);
+    draw_clipped_line(frame, top_right, bottom_right, color, 2);
+    draw_clipped_line(frame, bottom_right, bottom_left, color, 2);
+    draw_clipped_line(frame, bottom_left, top_left, color, 2);
   }
 };
 
@@ -95,8 +312,10 @@ int main(int argc, char * argv[])
   const auto mode = cli.get<std::string>("mode");
   const bool display = cli.get<bool>("display");
   const auto output_path = cli.get<std::string>("output-path");
-  const int start_frame = cli.get<int>("start-frame");
-  const int end_frame = cli.get<int>("end-frame");
+  const int start_frame_number = cli.get<int>("start-frame");
+  const int end_frame_number = cli.get<int>("end-frame");
+  const bool draw_kalman_trajectory = cli.get<bool>("kalman-trajectory");
+  const int prediction_frames = cli.get<int>("prediction-frames");
 
   if (input_path.empty()) {
     tools::logger()->error("Input video path is required");
@@ -106,8 +325,16 @@ int main(int argc, char * argv[])
     tools::logger()->error("Invalid mode '{}'; expected async or sync", mode);
     return 2;
   }
-  if (start_frame < 0 || end_frame < 0 || (end_frame > 0 && end_frame < start_frame)) {
-    tools::logger()->error("Invalid frame range: {}..{}", start_frame, end_frame);
+  if (
+    start_frame_number < 1 || end_frame_number < 0 ||
+    (end_frame_number > 0 && end_frame_number < start_frame_number)) {
+    tools::logger()->error(
+      "Invalid input video frame range: {}..{} (frame numbers start at 1)",
+      start_frame_number, end_frame_number);
+    return 2;
+  }
+  if (prediction_frames < 0) {
+    tools::logger()->error("prediction-frames must be zero or positive");
     return 2;
   }
 
@@ -121,9 +348,14 @@ int main(int argc, char * argv[])
   const int height = static_cast<int>(video.get(cv::CAP_PROP_FRAME_HEIGHT));
   double source_fps = video.get(cv::CAP_PROP_FPS);
   if (!std::isfinite(source_fps) || source_fps <= 0.0) source_fps = 30.0;
-  if (start_frame > 0 && !video.set(cv::CAP_PROP_POS_FRAMES, start_frame)) {
-    tools::logger()->error("Failed to seek input video to frame {}", start_frame);
-    return 2;
+
+  for (int skipped_frame_number = 1; skipped_frame_number < start_frame_number;
+       ++skipped_frame_number) {
+    if (!video.grab()) {
+      tools::logger()->error(
+        "Input video ended before requested start frame {}", start_frame_number);
+      return 2;
+    }
   }
 
   cv::VideoWriter writer;
@@ -141,6 +373,7 @@ int main(int argc, char * argv[])
   Samples preprocess_samples;
   Samples request_samples;
   Samples postprocess_samples;
+  ImageKalmanTrajectory kalman_trajectory(prediction_frames);
 
   const auto benchmark_start = std::chrono::steady_clock::now();
   auto steady_start = benchmark_start;
@@ -174,6 +407,10 @@ int main(int argc, char * argv[])
       steady_seconds > 0.0 ? steady_completed / steady_seconds : 0.0;
 
     draw_detections(result.frame, result.drones);
+    if (draw_kalman_trajectory) {
+      kalman_trajectory.update(result.drones, result.frame_id);
+      kalman_trajectory.draw(result.frame);
+    }
     tools::draw_text(
       result.frame, fmt::format("Frame: {}", result.frame_id), {30, 40}, {0, 255, 0});
     tools::draw_text(
@@ -209,14 +446,14 @@ int main(int argc, char * argv[])
 
   try {
     cv::Mat frame;
-    for (int frame_index = start_frame; !stop_requested; ++frame_index) {
-      if (end_frame > 0 && frame_index > end_frame) break;
+    for (int frame_number = start_frame_number; !stop_requested; ++frame_number) {
+      if (end_frame_number > 0 && frame_number > end_frame_number) break;
       if (!video.read(frame) || frame.empty()) break;
 
       const auto timestamp = std::chrono::steady_clock::now();
       submitted++;
       if (mode == "async") {
-        auto result = yolo.detect_async(frame, timestamp, static_cast<std::uint64_t>(frame_index));
+        auto result = yolo.detect_async(frame, timestamp, static_cast<std::uint64_t>(frame_number));
         if (result) consume(std::move(*result), true);
       } else {
         const auto inference_start = std::chrono::steady_clock::now();
@@ -227,7 +464,7 @@ int main(int argc, char * argv[])
         result.frame = frame.clone();
         result.drones = std::move(drones);
         result.timestamp = timestamp;
-        result.frame_id = static_cast<std::uint64_t>(frame_index);
+        result.frame_id = static_cast<std::uint64_t>(frame_number);
         result.request_ms =
           std::chrono::duration<double, std::milli>(inference_end - inference_start).count();
         consume(std::move(result), true);
