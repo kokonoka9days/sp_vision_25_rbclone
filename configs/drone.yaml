@@ -91,8 +91,8 @@ yaw_offset: 2.2                                              # ° yaw静靶偏�
 pitch_offset: -1.8                                           # ° pitch静靶偏移补偿
 comming_angle: 60                                            # ° 小陀螺出现侧角度阈值
 leaving_angle: 20                                            # ° 小陀螺消失侧角度阈值
-left_yaw_offset: -1                                          # ° 左枪管额外yaw偏移(无人机双枪管)
-right_yaw_offset: -0.6                                       # ° 右枪管额外yaw偏移(无人机双枪管)
+left_yaw_offset: -1                                          
+right_yaw_offset: -0.6                                      
 decision_speed: 10                                           # rad/s 高低速分界角速度
 high_speed_delay_time: 0.026                                 # s 高速小陀螺预测延迟
 low_speed_delay_time: 0.010                                  # s 低速平移预测延迟
