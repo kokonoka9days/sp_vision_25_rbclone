@@ -108,13 +108,16 @@ void Gimbal::sb_send(io::sb_VisionToGimbal VisionToGimbal)
 
 void Gimbal::omni_send(const io::OmniVisionToGimbal & VisionToGimbal)
 {
-  omni_send(VisionToGimbal.mode, VisionToGimbal.yaw);
+  omni_send(
+    VisionToGimbal.mode, VisionToGimbal.yaw, VisionToGimbal.pitch, VisionToGimbal.distance);
 }
 
-void Gimbal::omni_send(uint8_t mode, float yaw)
+void Gimbal::omni_send(uint8_t mode, float yaw, float pitch, float distance)
 {
   omni_tx_data_.mode = mode;
   omni_tx_data_.yaw = yaw;
+  omni_tx_data_.pitch = pitch;
+  omni_tx_data_.distance = distance;
 
   try {
     serial_.write(reinterpret_cast<const uint8_t *>(&omni_tx_data_), sizeof(omni_tx_data_));
