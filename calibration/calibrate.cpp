@@ -25,7 +25,7 @@ namespace fs = std::filesystem;
 
 const std::string keys =
   "{help h usage ? |                          | 输出命令行参数说明}"
-  "{config-path c  | ../configs/calibration.yaml | yaml配置文件路径 }"
+  "{config-path c  | ../configs/sb_short.yaml | yaml配置文件路径 }"
   "{@input-folder  | ../assets/img_with_q        | 输入文件夹路径   }";
 
 namespace
@@ -120,8 +120,13 @@ bool find_corners(
 {
   cv::Mat gray;
   cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
-  int flags = cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE;
-  if (fast_check) flags |= cv::CALIB_CB_FAST_CHECK;
+  int flags = 0;
+  if (fast_check) {
+    flags |= cv::CALIB_CB_FAST_CHECK;
+  } else {
+    // 仅在非快速模式下使用完整预处理（用于离线批处理等）
+    flags |= cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE;
+  }
 
   if (!cv::findChessboardCorners(gray, pattern_size, corners, flags)) return false;
 
@@ -316,7 +321,7 @@ std::vector<Sample> load_samples(
     }
 
     std::vector<cv::Point2f> corners;
-    const bool found = find_corners(image, config.pattern_size(), corners, false);
+    const bool found = find_corners(image, config.pattern_size(), corners, true);
     show_review(image, config, corners, found, index + 1, ids.size());
     fmt::print("[{}] {}\n", found ? "success" : "failure", image_path.string());
     if (!found) continue;
@@ -512,8 +517,8 @@ void capture_loop(
   io::Camera::initSDK();
   io::Camera camera(config_path);
 
-  int next_id = next_image_id(input_folder);
-  int saved_count = static_cast<int>(image_ids(input_folder).size());
+  int next_id = 1;          // 每次启动从 1 开始编号
+  int saved_count = 0;      // 显示已保存数量，初始为 0
   cv::namedWindow(kWindowName, cv::WINDOW_AUTOSIZE);
   tools::logger()->info("按 's' 保存图片和IMU数据，按 't' 开始标定，按 'q' 退出");
 

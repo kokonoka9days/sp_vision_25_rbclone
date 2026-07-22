@@ -59,6 +59,8 @@ struct BinocularAim{
   double short2long_point =  5.0;//(short_max_far + long_min_near)/2.;
   double long2short_point = 3.5;
 
+  std::atomic<int> force_control_frames{0};
+
   /// @brief 长短焦强制切换
   void Switch(auto_aim::Tracker& tracker, bool forced_switch = false){
 
@@ -76,6 +78,8 @@ struct BinocularAim{
       is_short = !is_short;
       switch_time_point = std::chrono::steady_clock::now();
       tracker.setSolver(this->solvers.aim_ptr); 
+
+      force_control_frames = 5;
       
       // if(is_short)
       // {

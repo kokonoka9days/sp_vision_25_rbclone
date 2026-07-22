@@ -60,14 +60,15 @@ int main(int argc, char * argv[])
     const auto state = gimbal.state();
     const Eigen::Vector3d gimbal_euler(state.yaw / 57.3, state.pitch / 57.3, 0.0);
 
-    const auto vision_cmd =
-      decider.decide_g(yolo, gimbal_euler, left_camera, right_camera, left_solver, right_solver);
+    float target_distance = 0.0f;
+    const auto vision_cmd = decider.decide_g(
+      yolo, gimbal_euler, left_camera, right_camera, left_solver, right_solver, &target_distance);
 
-    gimbal.omni_send(vision_cmd.mode, vision_cmd.yaw);
+    gimbal.omni_send(vision_cmd.mode, vision_cmd.yaw, vision_cmd.pitch, target_distance);
     std::this_thread::sleep_for(1ms);
   }
 
-  gimbal.omni_send(0, 0.0f);
+  gimbal.omni_send(0, 0.0f, 0.0f, 0.0f);
   tools::logger()->info("[OmniPerception] stopped.");
 
   return 0;

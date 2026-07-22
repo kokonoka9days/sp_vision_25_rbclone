@@ -30,8 +30,8 @@ struct __attribute__((packed)) GimbalToVision
   float q[4];    // wxyz顺序
   float bullet_speed;
   uint16_t bullet_count;  // 子弹累计发送次数
-  // float gimbal_yaw;
-  // float gimbal_pitch;
+  float gimbal_yaw;
+  float gimbal_pitch;
   uint16_t crc16;
 };
 
@@ -71,12 +71,14 @@ struct __attribute__((packed)) OmniVisionToGimbal
 {
   uint8_t head = {0x66};
   uint8_t mode = 0;
-  float yaw = 0;
+  float yaw = 0;       // rad
+  float pitch = 0;     // rad
+  float distance = 0;  // m, target-to-gimbal 3D distance
   uint8_t end = {0x11};
 };
 
 static_assert(sizeof(VisionToGimbal) <= 64);
-static_assert(sizeof(OmniVisionToGimbal) <= 64);
+static_assert(sizeof(OmniVisionToGimbal) == 15);
 
 enum class GimbalMode
 {
@@ -125,7 +127,7 @@ public:
 
   void sb_send(io::sb_VisionToGimbal VisionToGimbal);
 
-  void omni_send(uint8_t mode, float yaw);
+  void omni_send(uint8_t mode, float yaw, float pitch, float distance);
 
   void omni_send(const io::OmniVisionToGimbal & VisionToGimbal);
 
