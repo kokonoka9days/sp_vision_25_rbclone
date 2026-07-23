@@ -107,9 +107,6 @@ if(OPENVINO_MAKE)
     add_executable(4cmaera_test tests/4cmaera_test.cpp)
     target_link_libraries(4cmaera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
-    add_executable(camera_thread_test tests/camera_thread_test.cpp)
-    target_link_libraries(camera_thread_test ${OpenCV_LIBS} fmt::fmt auto_aim tools io)
-
     add_executable(cameras_test tests/cameras_test.cpp)
 target_link_libraries(cameras_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
@@ -125,8 +122,6 @@ if(TENSOR_RT_MAKE)
     add_executable(auto_aim_test_async tests/auto_aim_test_async.cpp)
     target_link_libraries(auto_aim_test_async ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
-    
-
     add_executable(rbnx_auto_aim_debug src/rbnx_auto_aim_debug.cpp)
     target_link_libraries(rbnx_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim  tools io)
 
@@ -134,13 +129,10 @@ endif()
 
 
 add_executable(camera_test tests/camera_test.cpp)
-add_executable(rv_camera_detect_test tests/rv_camera_detect_test.cpp)
-
 target_link_libraries(camera_test ${OpenCV_LIBS} fmt::fmt tools io)
-target_link_libraries(rv_camera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim  tools io)
-target_link_libraries(cboard_test ${OpenCV_LIBS} fmt::fmt tools io)
-target_link_libraries(fire_test ${OpenCV_LIBS} fmt::fmt tools io)
 
+add_executable(rv_camera_detect_test tests/rv_camera_detect_test.cpp)
+target_link_libraries(rv_camera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim  tools io)
 
 add_executable(gimbal_test tests/gimbal_test.cpp)
 target_link_libraries(gimbal_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
