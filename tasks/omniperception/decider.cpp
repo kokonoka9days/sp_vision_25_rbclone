@@ -295,7 +295,7 @@ Eigen::Vector2d Decider::delta_angle_3d(
     left_solver.omn_dig_yaw_solve(armors.front(), Eigen::Vector3d(0,0,-(105. * CV_PI / 180.0)), Eigen::Vector3d(-0.127611, -0.136932, 0.16) );
     auto xyz = armors.front().xyz_in_gimbal;
     tools::logger()->info("omn_xyz :x{}, y{} ,z{}", xyz(0), xyz(1), xyz(2));
-    auto ypd_angle = 140 /57.3 - std::atan2(xyz(0), xyz(1));
+    auto ypd_angle = 145 /57.3 - std::atan2(xyz(0), xyz(1));
     delta_angle[0] = ypd_angle;
     delta_angle[1] =std::atan2(xyz(2), std::sqrt(xyz(0) * xyz(0) + xyz(1) * xyz(1))); 
     return delta_angle;        

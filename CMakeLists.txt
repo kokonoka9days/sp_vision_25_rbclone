@@ -13,10 +13,10 @@ message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}-------
 
 
 # openvino依赖
-set(OPENVINO_MAKE OFF)
+set(OPENVINO_MAKE ON)
 
 # tensorRT依赖
-set(TENSOR_RT_MAKE ON)
+set(TENSOR_RT_MAKE OFF)
 
 find_package(OpenCV REQUIRED)
 find_package(fmt REQUIRED)
