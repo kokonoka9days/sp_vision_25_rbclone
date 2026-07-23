@@ -52,19 +52,24 @@ endif()
 
 ####################src###################
 if(OPENVINO_MAKE)
-add_executable(rb_auto_aim_debug  src/rb_auto_aim_debug.cpp)
-add_executable(rb_binocular_aim_debug  src/rb_binocular_aim_debug.cpp)
-add_executable(sb_omn_aim_mpc src/sb_omn_aim_mpc.cpp)
-add_executable(hero  src/hero.cpp)
-add_executable(rb_auto_standard_debug  src/rb_auto_standard_debug.cpp)
-add_executable(rb_auto_standard  src/rb_auto_standard.cpp)
+    add_executable(rb_auto_aim_debug  src/rb_auto_aim_debug.cpp)
+    add_executable(rb_binocular_aim_debug  src/rb_binocular_aim_debug.cpp)
+    add_executable(sb_omn_aim_mpc src/sb_omn_aim_mpc.cpp)
+    add_executable(hero  src/hero.cpp)
+    add_executable(rb_auto_standard_debug  src/rb_auto_standard_debug.cpp)
+    add_executable(rb_auto_standard  src/rb_auto_standard.cpp)
 
-target_link_libraries(rb_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
-target_link_libraries(sb_omn_aim_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io omniperception)
-target_link_libraries(rb_binocular_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
-target_link_libraries(hero ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
-target_link_libraries(rb_auto_standard_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
-target_link_libraries(rb_auto_standard ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
+    target_link_libraries(rb_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
+    target_link_libraries(sb_omn_aim_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io omniperception)
+    target_link_libraries(rb_binocular_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
+    target_link_libraries(hero ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
+    target_link_libraries(rb_auto_standard_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
+    target_link_libraries(rb_auto_standard ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
+endif()
+if(TENSOR_RT_MAKE)
+
+    add_executable(rbnx_auto_aim_debug src/rbnx_auto_aim_debug.cpp)
+    target_link_libraries(rbnx_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim  tools io)
 endif()
 # rv
 add_executable(rb_rv_aim_debug src/rb_rv_aim_debug.cpp)
@@ -113,17 +118,11 @@ target_link_libraries(cameras_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io aut
 endif()
 
 if(TENSOR_RT_MAKE)
-    add_executable(trt_camera_detect_test tests/trt_camera_detect_test.cpp)
-    target_link_libraries(trt_camera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools auto_aim io)
-
     add_executable(auto_aim_test tests/auto_aim_test.cpp)
     target_link_libraries(auto_aim_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
     add_executable(auto_aim_test_async tests/auto_aim_test_async.cpp)
     target_link_libraries(auto_aim_test_async ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
-
-    add_executable(rbnx_auto_aim_debug src/rbnx_auto_aim_debug.cpp)
-    target_link_libraries(rbnx_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim  tools io)
 
 endif()
 
