@@ -3,6 +3,8 @@
 #include <boost/math/interpolators/pchip.hpp>
 #include <unsupported/Eigen/FFT>
 
+#include "logger.hpp"
+
 
 namespace tools
 {
@@ -72,9 +74,15 @@ double FFTExample::detect_period_by_autocorr(const Eigen::VectorXd& x, double dt
         }
     }
     double norm = xm.squaredNorm();
-    if (norm < 1e-6) return -1.0;
+    if (norm < 1e-6) {
+        tools::logger()->warn("[FFT] 信号能量过低 norm = {}, 无法检测周期", norm);
+        return -1.0;
+    }
     double peak = max_corr / norm;
-    if (peak < 0.5) return -1.0;
+    if (peak < 0.5) {
+        tools::logger()->warn("[FFT] 信号周期性不明显peak = {}, 无法检测周期", peak);
+        return -1.0;
+    }
     return best_lag * dt;
 }
 

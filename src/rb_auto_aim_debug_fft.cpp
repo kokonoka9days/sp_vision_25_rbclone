@@ -161,7 +161,6 @@ int main(int argc, char * argv[])
       }else
         std::this_thread::sleep_for(1s);
     }
-
   });
 
   cv::Mat img;
