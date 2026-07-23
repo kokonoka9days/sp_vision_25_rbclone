@@ -31,7 +31,7 @@ int main(int argc, char * argv[])
 {
   tools::Exiter exiter;
   tools::Plotter plotter;
-  tools::Recorder recorder;
+  // tools::Recorder recorder(90);
   int i =0;
   
   cv::CommandLineParser cli(argc, argv, keys);
@@ -40,6 +40,7 @@ int main(int argc, char * argv[])
     return 0;
   }
 
+  io::Camera::initSDK();
   
   // 全向感知相机（工业相机）
   std::string omnl_yaml_name = cli.get<std::string>("l_cam");
@@ -56,7 +57,7 @@ int main(int argc, char * argv[])
   // io::Camera back_camera("configs/camera.yaml");
   tools::logger()->info("初始化");
   // 改为使用Gimbal串口通信（替代CBoard）
-  // io::Gimbal gimbal(omnl_yaml_name);
+  io::Gimbal gimbal(omnl_yaml_name);
 
   auto_aim::Solver solver(omnl_yaml_name);
   
@@ -78,11 +79,12 @@ int main(int argc, char * argv[])
   // 主循环5
   while (!exiter.exit()) {
 
-    omn_caml.read(img1, t1);
-    omn_camr.read(img2, t2);
+    // omn_caml.read(img1, t1);
+    // omn_camr.read(img2, t2);
 
     // 获取云台欧拉角
     auto gimbal_euler = tools::eulers(solver.R_gimbal2world(), 2, 1, 0);
+    auto q = gimbal.q(t1);
     static io::VisionToGimbal last_vision_cmd;
     // 全向感知模式
     io::VisionToGimbal vision_cmd = decider.decide_g(
@@ -94,13 +96,14 @@ int main(int argc, char * argv[])
     // data["yaw"] =(float)vision_cmd.yaw;
 
     plotter.plot(data);
+    // recorder.record(img1, q, t1);
     
     // gimbal.send(vision_cmd);
 
-    cv::imshow("l_cam", img1);
-    cv::imshow("r_cam", img2);
-    auto key = cv::waitKey(1);
-    if (key == 'q') break;
+    // cv::imshow("l_cam", img1);
+    // cv::imshow("r_cam", img2);
+    // auto key = cv::waitKey(1);
+    // if (key == 'q') break;
     
 
 }

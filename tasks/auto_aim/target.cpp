@@ -197,6 +197,8 @@ void Target::update(const Armor & armor)
 {
   int id = 0;
 
+  
+
 
   if (this->name == ArmorName::outpost) {
     // 【策略 A：前哨站专用】
@@ -249,6 +251,10 @@ void Target::update(const Armor & armor)
     if (last_cam_is_short != cam_is_short) {
       cam_is_switch_time_point = std::chrono::steady_clock::now();
       last_cam_is_short = cam_is_short;
+    }
+    if(last_cam_is_short){
+      // tools::logger()->info("[Target] last_cam_is_short");
+      
     }
     auto now = std::chrono::steady_clock::now();
     double cam_is_switch_lter_dt = tools::delta_time(now, cam_is_switch_time_point);

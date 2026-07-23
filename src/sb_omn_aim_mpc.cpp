@@ -19,7 +19,7 @@
 
 const std::string keys =
   "{help h usage ? |                                             | 输出命令行参数说明}"
-  "{short_camera   | ../configs/sb_short.yaml                          | 短焦相机配置文件路径 }"
+  "{short_camera   | ../configs/sb_long.yaml                          | 短焦相机配置文件路径 }"
   "{long_camera    | ../configs/sb_long.yaml                     | 长焦相机配置文件路径 }"
   "{l_cam          | ../configs/omn_camera_left.yaml | 左感知相机 }"
   "{r_cam          | ../configs/omn_camera_right.yaml  | 右感知相机 }";
@@ -39,16 +39,12 @@ int main(int argc, char * argv[])
     cli.printMessage();
     return 0;
   }
+
+  io::Camera::initSDK();
+  
   auto short_camera_config_path = cli.get<std::string>("short_camera");
   auto long_camera_config_path = cli.get<std::string>("long_camera");
-
-
-  // 主相机（工业相机）
-  io::Camera short_camera(short_camera_config_path);
-  // io::Camera long_camera(long_camera_config_path);
-  
-  
-  // 全向感知相机（工业相机）
+ // 全向感知相机（工业相机）
   std::string omnl_yaml_name = cli.get<std::string>("l_cam");
   std::string omnr_yaml_name = cli.get<std::string>("r_cam");
   io::Camera omn_cam1(omnl_yaml_name);
@@ -57,6 +53,13 @@ int main(int argc, char * argv[])
   auto omn_r_yaml = tools::load(omnr_yaml_name);
   omn_cam1.main_and_secondary = tools::read<std::string>(omn_l_yaml, "main_and_secondary");
   omn_cam2.main_and_secondary = tools::read<std::string>(omn_r_yaml, "main_and_secondary");
+
+  // 主相机（工业相机）
+  io::Camera short_camera(short_camera_config_path);
+  // io::Camera long_camera(long_camera_config_path);
+  
+  
+ 
   // io::Camera back_camera("configs/camera.yaml");
   
   // 改为使用Gimbal串口通信（替代CBoard）
@@ -119,7 +122,7 @@ int main(int argc, char * argv[])
         //MPC预测以及+自家火控
         // auto_aim::Planner * plan_short_or_long = target->cam_is_short ? &bincameras.planners.short_aim : &bincameras.planners.long_aim;
         auto_aim::Planner * plan_short_or_long = &short_camera_planner;
-        auto plan =  plan_short_or_long->plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
+        auto plan =  plan_short_or_long->plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::SB);
         // 1. 设置默认值
         uint8_t name = 0;
         float tx = 0.0f;

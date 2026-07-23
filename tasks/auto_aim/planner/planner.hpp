@@ -37,7 +37,8 @@ public:
   enum ShootStrategy{//开火策略
     Dynamics,          //动力学
     rbSuppressiveFire, //旧火控,火力压制
-    rbHero             //英雄
+    rbHero,             //英雄
+    SB                  //哨兵
   };
   Eigen::Vector4d debug_xyza;
   double aim_target_yaw;
@@ -58,7 +59,8 @@ public:
 
 
     auto future = std::chrono::steady_clock::now() + std::chrono::microseconds(int(delay_time * 1e6));
-
+    
+    
     target->predict(future);
 
     switch (strategy)
@@ -72,6 +74,8 @@ public:
     case rbHero:
       return rbHeroplan(*target, bullet_speed, gimbal_yaw);
       break;
+      case SB:
+      return sbplan(*target, bullet_speed, gimbal_yaw);
     default:
       // tools::logger()->warn("planner model error!");
       break;
@@ -80,15 +84,19 @@ public:
     
   }
   Plan rbplan(Target target, double bullet_speed, double gimbal_yaw);
+  Plan sbplan(Target target, double bullet_speed, double gimbal_yaw);
   bool rbShoot(Target target, double gimbal_yaw,  bool tower_fixed_pitch = false);
   Plan rbHeroplan(Target target, double bullet_speed, double gimbal_yaw); 
 private:
+  bool is_far = false;
   double yaw_offset_;
   double pitch_offset_;
+  double far_pitch_offset_;
   double fire_thresh_;
   double target_dist_error_, target_h_error_;
   double low_speed_delay_time_, high_speed_delay_time_, decision_speed_;
   double small_armor_tolerance, big_armor_tolerance;
+  double tower_and_base_armor_tolerance_;
   double gimbal_control_delay;
   double tower_pitch_prediction_time_;
 

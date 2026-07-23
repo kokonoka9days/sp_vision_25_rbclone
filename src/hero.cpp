@@ -94,7 +94,6 @@ int main(int argc, char * argv[])
       data["plan_pitch"] = plan.pitch * 57.3;
       data["plan_pitch_vel"] = plan.pitch_vel;
       data["plan_pitch_acc"] = plan.pitch_acc;
-
       data["fire"] = plan.fire ? 1 : 0;
       data["fired"] = fired ? 1 : 0;
 

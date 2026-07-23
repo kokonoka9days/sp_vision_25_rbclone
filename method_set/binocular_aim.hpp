@@ -56,19 +56,23 @@ struct BinocularAim{
   // double long_min_near = 1.5, long_max_far = 5.5;
 
   // 缓冲区 far2near and near2far
-  double short2long_point =  4.4;//(short_max_far + long_min_near)/2.;
-  double long2short_point = 2.5;
+  double short2long_point =  5.0;//(short_max_far + long_min_near)/2.;
+  double long2short_point = 3.5;
 
   /// @brief 长短焦强制切换
-  void Switch(auto_aim::Tracker& tracker){
+  void Switch(auto_aim::Tracker& tracker, bool forced_switch = false){
 
-    if(tools::delta_time(std::chrono::steady_clock::now(), switch_time_point) < 1.5) return ;
-    if(is_short && tracker.get_update_count() < 130 ) return;
+    if(!forced_switch){
+      if(tools::delta_time(std::chrono::steady_clock::now(), switch_time_point) < 3.0) return ;
+      if(is_short && tracker.get_update_count() < 70 ) return;      
+    }
     auto is_switch = [&](){
       this->cameras.aim_ptr->clear_camera_frame_buffer();
+      // this->cameras.aim_ptr->pause();
       this->cameras.Switch();
       this->solvers.Switch();
       this->planners.Switch();
+      // this->cameras.aim_ptr->resume();
       is_short = !is_short;
       switch_time_point = std::chrono::steady_clock::now();
       tracker.setSolver(this->solvers.aim_ptr); 
@@ -110,10 +114,10 @@ struct BinocularAim{
       if(tools::delta_time(std::chrono::steady_clock::now(), 
             this->cameras.aim_ptr->get_last_read_t()) > 1) {
         Switch(tracker);//切换至另一个相机
-        // tools::logger()->debug("切换相机");
+        tools::logger()->debug("切换相机");
       }
       
-      // tools::logger()->debug("死循环");
+      tools::logger()->debug("死循环");
       // if(tools::delta_time(std::chrono::steady_clock::now(), 
       //       this->cameras.aim_ptr->get_last_read_t()) > 1) {
       //   if(camera_state == CameraState::whack){

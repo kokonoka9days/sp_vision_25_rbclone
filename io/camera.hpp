@@ -24,6 +24,7 @@ public:
   virtual void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) = 0;
   virtual bool try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) = 0;
 
+
   virtual void pause() {} //停止
   virtual void resume() {} //开启
 
@@ -35,9 +36,13 @@ class Camera
 public:
   std::string main_and_secondary = "main"; //是否是主相机
   std::chrono::microseconds timestamp_offset = std::chrono::microseconds(0); //时间戳偏移量
-  
+  cv::Mat img_gamma_lut;
+  double  img_gamma = 1.0;
+
 
   Camera(const std::string & config_path);
+
+  static void initSDK();
   void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp);
   bool try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp);
 

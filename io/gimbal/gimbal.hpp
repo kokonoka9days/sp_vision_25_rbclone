@@ -25,7 +25,7 @@ enum class WorkMode : uint8_t
 struct __attribute__((packed)) GimbalToVision
 {
   uint8_t head[2] = {0x5a,0x53};
-  uint8_t mode;  // 0: 空闲, 1: 自瞄, 2: 小符, 3: 大符  电控控制右键0，1
+  uint8_t mode;  // 0: 空闲, 1: 自瞄, 2: 小符, 3: 大符, 4:开长焦  电控控制右键0，1
   uint16_t color; // 0: 红色, 1: 蓝色
   float q[4];    // wxyz顺序
   float bullet_speed;
@@ -74,7 +74,8 @@ enum class GimbalMode
   IDLE,        // 空闲
   AUTO_AIM,    // 自瞄
   SMALL_BUFF,  // 小符
-  BIG_BUFF     // 大符
+  BIG_BUFF,     // 大符
+  LONG_FOCAL_LENGTH //长焦
 };
 
 struct GimbalState

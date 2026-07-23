@@ -60,28 +60,30 @@ DahengCamera::DahengCamera(std::string camera_sn,
       queue_(1),
       flip_(flip), mirror_(mirror)
 {
-    tools::logger()->info("[Daheng] 初始化大恒相机SDk...");
+    // tools::logger()->info("[Daheng] 初始化大恒相机SDk...");
     
-    // 初始化SDK
-    GX_STATUS status = GXInitLib();
-    if (status != GX_STATUS_SUCCESS) {
-        tools::logger()->error("[Daheng] 大恒相机初始化失败，错误码: {:#x}", status);
-        return;
-    }
+    Camera::initSDK();
     sdk_initialized_ = true;
     
-    // 关键修复：先枚举确认相机存在，等待1秒让设备准备好
-    if (!enum_and_check_camera()) {
-        tools::logger()->warn("[Daheng] 初始相机检查失败，将在守护线程中重试...");
-    }
-    
-    std::this_thread::sleep_for(std::chrono::milliseconds(200)); // 给设备准备时间
+    std::this_thread::sleep_for(std::chrono::milliseconds(500)); // 给设备准备时间
     
 
     daemon_thread_ = std::thread([this](){
+
+        // 关键修复：先枚举确认相机存在，等待1秒让设备准备好
+        bool camera_enum = enum_and_check_camera();
+        if (!camera_enum) {
+            tools::logger()->warn("[Daheng] 初始相机检查失败，将在守护线程中重试...");
+        }
+
         if (open_camera()) { /* 初次连接 */ }
         while (!daemon_quit_) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+            if(!camera_enum) {
+               camera_enum =  enum_and_check_camera();
+               continue;
+            }
 
             if ((!capture_quit_ && hDevice == nullptr) || !capturing_) {
                 tools::logger()->warn("[Daheng] SN={} 正在尝试从重新连接...", this->camera_sn_);
@@ -483,7 +485,7 @@ void DahengCamera::ProcessData(void *pImageBuf, void *pImageRaw8Buf, void *pImag
 
 void DahengCamera::pause() {
     is_paused_ = true; // 设置暂停标志位
-    this->queue_.clear();
+    
     if (hDevice != nullptr) {
         // GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_STOP);
     }
@@ -491,6 +493,7 @@ void DahengCamera::pause() {
 
 void DahengCamera::resume() {
     is_paused_ = false; // 清除暂停标志位
+    this->queue_.clear();
     if (hDevice != nullptr) {
         // GXSendCommand(hDevice, GX_COMMAND_ACQUISITION_START);
     }
