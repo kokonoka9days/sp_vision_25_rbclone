@@ -13,10 +13,10 @@ message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}-------
 
 
 # openvino依赖
-set(OPENVINO_MAKE OFF)
+set(OPENVINO_MAKE ON)
 
 # tensorRT依赖
-set(TENSOR_RT_MAKE ON)
+set(TENSOR_RT_MAKE OFF)
 
 find_package(OpenCV REQUIRED)
 find_package(fmt REQUIRED)
@@ -134,10 +134,15 @@ target_link_libraries(4cmaera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io aut
 add_executable(camera_thread_test tests/camera_thread_test.cpp)
 target_link_libraries(camera_thread_test ${OpenCV_LIBS} fmt::fmt auto_aim tools io)
 
-add_executable(time_calibrator tests/time_calibrator.cpp)
-add_executable(auto_label tests/auto_label.cpp)
+# add_executable(time_calibrator tests/time_calibrator.cpp)
+# target_link_libraries(time_calibrator ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+
+# add_executable(auto_label tests/auto_label.cpp)
+# target_link_libraries(auto_label ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+
 add_executable(cameras_test tests/cameras_test.cpp)
-target_link_libraries(time_calibrator ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+target_link_libraries(cameras_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+
 
 add_executable(planner_test_offline tests/planner_test_offline.cpp)
 target_link_libraries(planner_test_offline ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io omniperception)
