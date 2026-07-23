@@ -68,6 +68,7 @@ int main(int argc, char * argv[])
     uint16_t last_bullet_count = 0;
 
     while (!quit) {
+      auto plan_t_start = std::chrono::steady_clock::now();
       auto target = target_queue.front(); 
       auto gs = gimbal.state();
 
@@ -147,9 +148,9 @@ int main(int argc, char * argv[])
         }
 
         plotter.plot(data);  
-
-        std::this_thread::sleep_for(5ms);
       }
+      data["plan_thread_dt_s"] = tools::delta_time(std::chrono::steady_clock::now(), plan_t_start)*1000;
+      std::this_thread::sleep_for(5ms);
     }
   });
 
@@ -157,7 +158,7 @@ int main(int argc, char * argv[])
     while (!quit) {
       auto fft_t_start = std::chrono::steady_clock::now();
       if(fft.analyze()){
-        tools::logger()->info("[main] 轮腿上下起伏, 计算花费时长：{}s", tools::delta_time(std::chrono::steady_clock::now(), fft_t_start));
+        tools::logger()->info("[main] 轮腿上下起伏, 计算花费时长：{}ms", tools::delta_time(std::chrono::steady_clock::now(), fft_t_start)*1000);
       }else
         std::this_thread::sleep_for(1s);
     }
