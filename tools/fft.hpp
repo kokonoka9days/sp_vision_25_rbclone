@@ -41,6 +41,8 @@ public:
         return last_amp_ * std::cos(2 * M_PI * last_freq_ * t + last_phase_ + phase_offset_); 
     }
 
+    double get_val_buf_front() const { return val_buf_.front(); }
+
     bool get_is_periodic() const { return is_periodic_; }
     void set_phase_offset(double offset) { phase_offset_ = offset; }
 

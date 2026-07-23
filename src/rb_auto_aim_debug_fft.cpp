@@ -145,6 +145,7 @@ int main(int argc, char * argv[])
         if(fft.get_is_periodic()){
           data["fft_value"] = fft.get_value(tools::delta_time(target->getTimePoint(), t0));
           data["target_xyz_in_world_z"] = target->xyz_in_world[2];
+          data["fft_original_value"] = fft.get_val_buf_front(); //低通过后的数据
         }
 
         plotter.plot(data);  
