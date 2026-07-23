@@ -8,6 +8,7 @@
 #include <string>
 #include <thread>
 #include <tuple>
+#include <vector>
 
 #include "serial/serial.h"
 #include "tools/thread_safe_queue.hpp"
@@ -137,6 +138,7 @@ public:
 
 private:
   serial::Serial serial_;
+  std::vector<std::string> com_ports_;
 
   std::thread thread_;
   std::atomic<bool> quit_ = false;
@@ -155,6 +157,7 @@ private:
   int gimbal_yaw2vision, gimbal_pitch2vision, gimbal_roll2vision;
 
   bool read(uint8_t * buffer, size_t size);
+  bool open_serial();
   void read_thread();
   void reconnect();
 };
