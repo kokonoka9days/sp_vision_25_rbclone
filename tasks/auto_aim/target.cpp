@@ -99,8 +99,14 @@ void Target::predict(std::chrono::steady_clock::time_point t)
   predict(dt);
   t_ = t;
 }
+void Target::predict(std::chrono::steady_clock::time_point t,  Eigen::VectorXd u_xyz)
+{
+  auto dt = tools::delta_time(t, t_);
+  predict(dt);
+  t_ = t;
+}
 
-void Target::predict(double dt)
+void Target::predict(double dt, Eigen::VectorXd u_xyz)
 {
   double vyaw = std::abs(ekf_.x[7]);
   double v_linear = std::hypot(ekf_.x[1], ekf_.x[3]); // 计算XY方向合成线速度 
@@ -179,8 +185,22 @@ void Target::predict(double dt)
   Q(4,4) = a_ * v1; Q(4,5) = b_ * v1; Q(5,4) = b_ * v1; Q(5,5) = c_ * v1; // Z
   Q(6,6) = a_ * v2; Q(6,7) = b_ * v2; Q(7,6) = b_ * v2; Q(7,7) = c_ * v2; // Yaw
 
+    // 控制矩阵
+  Eigen::MatrixXd B{
+    {0.5*dt*dt, 0,          0},
+    {dt,        0,          0},
+    {0,         0.5*dt*dt,  0},
+    {0,         dt,         0},
+    {0,         0,          0.5*dt*dt},
+    {0,         0,          dt},
+    {0,         0,          0},
+    {0,         0,          0},
+    {0,         0,          0},
+    {0,         0,          0},
+    {0,         0,          0}
+  };
   auto f = [&](const Eigen::VectorXd & x) -> Eigen::VectorXd {
-    Eigen::VectorXd x_prior = F * x;
+    Eigen::VectorXd x_prior = F * x + B * u_xyz;
     x_prior[6] = tools::limit_rad(x_prior[6]);
     return x_prior;
   };
@@ -196,9 +216,6 @@ void Target::predict(double dt)
 void Target::update(const Armor & armor)
 {
   int id = 0;
-
-  
-
 
   if (this->name == ArmorName::outpost) {
     // 【策略 A：前哨站专用】

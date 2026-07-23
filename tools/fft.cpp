@@ -1,0 +1,106 @@
+#include "fft.hpp"
+
+#include <boost/math/interpolators/pchip.hpp>
+#include <unsupported/Eigen/FFT>
+
+
+namespace tools
+{
+
+bool FFTExample::analyze(bool force) {
+    if (!force && (t_buf_.size() < min_points_ )) {
+        return is_periodic_;
+    }
+    last_analysis_frames_ = 0;
+    if (t_buf_.size() < min_points_) return false;
+
+    // 1. 将原始数据转为 vector (用于 PCHIP)
+    std::vector<double> t_vec(t_buf_.begin(), t_buf_.end());
+    std::vector<double> val_vec(val_buf_.begin(), val_buf_.end());
+
+    // 2. 构建均匀时间轴 (步长 0.01s)
+    double t_min = t_vec.front(), t_max = t_vec.back();
+    int n_uniform = static_cast<int>((t_max - t_min) / 0.01) + 1;
+    std::vector<double> t_uniform(n_uniform);
+    for (int i = 0; i < n_uniform; ++i)
+        t_uniform[i] = t_min + i * 0.01;
+
+    // 3. PCHIP 插值
+    auto pchip = boost::math::interpolators::pchip(
+        std::move(t_vec), std::move(val_vec));
+    Eigen::VectorXd val_uniform(n_uniform);
+    for (int i = 0; i < n_uniform; ++i)
+        val_uniform(i) = pchip(t_uniform[i]);
+
+    // 4. 自相关检测周期
+    double period = detect_period_by_autocorr(val_uniform, 0.01);
+    if (period <= 0.0) {
+        is_periodic_ = false;
+        return false;
+    }
+
+    // 5. FFT 提取参数
+    double freq, amp, phase;
+    if (!extract_base_harmonic(val_uniform, 0.01, freq, amp, phase)) {
+        is_periodic_ = false;
+        return false;
+    }
+
+    // 更新结果
+    is_periodic_ = true;
+    last_freq_ = freq;
+    last_amp_ = amp;
+    last_phase_ = phase;
+    last_period_ = 1.0 / freq;
+
+    return true;
+}
+
+
+double FFTExample::detect_period_by_autocorr(const Eigen::VectorXd& x, double dt) {
+    // 去直流
+    Eigen::VectorXd xm = x.array() - x.mean();
+    int N = x.size();
+    int max_lag = N / 2;
+    double max_corr = 0.0;
+    int best_lag = -1;
+    for (int lag = 1; lag < max_lag; ++lag) {
+        double corr = xm.head(N - lag).dot(xm.tail(N - lag));
+        if (corr > max_corr) {
+            max_corr = corr;
+            best_lag = lag;
+        }
+    }
+    double norm = xm.squaredNorm();
+    if (norm < 1e-6) return -1.0;
+    double peak = max_corr / norm;
+    if (peak < 0.5) return -1.0;
+    return best_lag * dt;
+}
+
+
+bool FFTExample::extract_base_harmonic(const Eigen::VectorXd& x, double dt,
+                            double& freq, double& amp, double& phase) {
+    int N = x.size();
+    Eigen::FFT<double> fft;
+    Eigen::VectorXcd X(N);
+    fft.fwd(X, x);
+    // 只考虑正频率
+    int n2 = N / 2;
+    double max_mag = 0.0;
+    int max_idx = 0;
+    for (int i = 1; i <= n2; ++i) {
+        double mag = std::abs(X(i));
+        if (mag > max_mag) {
+            max_mag = mag;
+            max_idx = i;
+        }
+    }
+    if (max_idx == 0) return false;
+    freq = max_idx / (N * dt);
+    amp = 2.0 * max_mag / N;
+    phase = std::arg(X(max_idx));
+    return true;
+}    
+} // namespace tools
+

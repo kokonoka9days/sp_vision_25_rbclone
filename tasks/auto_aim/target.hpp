@@ -38,7 +38,8 @@ public:
   Target(double x, double vyaw, double radius, double h);
 
   void predict(std::chrono::steady_clock::time_point t);
-  void predict(double dt);
+  void predict(double dt, Eigen::VectorXd u_xyz = Eigen::VectorXd::Zero(3));
+  void predict(std::chrono::steady_clock::time_point t,  Eigen::VectorXd u_xyz);
   void update(const Armor & armor);
 
   Eigen::VectorXd ekf_x() const;
