@@ -123,13 +123,12 @@ int main(int argc, char * argv[])
 
     auto q = gimbal.q(t - 3ms);
     if (last_t != std::chrono::steady_clock::time_point{}) {
-      double fps =
-        1. / std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count() * 1000000;
+      double fps = 1. / tools::delta_time(t , last_t);
       tools::logger()->info("capture fps: {:.2f}", fps);
     }
     last_t = t;
 
-    auto yolo_frame = yolo.detect(auto_aim::YOLOFrameData(img, q, t), frame_count);
+    auto yolo_frame = yolo.detect(auto_aim::YOLOFrameData(img, q, t), frame_count++);
     if (yolo_frame.is_empty) {
       tools::logger()->info("img_is_empty");
       continue;

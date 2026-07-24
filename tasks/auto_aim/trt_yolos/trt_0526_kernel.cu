@@ -30,15 +30,10 @@ __global__ void preprocess_kernel(const unsigned char* src, half* dst,
 
 extern "C" void launchPreprocess(const unsigned char* src, half* dst,
                                  int src_width, int src_height, int src_step,
-                                 int dst_width, int dst_height) {
-    size_t img_size = src_step * src_height;
-    unsigned char* d_src = nullptr;
-    cudaMalloc(&d_src, img_size);
-    cudaMemcpy(d_src, src, img_size, cudaMemcpyHostToDevice);
-
+                                 int dst_width, int dst_height,
+                                 cudaStream_t stream) {
     dim3 block(32, 32);
     dim3 grid((dst_width + block.x - 1) / block.x, (dst_height + block.y - 1) / block.y);
-    preprocess_kernel<<<grid, block>>>(d_src, dst, src_width, src_height, src_step, dst_width, dst_height);
-    cudaDeviceSynchronize();
-    cudaFree(d_src);
+    preprocess_kernel<<<grid, block, 0, stream>>>(
+        src, dst, src_width, src_height, src_step, dst_width, dst_height);
 }
