@@ -41,12 +41,13 @@ public:
     }
 
     double get_val_buf_front() const {
-        std::lock_guard<std::mutex> lock(mtx_);   // 若外部可能读取，也加锁
+        std::lock_guard<std::mutex> lock(mtx_);  
         return val_buf_.front();
     }
 
     bool get_is_periodic() const { return is_periodic_; }
     void set_phase_offset(double offset) { phase_offset_ = offset; }
+    double get_mean_val() const { return mean_val; }
 
 private:
     Buffer t_buf_, val_buf_;
@@ -57,6 +58,7 @@ private:
     size_t min_points_ = 400;
     size_t analysis_interval_frames_ = 30;
     size_t last_analysis_frames_ = 0;
+    double mean_val = 0.0;
 
     double detect_period_by_autocorr(const Eigen::VectorXd& x, double dt);
     bool extract_base_harmonic(const Eigen::VectorXd& x, double dt,

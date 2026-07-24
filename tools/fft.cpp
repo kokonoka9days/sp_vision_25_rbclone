@@ -24,7 +24,7 @@ bool FFTExample::analyze(bool force) {
         val_vec.assign(val_buf_.begin(), val_buf_.end());
     } // 锁在此释放，后续计算不再持有锁
 
-    double mean_val = std::accumulate(val_vec.begin(), val_vec.end(), 0.0) / val_vec.size();
+    this->mean_val = std::accumulate(val_vec.begin(), val_vec.end(), 0.0) / val_vec.size();
 
     double t_min = t_vec.front(), t_max = t_vec.back();
     int n_uniform = static_cast<int>((t_max - t_min) / 0.01) + 1;
