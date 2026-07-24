@@ -129,8 +129,9 @@ int main(int argc, char * argv[])
     }
     last_t = t;
 
-    auto yolo_frame = yolo.detect(auto_aim::YOLOFrameData(img, q, t), frame_count++);
+    auto yolo_frame = yolo.detect(auto_aim::YOLOFrameData(img, q, t), frame_count);
     if (yolo_frame.is_empty) {
+      tools::logger()->info("img_is_empty");
       continue;
     }
 
