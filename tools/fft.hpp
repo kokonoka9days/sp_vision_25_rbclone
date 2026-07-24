@@ -17,6 +17,7 @@ class FFTExample {
 public:
     using Buffer = boost::circular_buffer<double>;
 
+
     FFTExample(size_t max_points = 400)
         : t_buf_(max_points), val_buf_(max_points) {}
 
