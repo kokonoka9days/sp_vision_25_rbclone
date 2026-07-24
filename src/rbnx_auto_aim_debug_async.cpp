@@ -157,7 +157,13 @@ int main(int argc, char * argv[])
     // std::cout << "Roll: " << roll_deg << std::endl;
 
     solver.set_R_gimbal2world(q);
-    auto armors = yolo.detect(img);
+    auto yolo_frame = yolo.detect(auto_aim::YOLOFrameData(img, q, t));
+    img = yolo_frame.frame;
+    auto armors = yolo_frame.armors;
+    if(yolo_frame.is_empty){
+      std::cout<<"跳过"<<std::endl;
+      continue;
+    } 
     auto targets = tracker.track(armors, t);
     // recor.record(img, q, t);
   if(yaw_deg == 0 || pitch_deg ==0)std::cout<<"shit"<<std::endl;
