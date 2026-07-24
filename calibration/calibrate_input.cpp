@@ -681,7 +681,6 @@ void capture_loop(
   const std::string & config_path, const fs::path & input_folder, const CalibrationConfig & config)
 {
   io::Gimbal gimbal(config_path);
-  io::Camera::initSDK();
   io::Camera camera(config_path);
 
   int next_id = 1;          // 每次启动从 1 开始编号

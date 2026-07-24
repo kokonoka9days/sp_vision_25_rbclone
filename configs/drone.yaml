@@ -47,7 +47,7 @@ min_confidence: 0.8                                         # (0~1) 检测置信
 # mirror: false
 
 camera_name: "hikrobot"                                     # 相机品牌(枚举)
-camera_sn: "DA7188471"                                      # 相机序列号
+camera_sn: "DA9492714"                                      # 相机序列号
 exposure_us: 2500                                           # us 曝光时间
 gain: 0.8                                                   # (0~1) 增益
 # gamma: 0.7                                                   # [未使用] hikrobot不读取gamma(仅daheng/mindvision读取)
@@ -142,7 +142,7 @@ R_camera2gimbal: [-0.0075966848382389429, 0.028332439342095388, 0.99956968904643
 t_camera2gimbal: [-0.0064300910580854069, 0.037276498186262115, -0.055090648902732367]  # m 手眼标定平移向量
 
 
-com_port: "/dev/ttyUSB0"                                     # 串口设备路径
+com_port: "/dev/ttyACM0"                                     # 串口设备路径
 # 陀螺仪是否装错, 编号012分别代表电控坐标系ypr，想换旋转轴只需要对编号进行互换即可，负号就是对当前值取负，交换完再取负
 # 上车前记得对齐电控坐标系和济瞄惯性系
 gimbal_y1: 1                                                 # yaw轴映射(±1/±2/±3 负号取反)

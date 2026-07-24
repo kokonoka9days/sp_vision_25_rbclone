@@ -14,7 +14,7 @@
 #include "tasks/auto_aim/aimer.hpp"
 #include "tasks/auto_aim/shooter.hpp"
 #include "tasks/auto_aim/yolo.hpp"
-#include "tasks/auto_aim/detector.hpp"
+// #include "tasks/auto_aim/detector.hpp"
 #include "tools/exiter.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
@@ -30,7 +30,7 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/sb_long.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/drone.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -48,7 +48,7 @@ int main(int argc, char * argv[])
   io::Camera camera(config_path);
 
   auto_aim::YOLO yolo(config_path, true);
-  auto_aim::Detector detector(config_path, true);
+  // auto_aim::Detector detector(config_path, true);
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, &solver);
   tracker.set_gimbal(&gimbal);
@@ -75,6 +75,7 @@ int main(int argc, char * argv[])
       //MPC预测以及+自家火控
       auto plan = planner.plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
 
+      auto plan_t_end = std::chrono::steady_clock::now();
      // 1. 设置默认值
       uint8_t name = 0;
       float tx = 0.0f;
@@ -93,7 +94,8 @@ int main(int argc, char * argv[])
       plan.yaw, plan.yaw_vel, plan.yaw_acc,
       plan.pitch, plan.pitch_vel, plan.pitch_acc,
       tx,ty,name
-      );    
+      );
+
       
       auto fired = gs.bullet_count > last_bullet_count;
       last_bullet_count = gs.bullet_count;
@@ -143,14 +145,14 @@ int main(int argc, char * argv[])
         data["ekf_r"] = ekf_satic(8);   
 
         if(fft.get_is_periodic()){
-          data["fft_value"] = fft.get_value(tools::delta_time(target->getTimePoint(), t0)) + fft.get_mean_val(); //低通过后的数据
+          data["fft_value"] = fft.get_value(tools::delta_time(target->getTimePoint(), t0));
           data["target_xyz_in_world_z"] = target->xyz_in_world[2];
           data["fft_original_value"] = fft.get_val_buf_front(); //低通过后的数据
         }
-
+        data["plan_thread_dt_s"] = tools::delta_time(plan_t_end, plan_t_start)*1000;
         plotter.plot(data);  
       }
-      data["plan_thread_dt_s"] = tools::delta_time(std::chrono::steady_clock::now(), plan_t_start)*1000;
+      
       std::this_thread::sleep_for(5ms);
     }
   });
@@ -168,24 +170,48 @@ int main(int argc, char * argv[])
   cv::Mat img;
   std::chrono::steady_clock::time_point t;
   std::chrono::steady_clock::time_point last_t;
+  int frame_count = 0;
 
   while (!exiter.exit()) {
     camera.read(img, t);
     auto q = gimbal.q(t - 3ms);
 
     solver.set_R_gimbal2world(q);
-    auto armors = detector.detect(img);
+
+    auto yolo_frame = yolo.detect(auto_aim::YOLOFrameData(img, q, t), frame_count++);
+    if (yolo_frame.is_empty) {
+      tools::logger()->info("img_is_empty");
+      continue;
+    }
+
+    img = yolo_frame.frame;
+    q = yolo_frame.gimbal_q;
+    t = yolo_frame.timestamp;
+    auto armors = yolo_frame.armors;
+
     auto targets = tracker.track(armors, t);
     // recor.record(img, q, t);
 
     auto now = std::chrono::steady_clock::now();
     double fps = 1./tools::delta_time(now, last_t);
     // 计算平均帧率
-    static std::tuple<size_t, double, std::array<double, 200>> fpss = {0, fps*200, std::array<double, 200>{fps}};
-    std::get<0>(fpss)++;                              
-    std::get<1>(fpss) = std::get<1>(fpss) + fps;      
-    std::get<1>(fpss) = std::get<1>(fpss) - std::get<2>(fpss)[std::get<0>(fpss) % 200];
-    double mean_fps = std::get<1>(fpss) / 200.0; // 计算平均值
+    static std::tuple<size_t, double, std::array<double, 200>> fpss = {0, 0, std::array<double, 200>{0}};
+    static auto& cnt = std::get<0>(fpss);
+    static auto& sum = std::get<1>(fpss);
+    static auto& arr = std::get<2>(fpss);
+
+    if (cnt < 200) {
+        arr[cnt] = fps;
+        sum += fps;
+        cnt++;
+    } else {
+        size_t idx = cnt % 200;
+        sum -= arr[idx];   // 先减旧值
+        arr[idx] = fps;    // 再更新
+        sum += fps;        // 再加新值
+        cnt++;
+    }
+    double mean_fps = sum / (cnt > 200 ? 200 : cnt);
 
     // 低通滤波过滤z轴数据
     static double filtered_z = 0.0;
@@ -211,7 +237,7 @@ int main(int argc, char * argv[])
         fft.add_sample(tools::delta_time(t, t0), filtered_z);
     }
 
-    // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
+    tools::draw_text(img, "mean_fps: "+std::to_string(mean_fps), cv::Point(40, 130), {0, 0, 244});
     last_t = now;
     tools::logger()->info("fps:: {:.2f}, mean_fps:: {:.2f}", fps, mean_fps);
 
@@ -305,13 +331,13 @@ int main(int argc, char * argv[])
       io::GimbalState* g_demo = gimbal.set_state_();
       g_demo->mode = !g_demo->mode;
     }
-    // if(key == 's') {
-    //   stopkey = !stopkey;
-    // }
+    if(key == 's') {
+      stopkey = !stopkey;
+    }
   }
   quit = true;
   if (plan_thread.joinable()) plan_thread.join();
-  if (fft_thread.joinable()) fft_thread.join();
+  // if (fft_thread.joinable()) fft_thread.join();
   
   // 获取当前下位机发来的云台状态数据
   auto current_state = gimbal.state();
