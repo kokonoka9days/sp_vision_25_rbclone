@@ -38,6 +38,7 @@ struct TRTFrameData0526 : public YOLOFrameData {
     void setTRTFrameData(const YOLOFrameData& f) {
         this->frame = f.frame;
         this->gimbal_q = f.gimbal_q;
+        this->timestamp = f.timestamp;
         this->armors = f.armors;
         this->detect_color = f.detect_color;
         this->is_empty = false;

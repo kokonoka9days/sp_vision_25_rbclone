@@ -13,12 +13,16 @@ struct YOLOFrameData
   int detect_color = 0;     
   std::list<Armor> armors;
   Eigen::Quaterniond gimbal_q;
+  std::chrono::steady_clock::time_point timestamp;
   cv::Mat frame;
   bool is_empty ;
 
   YOLOFrameData():is_empty(true){};
 
-  YOLOFrameData(cv::Mat frame_, Eigen::Quaterniond gimbal_q_ = Eigen::Quaterniond(1,1,1,1)): frame(frame_),gimbal_q(gimbal_q_), is_empty(false){};
+  YOLOFrameData(
+    cv::Mat frame_, Eigen::Quaterniond gimbal_q_ = Eigen::Quaterniond(1,1,1,1),
+    std::chrono::steady_clock::time_point timestamp_ = {})
+  : gimbal_q(gimbal_q_), timestamp(timestamp_), frame(frame_), is_empty(false){};
 };
 
 class YOLOBase

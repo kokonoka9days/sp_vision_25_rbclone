@@ -13,10 +13,10 @@ message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}-------
 
 
 # openvino依赖
-set(OPENVINO_MAKE ON)
+set(OPENVINO_MAKE OFF)
 
 # tensorRT依赖
-set(TENSOR_RT_MAKE OFF)
+set(TENSOR_RT_MAKE ON)
 
 find_package(OpenCV REQUIRED)
 find_package(fmt REQUIRED)
@@ -70,6 +70,10 @@ if(TENSOR_RT_MAKE)
 
     add_executable(rbnx_auto_aim_debug src/rbnx_auto_aim_debug.cpp)
     target_link_libraries(rbnx_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim  tools io)
+
+    add_executable(rbnx_auto_aim_debug_async src/rbnx_auto_aim_debug_async.cpp)
+    target_link_libraries(rbnx_auto_aim_debug_async ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim  tools io)
+
 endif()
 # rv
 add_executable(rb_rv_aim_debug src/rb_rv_aim_debug.cpp)
