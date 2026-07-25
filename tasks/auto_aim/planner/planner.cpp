@@ -313,10 +313,10 @@ bool Planner::rbShoot(Target target, double gimbal_yaw, bool tower_fixed_pitch){
 
 
   if(!outpost_is_make) suggest_fire = 0;
-  if(suggest_fire){
-    // tools::logger()->info("fire! control_delta_angle: {},  allow_fire_ang_max: {}, allow_fire_ang_min: {}",
-    //   control_delta_angle, allow_fire_ang_max, allow_fire_ang_min
-    // );
+  if(!suggest_fire){
+    tools::logger()->info("not fire! control_delta_angle: {},  allow_fire_ang_max: {}, allow_fire_ang_min: {}",
+      control_delta_angle, allow_fire_ang_max, allow_fire_ang_min
+    );
   }
     
     return suggest_fire;
@@ -444,7 +444,7 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   //     traj(2, HALF_HORIZON + shoot_offset_) -
   //       pitch_solver_->work->x(0, HALF_HORIZON + shoot_offset_)) < fire_thresh_;
   target.predict(-gimbal_control_delay);
-  plan.fire = rbShoot(target, (gimbal_yaw )/57.3 - yaw_offset_);
+  plan.fire = rbShoot(target, plan.yaw - yaw_offset_);
   // tools::logger()->warn("fire:{}", plan.fire);
   plan.target_yaw = (aim_target_yaw + yaw_offset_ )* 57.3;
 

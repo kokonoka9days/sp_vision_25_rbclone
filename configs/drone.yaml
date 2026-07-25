@@ -93,15 +93,15 @@ outpost_max_temp_lost_count: 75                              # 帧 前哨站专�
 #####-----aimer参数-----#####
 # yaw_offset: 2.2                                              # ° yaw静靶偏移补偿
 # pitch_offset: -2.05                                           # ° pitch静靶偏移补偿
-yaw_offset: 2.475                                              # ° yaw静靶偏移补偿
-pitch_offset: -1.9                                           # ° pitch静靶偏移补偿
+yaw_offset: 2.075                                              # ° yaw静靶偏移补偿
+pitch_offset: -1.0                                          # ° pitch静靶偏移补偿
 comming_angle: 60                                            # ° 小陀螺出现侧角度阈值
 leaving_angle: 20                                            # ° 小陀螺消失侧角度阈值
 left_yaw_offset: -1                                          
 right_yaw_offset: -0.6                                      
 decision_speed: 10                                           # rad/s 高低速分界角速度
-high_speed_delay_time: 0.026                                 # s 高速小陀螺预测延迟
-low_speed_delay_time: 0.010                                  # s 低速平移预测延迟
+high_speed_delay_time: 0.015                                 # s 高速小陀螺预测延迟
+low_speed_delay_time: 0.015                                  # s 低速平移预测延迟
 shoot_offset: 2                                              # 步 MPC开火查询偏移步数
 
 
@@ -121,9 +121,9 @@ gimbal_control_delay: 0.012                                  # s 云台控制延
 tower_pitch_prediction_time: 0.05                            # s 前哨站pitch预测时间
 far_pitch_offset: 1.7                                        # ° 远距离(target_h>1m)pitch补偿
 tower_and_base_armor_tolerance_: 0.10                        # rad 前哨站/基地开火窗口
-gimbal_delay: 0.002                                          # s 云台总延迟(系统+电控)
+gimbal_delay: 0.00                                          # s 云台总延迟(系统+电控)
 
-max_yaw_acc: 50                                              # rad/s² yaw MPC角加速度上限
+max_yaw_acc: 75                                            # rad/s² yaw MPC角加速度上限
 Q_yaw: [9e6, 0]                                              # yaw跟踪代价权重
 R_yaw: [1]                                                   # yaw平滑代价权重
 
