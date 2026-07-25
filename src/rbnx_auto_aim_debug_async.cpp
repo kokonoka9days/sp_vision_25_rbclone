@@ -189,10 +189,10 @@ int main(int argc, char * argv[])
       tools::draw_points(img, image_points, {0, 0, 255});
     }
 
-    cv::resize(img, img, {}, 0.5, 0.5);
-    cv::imshow("reprojection", img);
-    auto key = cv::waitKey(1);
-    if (key == 'q') break;
+    // cv::resize(img, img, {}, 0.5, 0.5);
+    // cv::imshow("reprojection", img);
+    // auto key = cv::waitKey(1);
+    // if (key == 'q') break;
   }
 
   quit = true;

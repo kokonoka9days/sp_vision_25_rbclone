@@ -52,7 +52,7 @@ min_confidence: 0.8                                         # (0~1) 检测置信
 
 camera_name: "hikrobot"                                     # 相机品牌(枚举)
 camera_sn: "DA7188471"                                      # 相机序列号
-exposure_us: 2500                                           # us 曝光时间
+exposure_us: 1700                                           # us 曝光时间
 gain: 0.8                                                   # (0~1) 增益
 # gamma: 0.7                                                   # [未使用] hikrobot不读取gamma(仅daheng/mindvision读取)
 # vid_pid: "2bdf:0001"                                        # [未使用] hikrobot的vid_pid在camera.cpp中硬编码
