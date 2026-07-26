@@ -1,0 +1,693 @@
+#include <fmt/core.h>
+
+#include <Eigen/Geometry>
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <cstdint>
+#include <cstdlib>
+#include <deque>
+#include <exception>
+#include <limits>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include <opencv2/opencv.hpp>
+#include <geometry_msgs/msg/transform.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
+#include <sensor_msgs/msg/image.hpp>
+#include <tf2_msgs/msg/tf_message.hpp>
+
+#include "tasks/auto_aim/planner/planner.hpp"
+#include "tasks/auto_aim/solver.hpp"
+#include "tasks/auto_aim/tracker.hpp"
+#include "tasks/auto_aim/yolo.hpp"
+#include "tools/img_tools.hpp"
+#include "tools/logger.hpp"
+#include "tools/math_tools.hpp"
+
+using namespace std::chrono_literals;
+
+namespace
+{
+
+const std::string kKeys =
+  "{help h usage ?    |                                       | 输出命令行参数说明}"
+  "{@config-path      | ../configs/rb_auto_aim_simulator.yaml | yaml配置文件路径}"
+  "{image-topic       | /image_raw                            | sensor_msgs/Image话题}"
+  "{camera-info-topic | /camera_info                          | sensor_msgs/CameraInfo话题}"
+  "{tf-topic          | /tf                                   | tf2_msgs/TFMessage话题}"
+  "{bullet-speed      | 22.0                                  | 模拟弹速(m/s)}";
+
+int64_t stamp_ns(const builtin_interfaces::msg::Time & stamp)
+{
+  return static_cast<int64_t>(stamp.sec) * 1000000000LL + stamp.nanosec;
+}
+
+struct SimulatorFrame
+{
+  cv::Mat image;
+  sensor_msgs::msg::Image::ConstSharedPtr image_owner;
+  Eigen::Quaterniond q_gimbal2world;
+  Eigen::Matrix3d camera_matrix;
+  std::vector<double> distort_coeffs;
+  Eigen::Isometry3d T_camera2gimbal;
+  std::chrono::steady_clock::time_point received_at;
+  double source_fps = 0.0;
+  int64_t stamp = 0;
+};
+
+struct CapturedFrame
+{
+  SimulatorFrame frame;
+  double image_wait_ms = 0.0;
+};
+
+struct PerceptionFrame
+{
+  SimulatorFrame frame;
+  std::optional<auto_aim::Target> target;
+  Eigen::Vector3d ypr = Eigen::Vector3d::Zero();
+  double image_wait_ms = 0.0;
+  double perception_ms = 0.0;
+};
+
+template <typename T>
+class BoundedLatestQueue
+{
+public:
+  explicit BoundedLatestQueue(std::size_t capacity)
+  : capacity_(std::max<std::size_t>(1, capacity))
+  {
+  }
+
+  bool push(T value)
+  {
+    {
+      std::lock_guard lock(mutex_);
+      if (closed_) return false;
+      if (queue_.size() >= capacity_) {
+        queue_.pop_front();
+        ++dropped_;
+      }
+      queue_.push_back(std::move(value));
+    }
+    not_empty_.notify_one();
+    return true;
+  }
+
+  std::optional<T> pop()
+  {
+    std::unique_lock lock(mutex_);
+    not_empty_.wait(lock, [this] { return closed_ || !queue_.empty(); });
+    if (queue_.empty()) return std::nullopt;
+
+    T value = std::move(queue_.front());
+    queue_.pop_front();
+    return value;
+  }
+
+  void close()
+  {
+    {
+      std::lock_guard lock(mutex_);
+      closed_ = true;
+    }
+    not_empty_.notify_all();
+  }
+
+  std::size_t dropped() const
+  {
+    std::lock_guard lock(mutex_);
+    return dropped_;
+  }
+
+private:
+  const std::size_t capacity_;
+  mutable std::mutex mutex_;
+  std::condition_variable not_empty_;
+  std::deque<T> queue_;
+  bool closed_ = false;
+  std::size_t dropped_ = 0;
+};
+
+struct StampedTransformState
+{
+  int64_t stamp;
+  Eigen::Quaterniond q_gimbal2world;
+  Eigen::Isometry3d T_camera2gimbal;
+};
+
+struct StampedCameraInfo
+{
+  int64_t stamp;
+  Eigen::Matrix3d camera_matrix;
+  std::vector<double> distort_coeffs;
+};
+
+class SimulatorInput : public rclcpp::Node
+{
+public:
+  SimulatorInput(
+    const std::string & image_topic, const std::string & camera_info_topic,
+    const std::string & tf_topic)
+  : Node("rb_auto_aim_simulator")
+  {
+    image_callback_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    metadata_callback_group_ =
+      create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+
+    rclcpp::SubscriptionOptions image_options;
+    image_options.callback_group = image_callback_group_;
+    auto image_qos = rclcpp::SensorDataQoS();
+    image_qos.keep_last(1);
+    image_sub_ = create_subscription<sensor_msgs::msg::Image>(
+      image_topic, image_qos,
+      [this](sensor_msgs::msg::Image::ConstSharedPtr msg) { on_image(std::move(msg)); },
+      image_options);
+
+    rclcpp::SubscriptionOptions metadata_options;
+    metadata_options.callback_group = metadata_callback_group_;
+    auto camera_info_qos = rclcpp::SensorDataQoS();
+    camera_info_qos.keep_last(1);
+    camera_info_sub_ = create_subscription<sensor_msgs::msg::CameraInfo>(
+      camera_info_topic, camera_info_qos,
+      [this](sensor_msgs::msg::CameraInfo::ConstSharedPtr msg) { on_camera_info(*msg); },
+      metadata_options);
+    tf_sub_ = create_subscription<tf2_msgs::msg::TFMessage>(
+      tf_topic, rclcpp::QoS(30),
+      [this](tf2_msgs::msg::TFMessage::ConstSharedPtr msg) { on_tf(*msg); }, metadata_options);
+  }
+
+  std::optional<SimulatorFrame> wait_for_frame(std::chrono::milliseconds timeout)
+  {
+    std::unique_lock lock(mutex_);
+    frame_ready_.wait_for(lock, timeout, [this] {
+      return pending_image_.has_value() && !transform_states_.empty() && !camera_infos_.empty();
+    });
+    if (!pending_image_ || transform_states_.empty() || camera_infos_.empty()) {
+      return std::nullopt;
+    }
+
+    auto pending_image = std::move(*pending_image_);
+    pending_image_.reset();
+
+    auto nearest_transform = transform_states_.begin();
+    auto transform_delta = std::numeric_limits<int64_t>::max();
+    for (auto it = transform_states_.begin(); it != transform_states_.end(); ++it) {
+      const auto delta = std::llabs(it->stamp - pending_image.stamp);
+      if (delta < transform_delta) {
+        nearest_transform = it;
+        transform_delta = delta;
+      }
+    }
+
+    auto nearest_camera_info = camera_infos_.begin();
+    auto camera_info_delta = std::numeric_limits<int64_t>::max();
+    for (auto it = camera_infos_.begin(); it != camera_infos_.end(); ++it) {
+      const auto delta = std::llabs(it->stamp - pending_image.stamp);
+      if (delta < camera_info_delta) {
+        nearest_camera_info = it;
+        camera_info_delta = delta;
+      }
+    }
+
+    if (transform_delta > 100000000LL && !warned_tf_delay_) {
+      tools::logger()->warn(
+        "图像与TF标定时间差为 {:.1f} ms，将使用最近数据", transform_delta / 1e6);
+      warned_tf_delay_ = true;
+    }
+
+    const auto transform = *nearest_transform;
+    const auto camera_info = *nearest_camera_info;
+    lock.unlock();
+
+    // bgr8 is exposed as a read-only view. image_owner keeps the ROS buffer alive.
+    auto image = to_bgr(*pending_image.message);
+    return SimulatorFrame{
+      std::move(image),
+      std::move(pending_image.message),
+      transform.q_gimbal2world,
+      camera_info.camera_matrix,
+      camera_info.distort_coeffs,
+      transform.T_camera2gimbal,
+      pending_image.received_at,
+      pending_image.source_fps,
+      pending_image.stamp};
+  }
+
+private:
+  struct PendingImage
+  {
+    sensor_msgs::msg::Image::ConstSharedPtr message;
+    std::chrono::steady_clock::time_point received_at;
+    double source_fps;
+    int64_t stamp;
+  };
+
+  static cv::Mat to_bgr(const sensor_msgs::msg::Image & msg)
+  {
+    int type = 0;
+    int conversion = -1;
+    std::size_t bytes_per_pixel = 0;
+
+    if (msg.encoding == "bgr8") {
+      type = CV_8UC3;
+      bytes_per_pixel = 3;
+    } else if (msg.encoding == "rgb8") {
+      type = CV_8UC3;
+      bytes_per_pixel = 3;
+      conversion = cv::COLOR_RGB2BGR;
+    } else if (msg.encoding == "bgra8") {
+      type = CV_8UC4;
+      bytes_per_pixel = 4;
+      conversion = cv::COLOR_BGRA2BGR;
+    } else if (msg.encoding == "rgba8") {
+      type = CV_8UC4;
+      bytes_per_pixel = 4;
+      conversion = cv::COLOR_RGBA2BGR;
+    } else if (msg.encoding == "mono8") {
+      type = CV_8UC1;
+      bytes_per_pixel = 1;
+      conversion = cv::COLOR_GRAY2BGR;
+    } else {
+      throw std::runtime_error("不支持的图像编码: " + msg.encoding);
+    }
+
+    const auto minimum_step = static_cast<std::size_t>(msg.width) * bytes_per_pixel;
+    const auto required_size = static_cast<std::size_t>(msg.step) * msg.height;
+    if (msg.step < minimum_step || msg.data.size() < required_size) {
+      throw std::runtime_error("ROS图像的step或data长度无效");
+    }
+
+    const cv::Mat source(
+      static_cast<int>(msg.height), static_cast<int>(msg.width), type,
+      const_cast<unsigned char *>(msg.data.data()), msg.step);
+    if (conversion < 0) return source;
+
+    cv::Mat bgr;
+    cv::cvtColor(source, bgr, conversion);
+    return bgr;
+  }
+
+  static std::optional<Eigen::Isometry3d> to_isometry(
+    const geometry_msgs::msg::Transform & transform)
+  {
+    const auto & rotation = transform.rotation;
+    Eigen::Quaterniond q(rotation.w, rotation.x, rotation.y, rotation.z);
+    if (!q.coeffs().allFinite() || q.norm() < 1e-9) return std::nullopt;
+
+    Eigen::Vector3d translation(
+      transform.translation.x, transform.translation.y, transform.translation.z);
+    if (!translation.allFinite()) return std::nullopt;
+
+    Eigen::Isometry3d result = Eigen::Isometry3d::Identity();
+    result.linear() = q.normalized().toRotationMatrix();
+    result.translation() = translation;
+    return result;
+  }
+
+  void on_image(sensor_msgs::msg::Image::ConstSharedPtr msg)
+  {
+    try {
+      std::size_t bytes_per_pixel = 0;
+      if (msg->encoding == "mono8") {
+        bytes_per_pixel = 1;
+      } else if (msg->encoding == "bgr8" || msg->encoding == "rgb8") {
+        bytes_per_pixel = 3;
+      } else if (msg->encoding == "bgra8" || msg->encoding == "rgba8") {
+        bytes_per_pixel = 4;
+      } else {
+        throw std::runtime_error("不支持的图像编码: " + msg->encoding);
+      }
+
+      const auto minimum_step = static_cast<std::size_t>(msg->width) * bytes_per_pixel;
+      const auto required_size = static_cast<std::size_t>(msg->step) * msg->height;
+      if (msg->step < minimum_step || msg->data.size() < required_size) {
+        throw std::runtime_error("ROS图像的step或data长度无效");
+      }
+
+      const auto received_at = std::chrono::steady_clock::now();
+      const auto image_stamp = stamp_ns(msg->header.stamp);
+      {
+        std::lock_guard lock(mutex_);
+        if (last_image_received_at_) {
+          const auto interval =
+            std::chrono::duration<double>(received_at - *last_image_received_at_).count();
+          if (interval > 0.0) {
+            source_period_seconds_ = source_period_seconds_ == 0.0
+                                       ? interval
+                                       : 0.9 * source_period_seconds_ + 0.1 * interval;
+            source_fps_ = 1.0 / source_period_seconds_;
+          }
+        }
+        last_image_received_at_ = received_at;
+        pending_image_ = PendingImage{
+          std::move(msg), received_at, source_fps_, image_stamp};
+      }
+      frame_ready_.notify_one();
+    } catch (const std::exception & e) {
+      RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 2000, "%s", e.what());
+    }
+  }
+
+  void on_camera_info(const sensor_msgs::msg::CameraInfo & msg)
+  {
+    Eigen::Matrix3d camera_matrix;
+    camera_matrix << msg.k[0], msg.k[1], msg.k[2], msg.k[3], msg.k[4], msg.k[5], msg.k[6],
+      msg.k[7], msg.k[8];
+    if (!camera_matrix.allFinite() || camera_matrix(0, 0) <= 0 || camera_matrix(1, 1) <= 0) {
+      RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 2000, "收到无效CameraInfo");
+      return;
+    }
+
+    {
+      std::lock_guard lock(mutex_);
+      camera_infos_.push_back({stamp_ns(msg.header.stamp), camera_matrix, msg.d});
+      while (camera_infos_.size() > 60) camera_infos_.pop_front();
+    }
+    frame_ready_.notify_one();
+
+    if (!camera_info_received_.exchange(true)) {
+      tools::logger()->info(
+        "动态相机内参: {}x{}, fx={:.3f}, fy={:.3f}, cx={:.3f}, cy={:.3f}", msg.width,
+        msg.height, msg.k[0], msg.k[4], msg.k[2], msg.k[5]);
+    }
+  }
+
+  void on_tf(const tf2_msgs::msg::TFMessage & msg)
+  {
+    std::lock_guard lock(mutex_);
+    std::optional<Eigen::Isometry3d> T_gimbal2world;
+    std::optional<Eigen::Isometry3d> T_camera_link2gimbal;
+    std::optional<Eigen::Isometry3d> T_camera_optical2camera_link;
+    int64_t tf_stamp = 0;
+
+    for (const auto & transform : msg.transforms) {
+      const auto value = to_isometry(transform.transform);
+      if (!value) continue;
+
+      if (transform.header.frame_id == "odom" && transform.child_frame_id == "gimbal_link") {
+        T_gimbal2world = *value;
+        tf_stamp = stamp_ns(transform.header.stamp);
+      } else if (
+        transform.header.frame_id == "gimbal_link" &&
+        transform.child_frame_id == "camera_link") {
+        T_camera_link2gimbal = *value;
+      } else if (
+        transform.header.frame_id == "camera_link" &&
+        transform.child_frame_id == "camera_optical_frame") {
+        T_camera_optical2camera_link = *value;
+      }
+    }
+
+    if (T_gimbal2world && T_camera_link2gimbal && T_camera_optical2camera_link) {
+      const Eigen::Isometry3d T_camera2gimbal =
+        *T_camera_link2gimbal * *T_camera_optical2camera_link;
+      transform_states_.push_back(
+        {tf_stamp, Eigen::Quaterniond(T_gimbal2world->linear()), T_camera2gimbal});
+      while (transform_states_.size() > 300) transform_states_.pop_front();
+
+      if (!handeye_received_.exchange(true)) {
+        const auto & t = T_camera2gimbal.translation();
+        tools::logger()->info(
+          "动态手眼外参已接入: t_camera2gimbal=[{:.4f}, {:.4f}, {:.4f}] m", t.x(), t.y(),
+          t.z());
+      }
+    }
+    frame_ready_.notify_one();
+  }
+
+  std::mutex mutex_;
+  std::condition_variable frame_ready_;
+  std::optional<PendingImage> pending_image_;
+  std::deque<StampedTransformState> transform_states_;
+  std::deque<StampedCameraInfo> camera_infos_;
+  std::atomic<bool> camera_info_received_ = false;
+  std::atomic<bool> handeye_received_ = false;
+  bool warned_tf_delay_ = false;
+  std::optional<std::chrono::steady_clock::time_point> last_image_received_at_;
+  double source_period_seconds_ = 0.0;
+  double source_fps_ = 0.0;
+
+  rclcpp::CallbackGroup::SharedPtr image_callback_group_;
+  rclcpp::CallbackGroup::SharedPtr metadata_callback_group_;
+  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
+  rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
+  rclcpp::Subscription<tf2_msgs::msg::TFMessage>::SharedPtr tf_sub_;
+};
+
+void draw_target_debug(
+  cv::Mat & image, const auto_aim::Target & target, auto_aim::Solver & solver,
+  const auto_aim::Planner & planner, bool has_plan)
+{
+  for (const Eigen::Vector4d & xyza : target.armor_xyza_list()) {
+    const auto points =
+      solver.reproject_armor(xyza.head<3>(), xyza[3], target.armor_type, target.name);
+    tools::draw_points(image, points, {235, 206, 135});
+  }
+
+  if (has_plan) {
+    const Eigen::Vector4d aim_xyza = planner.debug_xyza;
+    const auto points = solver.reproject_armor(
+      aim_xyza.head<3>(), aim_xyza[3], target.armor_type, target.name);
+    tools::draw_points(image, points, {0, 0, 255});
+  }
+
+  const auto ekf = target.ekf_x();
+  const Eigen::Vector3d center(ekf[0], ekf[2], ekf[4]);
+  const Eigen::Vector3d velocity(ekf[1], ekf[3], ekf[5]);
+  const Eigen::Vector3d predicted = center + velocity * 0.5;
+  const auto center_points = solver.reproject_armor(center, 0.0, target.armor_type, target.name);
+  const auto predicted_points =
+    solver.reproject_armor(predicted, 0.0, target.armor_type, target.name);
+  if (!center_points.empty() && !predicted_points.empty()) {
+    cv::circle(image, center_points[0], 5, {51, 153, 237}, -1);
+    cv::circle(image, predicted_points[0], 7, {0, 0, 255}, -1);
+    cv::line(image, center_points[0], predicted_points[0], {0, 255, 255}, 2);
+  }
+}
+
+}  // namespace
+
+int main(int argc, char * argv[])
+{
+  cv::CommandLineParser cli(argc, argv, kKeys);
+  if (cli.has("help")) {
+    cli.printMessage();
+    return 0;
+  }
+
+  const auto config_path = cli.get<std::string>(0);
+  const auto image_topic = cli.get<std::string>("image-topic");
+  const auto camera_info_topic = cli.get<std::string>("camera-info-topic");
+  const auto tf_topic = cli.get<std::string>("tf-topic");
+  const auto bullet_speed = cli.get<double>("bullet-speed");
+  if (!cli.check()) {
+    cli.printErrors();
+    return 2;
+  }
+
+  rclcpp::init(0, nullptr);
+  auto input = std::make_shared<SimulatorInput>(image_topic, camera_info_topic, tf_topic);
+  rclcpp::executors::MultiThreadedExecutor executor;
+  executor.add_node(input);
+  std::thread spin_thread([&executor] { executor.spin(); });
+
+  int result = 0;
+  try {
+    BoundedLatestQueue<CapturedFrame> capture_queue(2);
+    BoundedLatestQueue<PerceptionFrame> perception_queue(2);
+    std::atomic<bool> stop_pipeline = false;
+    std::mutex worker_error_mutex;
+    std::exception_ptr worker_error;
+
+    auto stop_workers = [&] {
+      stop_pipeline = true;
+      capture_queue.close();
+      perception_queue.close();
+      executor.cancel();
+    };
+    auto report_worker_error = [&](std::exception_ptr error) {
+      {
+        std::lock_guard lock(worker_error_mutex);
+        if (!worker_error) worker_error = error;
+      }
+      stop_workers();
+    };
+
+    auto_aim::Planner planner(config_path);
+    auto_aim::Solver display_solver(config_path);
+
+    std::thread capture_thread;
+    std::thread perception_thread;
+    try {
+      capture_thread = std::thread([&] {
+        try {
+          while (!stop_pipeline && rclcpp::ok()) {
+            const auto wait_begin = std::chrono::steady_clock::now();
+            auto frame = input->wait_for_frame(200ms);
+            const auto wait_end = std::chrono::steady_clock::now();
+            if (!frame) continue;
+
+            const double image_wait_ms =
+              std::chrono::duration<double, std::milli>(wait_end - wait_begin).count();
+            if (!capture_queue.push({std::move(*frame), image_wait_ms})) break;
+          }
+          capture_queue.close();
+        } catch (...) {
+          report_worker_error(std::current_exception());
+        }
+      });
+
+      perception_thread = std::thread([&] {
+        try {
+          // HighGUI remains in the planner/main thread, so detector debug must stay disabled here.
+          auto_aim::YOLO detector(config_path, false);
+          auto_aim::Solver solver(config_path);
+          auto_aim::Tracker tracker(config_path, &solver);
+          int frame_count = 0;
+
+          while (!stop_pipeline) {
+            auto captured = capture_queue.pop();
+            if (!captured) break;
+
+            const auto perception_begin = std::chrono::steady_clock::now();
+            auto & frame = captured->frame;
+            solver.set_R_gimbal2world_from_tf(frame.q_gimbal2world);
+            solver.set_camera_calibration(frame.camera_matrix, frame.distort_coeffs);
+            solver.set_camera2gimbal(
+              frame.T_camera2gimbal.linear(), frame.T_camera2gimbal.translation());
+            auto armors = detector.detect(frame.image, frame_count++);
+            auto targets = tracker.test_track(armors, frame.received_at);
+
+            auto ypr = tools::eulers(frame.q_gimbal2world, 2, 1, 0);
+            // ROS uses a right-handed +Y pitch; vision treats muzzle-up as positive.
+            ypr[1] = -ypr[1];
+            std::optional<auto_aim::Target> target;
+            if (!targets.empty()) target = targets.front();
+
+            const auto perception_end = std::chrono::steady_clock::now();
+            const double perception_ms =
+              std::chrono::duration<double, std::milli>(
+                perception_end - perception_begin).count();
+            if (!perception_queue.push(
+                  {std::move(frame), std::move(target), ypr, captured->image_wait_ms,
+                   perception_ms})) {
+              break;
+            }
+          }
+          perception_queue.close();
+        } catch (...) {
+          report_worker_error(std::current_exception());
+        }
+      });
+    } catch (...) {
+      stop_workers();
+      if (capture_thread.joinable()) capture_thread.join();
+      throw;
+    }
+
+    tools::logger()->info(
+      "三线程流水线已启动: image_wait -> perception -> planner/display; image={}, tf={}",
+      image_topic, tf_topic);
+
+    auto last_frame_time = std::chrono::steady_clock::now();
+    std::exception_ptr main_error;
+    try {
+      while (!stop_pipeline && rclcpp::ok()) {
+        auto perception = perception_queue.pop();
+        if (!perception) break;
+
+        auto & frame = perception->frame;
+        cv::Mat display_image = frame.image.clone();
+        display_solver.set_R_gimbal2world_from_tf(frame.q_gimbal2world);
+        display_solver.set_camera_calibration(frame.camera_matrix, frame.distort_coeffs);
+        display_solver.set_camera2gimbal(
+          frame.T_camera2gimbal.linear(), frame.T_camera2gimbal.translation());
+
+        const auto planner_begin = std::chrono::steady_clock::now();
+        const auto plan = planner.plan(
+          perception->target, bullet_speed, perception->ypr[0],
+          auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
+        const auto planner_end = std::chrono::steady_clock::now();
+        const double planner_ms =
+          std::chrono::duration<double, std::milli>(planner_end - planner_begin).count();
+
+        if (perception->target) {
+          draw_target_debug(
+            display_image, *perception->target, display_solver, planner, plan.control);
+        }
+
+        const auto now = std::chrono::steady_clock::now();
+        const auto dt = std::chrono::duration<double>(now - last_frame_time).count();
+        last_frame_time = now;
+        const double fps = dt > 0.0 ? 1.0 / dt : 0.0;
+        const double latency_ms =
+          std::chrono::duration<double, std::milli>(now - frame.received_at).count();
+
+        tools::draw_text(
+          display_image, fmt::format("FPS {:.1f} latency {:.1f} ms", fps, latency_ms), {40, 40},
+          {0, 255, 0});
+        tools::draw_text(
+          display_image,
+          fmt::format(
+            "Input {:.1f} FPS Wait {:.1f} Detect/Track {:.1f} Plan {:.1f} ms Drop {}/{}",
+            frame.source_fps, perception->image_wait_ms, perception->perception_ms, planner_ms,
+            capture_queue.dropped(), perception_queue.dropped()),
+          {40, 80}, {255, 255, 255});
+        tools::draw_text(
+          display_image, fmt::format("Yaw {:.2f}", perception->ypr[0] * 180.0 / CV_PI),
+          {40, 120}, {0, 128, 255});
+        tools::draw_text(
+          display_image, fmt::format("Pitch {:.2f}", perception->ypr[1] * 180.0 / CV_PI),
+          {40, 160}, {0, 255, 255});
+        tools::draw_text(
+          display_image, fmt::format("Roll {:.2f}", perception->ypr[2] * 180.0 / CV_PI),
+          {40, 200}, {0, 255, 255});
+        if (plan.control) {
+          tools::draw_text(
+            display_image,
+            fmt::format(
+              "Plan yaw {:.2f} pitch {:.2f} fire {}", plan.yaw * 180.0 / CV_PI,
+              plan.pitch * 180.0 / CV_PI, plan.fire),
+            {40, 240}, {255, 255, 0});
+        }
+
+        cv::Mat display;
+        cv::resize(display_image, display, {}, 0.5, 0.5);
+        cv::imshow("rb_auto_aim_simulator", display);
+        const auto key = cv::waitKey(1);
+        if (key == 'q' || key == 27) break;
+      }
+    } catch (...) {
+      main_error = std::current_exception();
+    }
+
+    stop_workers();
+    if (capture_thread.joinable()) capture_thread.join();
+    if (perception_thread.joinable()) perception_thread.join();
+
+    if (main_error) std::rethrow_exception(main_error);
+    {
+      std::lock_guard lock(worker_error_mutex);
+      if (worker_error) std::rethrow_exception(worker_error);
+    }
+  } catch (const std::exception & e) {
+    tools::logger()->error("rb_auto_aim_simulator退出: {}", e.what());
+    result = 1;
+  }
+
+  executor.cancel();
+  if (spin_thread.joinable()) spin_thread.join();
+  rclcpp::shutdown();
+  cv::destroyAllWindows();
+  return result;
+}

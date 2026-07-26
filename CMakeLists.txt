@@ -13,10 +13,10 @@ message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}-------
 
 
 # openvino依赖
-set(OPENVINO_MAKE OFF)
+set(OPENVINO_MAKE ON)
 
 # tensorRT依赖
-set(TENSOR_RT_MAKE ON)
+set(TENSOR_RT_MAKE OFF)
 
 find_package(OpenCV REQUIRED)
 find_package(fmt REQUIRED)
@@ -150,6 +150,9 @@ target_link_libraries(serial_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tool
 find_package(ament_cmake QUIET)
 find_package(rclcpp QUIET)
 find_package(std_msgs QUIET)
+find_package(sensor_msgs QUIET)
+find_package(geometry_msgs QUIET)
+find_package(tf2_msgs QUIET)
 find_package(rosidl_typesupport_cpp QUIET)
 find_package(sp_msgs QUIET)
 
@@ -165,6 +168,23 @@ if(rosidl_typesupport_cpp_FOUND)
 endif()
 if(sp_msgs_FOUND)
     message(STATUS "找到sp_msgs_FOUND")
+endif()
+
+# Daedalus simulator bridge only uses standard ROS 2 messages and does not
+# depend on the locally generated sp_msgs package.
+if(ament_cmake_FOUND AND rclcpp_FOUND AND sensor_msgs_FOUND AND geometry_msgs_FOUND AND tf2_msgs_FOUND AND
+   (OPENVINO_MAKE OR TENSOR_RT_MAKE))
+    add_executable(rb_auto_aim_simulator src/rb_auto_aim_simulator.cpp)
+    target_link_libraries(rb_auto_aim_simulator
+        ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
+    ament_target_dependencies(rb_auto_aim_simulator rclcpp sensor_msgs geometry_msgs tf2_msgs)
+    if(OPENVINO_MAKE)
+        target_compile_definitions(rb_auto_aim_simulator PRIVATE OPENVINO_MAKE)
+    else()
+        target_compile_definitions(rb_auto_aim_simulator PRIVATE TENSOR_RT_MAKE)
+    endif()
+else()
+    message(STATUS "ROS2 sensor_msgs/geometry_msgs/tf2_msgs not found, skipping rb_auto_aim_simulator")
 endif()
 
 if(ament_cmake_FOUND AND rclcpp_FOUND AND std_msgs_FOUND AND rosidl_typesupport_cpp_FOUND AND sp_msgs_FOUND)
