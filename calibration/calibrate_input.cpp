@@ -9,10 +9,13 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <opencv2/core/eigen.hpp>
 #include <opencv2/opencv.hpp>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "io/camera.hpp"
@@ -25,7 +28,7 @@ namespace fs = std::filesystem;
 
 const std::string keys =
   "{help h usage ? |                          | 输出命令行参数说明}"
-  "{config-path c  | ../configs/sb_short.yaml | yaml配置文件路径 }"
+  "{config-path c  | ../configs/calibration.yaml | yaml配置文件路径 }"
   "{@input-folder  | ../assets/img_with_q        | 输入文件夹路径   }";
 
 namespace
@@ -489,7 +492,170 @@ void print_handeye_yaml(const CalibrationConfig & config, const HandEyeCalibrati
   fmt::print("\n{}\n", result.c_str());
 }
 
-bool run_calibration(const fs::path & folder, const CalibrationConfig & config)
+struct YamlReplacement
+{
+  std::string key;
+  std::string value;
+  int matches = 0;
+};
+
+std::string flow_sequence(const std::vector<double> & values)
+{
+  YAML::Emitter output;
+  output << YAML::Flow << values;
+  if (!output.good()) throw std::runtime_error("无法生成 YAML 数组");
+  return output.c_str();
+}
+
+int replacement_index(const std::string & line, const std::vector<YamlReplacement> & replacements)
+{
+  if (
+    line.empty() || std::isspace(static_cast<unsigned char>(line.front())) || line.front() == '#') {
+    return -1;
+  }
+
+  const auto colon = line.find(':');
+  if (colon == std::string::npos) return -1;
+
+  auto key_end = colon;
+  while (key_end > 0 && std::isspace(static_cast<unsigned char>(line[key_end - 1]))) --key_end;
+  const auto key = line.substr(0, key_end);
+  for (size_t i = 0; i < replacements.size(); ++i) {
+    if (key == replacements[i].key) return static_cast<int>(i);
+  }
+  return -1;
+}
+
+bool has_block_value(const std::string & line)
+{
+  const auto colon = line.find(':');
+  if (colon == std::string::npos) return false;
+
+  auto value_start = colon + 1;
+  while (value_start < line.size() && std::isspace(static_cast<unsigned char>(line[value_start]))) {
+    ++value_start;
+  }
+  return value_start == line.size() || line[value_start] == '#';
+}
+
+void validate_calibration_values(const YAML::Node & yaml)
+{
+  const std::vector<std::pair<std::string, size_t>> expected_sizes = {
+    {"camera_matrix", 9}, {"distort_coeffs", 5}, {"R_camera2gimbal", 9}, {"t_camera2gimbal", 3}};
+
+  if (!yaml.IsMap()) throw std::runtime_error("输入配置的 YAML 顶层必须是映射");
+  for (const auto & [key, expected_size] : expected_sizes) {
+    const auto value = yaml[key];
+    if (!value || !value.IsSequence() || value.size() != expected_size) {
+      throw std::runtime_error(fmt::format("写入后的 {} 应包含 {} 个数值", key, expected_size));
+    }
+    value.as<std::vector<double>>();
+  }
+}
+
+void update_calibration_yaml(
+  const std::string & config_path, const CameraCalibration & camera,
+  const HandEyeCalibration & handeye)
+{
+  const std::vector<double> camera_matrix_data(
+    camera.camera_matrix.begin<double>(), camera.camera_matrix.end<double>());
+  const std::vector<double> distort_coeffs_data(
+    camera.distort_coeffs.begin<double>(), camera.distort_coeffs.end<double>());
+  const std::vector<double> R_camera2gimbal_data(
+    handeye.R_camera2gimbal.begin<double>(), handeye.R_camera2gimbal.end<double>());
+  const std::vector<double> t_camera2gimbal_data(
+    handeye.t_camera2gimbal.begin<double>(), handeye.t_camera2gimbal.end<double>());
+
+  std::vector<YamlReplacement> replacements = {
+    {"camera_matrix", flow_sequence(camera_matrix_data)},
+    {"distort_coeffs", flow_sequence(distort_coeffs_data)},
+    {"R_camera2gimbal", flow_sequence(R_camera2gimbal_data)},
+    {"t_camera2gimbal", flow_sequence(t_camera2gimbal_data)}};
+
+  std::ifstream input(config_path, std::ios::binary);
+  if (!input) throw std::runtime_error(fmt::format("无法读取配置文件: {}", config_path));
+  const std::string source{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+  const auto original_yaml = YAML::Load(source);
+  if (!original_yaml.IsMap()) throw std::runtime_error("输入配置的 YAML 顶层必须是映射");
+
+  std::vector<std::string> lines;
+  std::istringstream source_stream(source);
+  for (std::string line; std::getline(source_stream, line);) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    lines.emplace_back(std::move(line));
+  }
+
+  std::vector<std::string> updated_lines;
+  updated_lines.reserve(lines.size() + replacements.size() + 1);
+  for (size_t i = 0; i < lines.size(); ++i) {
+    const int index = replacement_index(lines[i], replacements);
+    if (index < 0) {
+      updated_lines.push_back(lines[i]);
+      continue;
+    }
+
+    auto & replacement = replacements[static_cast<size_t>(index)];
+    if (++replacement.matches > 1) {
+      throw std::runtime_error(fmt::format("配置文件中存在重复字段: {}", replacement.key));
+    }
+
+    const bool remove_block_lines = has_block_value(lines[i]);
+    updated_lines.emplace_back(fmt::format("{}: {}", replacement.key, replacement.value));
+    if (remove_block_lines) {
+      while (i + 1 < lines.size() && !lines[i + 1].empty() &&
+             std::isspace(static_cast<unsigned char>(lines[i + 1].front()))) {
+        ++i;
+      }
+    }
+  }
+
+  for (const auto & replacement : replacements) {
+    if (replacement.matches != 0) continue;
+    if (!updated_lines.empty() && !updated_lines.back().empty()) updated_lines.emplace_back();
+    updated_lines.emplace_back(fmt::format("{}: {}", replacement.key, replacement.value));
+  }
+
+  std::string updated;
+  for (const auto & line : updated_lines) updated += line + '\n';
+  validate_calibration_values(YAML::Load(updated));
+
+  const fs::path path(config_path);
+  const fs::path temporary_path(config_path + ".tmp");
+  const fs::path backup_path(config_path + ".bak");
+  {
+    std::ofstream output(temporary_path, std::ios::binary | std::ios::trunc);
+    if (!output || !(output << updated) || !output.flush()) {
+      std::error_code error;
+      fs::remove(temporary_path, error);
+      throw std::runtime_error(fmt::format("无法写入临时配置文件: {}", temporary_path.string()));
+    }
+  }
+
+  std::error_code error;
+  const auto original_permissions = fs::status(path, error).permissions();
+  if (!error) fs::permissions(temporary_path, original_permissions, error);
+  if (error) {
+    fs::remove(temporary_path, error);
+    throw std::runtime_error("无法保留配置文件权限");
+  }
+
+  fs::copy_file(path, backup_path, fs::copy_options::overwrite_existing, error);
+  if (error) {
+    fs::remove(temporary_path, error);
+    throw std::runtime_error(fmt::format("无法备份配置文件: {}", backup_path.string()));
+  }
+
+  fs::rename(temporary_path, path, error);
+  if (error) {
+    fs::remove(temporary_path, error);
+    throw std::runtime_error(fmt::format("无法替换配置文件: {}", config_path));
+  }
+
+  tools::logger()->info("标定结果已写入 {}，原配置已备份到 {}", config_path, backup_path.string());
+}
+
+bool run_calibration(
+  const fs::path & folder, const CalibrationConfig & config, const std::string & config_path)
 {
   tools::logger()->info("开始读取标定样本");
   cv::Size image_size;
@@ -506,6 +672,7 @@ bool run_calibration(const fs::path & folder, const CalibrationConfig & config)
   tools::logger()->info("使用本次相机内参进行手眼标定");
   const auto handeye = calibrate_handeye(samples, config, camera);
   print_handeye_yaml(config, handeye);
+  update_calibration_yaml(config_path, camera, handeye);
   tools::logger()->info("相机标定和手眼标定完成");
   return true;
 }
@@ -562,7 +729,7 @@ void capture_loop(
 
     if (key == 't') {
       try {
-        run_calibration(input_folder, config);
+        run_calibration(input_folder, config, config_path);
       } catch (const cv::Exception & e) {
         tools::logger()->error("OpenCV 标定失败: {}", e.what());
       } catch (const std::exception & e) {

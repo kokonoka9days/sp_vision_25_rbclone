@@ -148,7 +148,7 @@ Plan Planner::sbplan(Target target, double bullet_speed, double gimbal_yaw)
   
   target.predict(bullet_traj.fly_time);
 
-  tools::logger()->info("h:{}, xy_d:{}, xyz_d:{}, fly_time:{}, ", target_h, min_dist, xyz.norm(), bullet_traj.fly_time);
+  // tools::logger()->info("h:{}, xy_d:{}, xyz_d:{}, fly_time:{}, ", target_h, min_dist, xyz.norm(), bullet_traj.fly_time);
 
   // 2. Get trajectory
   double yaw0;
@@ -356,7 +356,7 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   
   target.predict(bullet_traj.fly_time);
 
-  tools::logger()->info("h:{}, xy_d:{}, xyz_d:{}, fly_time:{}, ", target_h, min_dist, xyz.norm(), bullet_traj.fly_time);
+  // tools::logger()->info("h:{}, xy_d:{}, xyz_d:{}, fly_time:{}, ", target_h, min_dist, xyz.norm(), bullet_traj.fly_time);
 
   // 2. Get trajectory
   double yaw0;
@@ -446,7 +446,7 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   //     traj(2, HALF_HORIZON + shoot_offset_) -
   //       pitch_solver_->work->x(0, HALF_HORIZON + shoot_offset_)) < fire_thresh_;
   target.predict(-gimbal_control_delay);
-  plan.fire = rbShoot(target, (gimbal_yaw )/57.3 - yaw_offset_);
+  plan.fire = rbShoot(target, plan.yaw - yaw_offset_);
   // tools::logger()->warn("fire:{}", plan.fire);
   plan.target_yaw = (aim_target_yaw + yaw_offset_ )* 57.3;
 

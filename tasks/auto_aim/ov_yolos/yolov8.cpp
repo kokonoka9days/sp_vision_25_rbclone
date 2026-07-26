@@ -56,6 +56,7 @@ YOLOV8::YOLOV8(const std::string & config_path, bool debug)
   model = ppp.build();
   compiled_model_ = core_.compile_model(
     model, device_, ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY));
+  async_pipeline_.init(compiled_model_, 416, 416);
 }
 
 std::list<Armor> YOLOV8::detect(const cv::Mat & raw_img, int frame_count)
@@ -101,6 +102,33 @@ std::list<Armor> YOLOV8::detect(const cv::Mat & raw_img, int frame_count)
   cv::Mat output(output_shape[1], output_shape[2], CV_32F, output_tensor.data());
 
   return parse(scale, output, raw_img, frame_count);
+}
+
+YOLOFrameData YOLOV8::detect(YOLOFrameData frame_data, int frame_count)
+{
+  if (frame_data.frame.empty()) {
+    tools::logger()->warn("Empty img!, camera drop!");
+    return YOLOFrameData();
+  }
+
+  cv::Mat bgr_img;
+  if (use_roi_) {
+    if (roi_.width == -1) {
+      roi_.width = frame_data.frame.cols;
+    }
+    if (roi_.height == -1) {
+      roi_.height = frame_data.frame.rows;
+    }
+    bgr_img = frame_data.frame(roi_);
+  } else {
+    bgr_img = frame_data.frame;
+  }
+
+  return async_pipeline_.detect(
+    bgr_img, frame_data, frame_count,
+    [this](double scale, cv::Mat & output, const cv::Mat & img, int finished_frame_count) {
+      return parse(scale, output, img, finished_frame_count);
+    });
 }
 
 std::list<Armor> YOLOV8::parse(

@@ -53,15 +53,15 @@ outpost_max_temp_lost_count: 75
 
 
 #####-----aimer参数-----##### 12mm
-yaw_offset: 1.0 # degree -2.5
+yaw_offset: 0.5 # degree -2.5
 pitch_offset: 0.7 # degree 2
 far_pitch_offset: 1.7
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/s
-high_speed_delay_time: 0.013 # s   远 0.25
-low_speed_delay_time: 0.013 # s    远 0.25
-gimbal_delay: 0.002
+high_speed_delay_time: 0.005 # s   远 0.25
+low_speed_delay_time: 0.005 # s    远 0.25
+gimbal_delay: 0.001
 shoot_offset: 2
 
 #####-----shooter参数-----#####
@@ -83,10 +83,10 @@ auto_fire: true # 是否由自瞄控制射击
 # 6mm camera
 camera_name: "daheng"
 camera_sn: "KE0210030295"
-exposure_us: 5000
-gain: 0.4
-gamma: 0.3      
-img_gamma: 0.3              
+exposure_us: 8000
+gain: 0.7
+gamma: 1      
+img_gamma: 1              
 vid_pid: "2bdf:0001"
 flip: true
 mirror: true
@@ -111,14 +111,15 @@ timestamp_offset_us: 4318 #us 2300
 #6mm camera
 R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 
-# 相机同理想情况的偏角: yaw0.96 pitch0.05 roll-2.51 degree
-# 标定板到世界坐标系原点的水平距离: 1.88 m
-# 标定板同竖直摆放时的偏角: yaw17.10 pitch9.90 roll178.54 degree
-R_camera2gimbal: [-0.016736393652106343, 0.0001645433854914723, 0.9998599232157451, -0.9988969318366027, -0.04388158415932314, -0.01671305295539334, 0.04387268734581111, -0.9990367257999788, 0.0008987813494899698]
-t_camera2gimbal: [0.12065066009490164, 0.03445425398962758, 0.059524175217396585]
-# 重投影误差: 0.0820px
-camera_matrix: [1737.039655225044, 0, 610.8806746255623, 0, 1737.2743775332876, 484.79049617651157, 0, 0, 1]
-distort_coeffs: [-0.04884453537210094, 0.12555422968265023, -0.0012399241853100107, -0.0008682406079784554, 0.008637363052025166]
+# 相机同理想情况的偏角: yaw-0.18 pitch-1.14 roll-2.28 degree
+# 标定板到世界坐标系原点的水平距离: 1.90 m
+# 标定板同竖直摆放时的偏角: yaw43.71 pitch10.78 roll179.96 degree
+R_camera2gimbal: [0.0039451823575317275, -0.0198075950533623, 0.9997960265546008, -0.9992037957762326, -0.039772115174926334, 0.0031548947496264084, 0.03970151184192672, -0.9990124313704584, -0.01994873240962797]
+t_camera2gimbal: [0.1632379259477051, 0.04345419362227667, 0.028207186526476375]
+
+camera_matrix: [1718.877, 0.000, 609.788, 0.000, 1719.796, 536.541, 0.000, 0.000, 1.000]
+distort_coeffs: [-0.052650, 0.174015, 0.004017, 0.001724, -0.172518]
+# reprojection error: 0.115 px
 
 # _camera2gimbal第一位调yaw
 # _camera2gimbal第二位调yaw
@@ -140,7 +141,7 @@ send_canid: 0xff
 can_interface: "can0"
 
 #####-----gimbal参数-----#####
-com_port: "/dev/ttyACM1"
+com_port: "/dev/ttyACM0"
 # 陀螺仪是否装错, 编号012分别代表电控坐标系ypr，想换旋转轴只需要对编号进行互换即可，负号就是对当前值取负，交换完再取负
 # 上车前记得对齐电控坐标系和济瞄惯性系
 gimbal_y1: 1
@@ -160,7 +161,7 @@ fire_thresh: 0.003 #
 small_armor_tolerance: 0.12
 big_armor_tolerance: 0.22
 tower_and_base_armor_tolerance_: 0.10  # 26赛季前哨站和基地装甲板检测宽度
-gimbal_control_delay: 0.014
+gimbal_control_delay: 0.0
 tower_pitch_prediction_time: 0.05
 
 max_yaw_acc: 50

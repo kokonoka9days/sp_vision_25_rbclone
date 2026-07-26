@@ -60,14 +60,14 @@ outpost_max_temp_lost_count: 75
 # low_speed_delay_time: 0.093 # s
 
 #####-----aimer参数-----##### 12mm
-yaw_offset: -0.5 # degree 
-pitch_offset: 0.4 # degree 2
+yaw_offset: -0.2 # degree 
+pitch_offset: 1 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/
 
-high_speed_delay_time: 0.018 # s   远 0.25
-low_speed_delay_time: 0.017 # s    远 0.25
+high_speed_delay_time: 0.005 # s   远 0.25
+low_speed_delay_time: 0.005 # s    远 0.25
 far_pitch_offset: 1.2
 
 #####-----shooter参数-----#####
@@ -99,10 +99,10 @@ auto_fire: true # 是否由自瞄控制射击
 
 camera_name: "daheng"
 camera_sn: "FDN24040487"
-exposure_us: 4000
-gain: 0.4
-gamma: 0.6
-img_gamma: 1
+exposure_us: 2000
+gain: 0.9
+gamma: 1
+img_gamma: 0.3
 vid_pid: "2ba2:4d55"
 flip: true
 mirror: true
@@ -128,14 +128,14 @@ R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 # # _camera2gimbal第三位调pitch
 
 # #12mm camera
-# 相机同理想情况的偏角: yaw-1.01 pitch0.40 roll-3.17 degree
-# 标定板到世界坐标系原点的水平距离: 3.99 m
-# 标定板同竖直摆放时的偏角: yaw18.59 pitch10.91 roll179.05 degree
-R_camera2gimbal: [0.01724177990211943, 0.008031166851665581, 0.9998190943289729, -0.9983196678891441, -0.05519050378990992, 0.017659246788155888, 0.05532234387221791, -0.9984435430460833, 0.007066089305084381]
-t_camera2gimbal: [-0.06053188184293589, 0.04306961926275315, 0.07400899334239491]
-# 重投影误差: 0.1039px
-camera_matrix: [4733.43401413086, 0, 599.7636786594903, 0, 4741.85173415842, 478.8499763209543, 0, 0, 1]
-distort_coeffs: [0.021580388912033843, -1.367908470971454, -0.0014335525678331896, -0.0030262393654059178, 31.166315287522888]
+# 相机同理想情况的偏角: yaw-0.62 pitch-1.90 roll-2.87 degree
+# 标定板到世界坐标系原点的水平距离: 4.10 m
+# 标定板同竖直摆放时的偏角: yaw58.53 pitch15.36 roll179.96 degree
+R_camera2gimbal: [0.012545059840903943, -0.032624516901306404, 0.9993889444908544, -0.9986644638027364, -0.05050501344638633, 0.010887256512678783, 0.050118960595573726, -0.998190805664797, -0.033214534094017076]
+t_camera2gimbal: [0.3492770993046874, 0.08835893651003417, -0.022134114406034914]
+# 重投影误差: 0.0978px
+camera_matrix: [4611.758710323274, 0, 583.3952101658823, 0, 4569.560460015565, 684.1953401838869, 0, 0, 1]
+distort_coeffs: [0.03085039971208192, -0.6853454794179297, 0.007390278697268004, 0.0015864217551744672, 9.76043406163511]
 gimbal_y1: 1
 gimbal_p2: 2
 gimbal_r3: 3
@@ -146,7 +146,7 @@ send_canid: 0xff
 can_interface: "can0"
 
 #####-----gimbal参数-----#####
-com_port: "/dev/ttyACM1"
+com_port: "/dev/ttyACM0"
 
 
 #####-----planner-----#####
@@ -156,9 +156,10 @@ fire_thresh: 0.003 #
 small_armor_tolerance: 0.03
 big_armor_tolerance: 0.22
 tower_and_base_armor_tolerance_: 0.10  # 26赛季前哨站和基地装甲板检测宽度
-gimbal_control_delay: 0.02 
+gimbal_control_delay: 0.0 
 tower_pitch_prediction_time: 0.3
-
+gimbal_delay: 0.001
+shoot_offset: 2
 max_yaw_acc: 50
 Q_yaw: [9e6, 0]
 R_yaw: [1]

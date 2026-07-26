@@ -54,8 +54,8 @@ Options:
 Notes:
   The repository currently hard-codes TENSOR_RT_MAKE=ON and OPENVINO_MAKE=OFF
   in top-level CMakeLists.txt, so the default build requires CUDA + TensorRT.
-  Daheng Galaxy SDK must provide libgxiapi.so system-wide; it is not vendored
-  in this repository.
+  Daheng Galaxy runtime can be provided system-wide or vendored as
+  io/daheng/lib/<amd64|arm64>/libgxiapi.so.
 USAGE
 }
 
@@ -400,6 +400,7 @@ configure_camera_sdk_paths() {
   esac
 
   local paths=()
+  [[ -d "${REPO_ROOT}/io/daheng/lib/${sdk_arch}" ]] && paths+=("${REPO_ROOT}/io/daheng/lib/${sdk_arch}")
   [[ -d "${REPO_ROOT}/io/hikrobot/lib/${sdk_arch}" ]] && paths+=("${REPO_ROOT}/io/hikrobot/lib/${sdk_arch}")
   [[ -d "${REPO_ROOT}/io/mindvision/lib/${sdk_arch}" ]] && paths+=("${REPO_ROOT}/io/mindvision/lib/${sdk_arch}")
 
@@ -453,6 +454,7 @@ find_shared_lib() {
     aarch64) sdk_arch="arm64" ;;
   esac
   if [[ -n "${sdk_arch}" ]]; then
+    search_roots+=("${REPO_ROOT}/io/daheng/lib/${sdk_arch}")
     search_roots+=("${REPO_ROOT}/io/hikrobot/lib/${sdk_arch}")
     search_roots+=("${REPO_ROOT}/io/mindvision/lib/${sdk_arch}")
   fi
@@ -551,7 +553,7 @@ verify_dependencies() {
   check_cuda || failures=$((failures + 1))
   check_ceres || failures=$((failures + 1))
   check_lib libnvinfer.so "TensorRT libnvinfer.so was not found. The current CMake default requires TensorRT." || failures=$((failures + 1))
-  check_lib libgxiapi.so "Daheng Galaxy SDK libgxiapi.so was not found. Install Galaxy_camera.run from Daheng, then rerun this script." || failures=$((failures + 1))
+  check_lib libgxiapi.so "Daheng Galaxy runtime libgxiapi.so was not found. Install Galaxy_camera.run or place libgxiapi.so under io/daheng/lib/<amd64|arm64>." || failures=$((failures + 1))
   check_lib libMvCameraControl.so "HikRobot runtime library was not found in ldconfig/common paths." || failures=$((failures + 1))
   check_lib libMVSDK.so "MindVision runtime library was not found in ldconfig/common paths." || failures=$((failures + 1))
 
