@@ -283,19 +283,47 @@ bool Planner::rbShoot(Target target, double gimbal_yaw, bool tower_fixed_pitch){
   if(target.name == ArmorName::base || target.name == ArmorName::outpost) shoot_range = tower_and_base_armor_tolerance_;
 
     // 打击范围计算
-  double ax = target_armor_xyza(0) - 0.5f * shoot_range * sin(target_yaw);
-  double ay = target_armor_xyza(1) + 0.5f * shoot_range * cos(target_yaw);
-  double bx = target_armor_xyza(0) + 0.5f * shoot_range * sin(target_yaw);
-  double by = target_armor_xyza(1) - 0.5f * shoot_range * cos(target_yaw);
-  double angle_a = atan2(ay, ax);
-  double angle_b = atan2(by, bx);
-  double angle_c = atan2(target_armor_xyza(1), target_armor_xyza(0));
-  // double allow_fire_ang_max = angle_c - angle_b;
-  // double allow_fire_ang_min = angle_c - angle_a;
-  double allow_fire_ang_max = std::max(angle_a, angle_b) - angle_c;
-  double allow_fire_ang_min = std::min(angle_a, angle_b) - angle_c;
-  allow_fire_ang_max = tools::limit_rad(allow_fire_ang_max);
-  allow_fire_ang_min = tools::limit_rad(allow_fire_ang_min);
+
+  // 左边缘（沿切线正方向偏移半宽）
+  double left_x = target_armor_xyza(0) + 0.5 * shoot_range * (-sin(target_yaw));
+  double left_y = target_armor_xyza(1) + 0.5 * shoot_range * cos(target_yaw);
+
+  // 右边缘（沿切线负方向偏移半宽）
+  double right_x = target_armor_xyza(0) - 0.5 * shoot_range * (-sin(target_yaw));
+  double right_y = target_armor_xyza(1) - 0.5 * shoot_range * cos(target_yaw);
+
+
+  // 目标中心方向
+  double center_angle = atan2(target_armor_xyza(1), target_armor_xyza(0));
+  // 当前云台偏差（相对于中心）
+  double delta = tools::limit_rad(center_angle - gimbal_yaw);
+
+
+  double left_angle = atan2(left_y, left_x);
+  double right_angle = atan2(right_y, right_x);
+  // 计算左右边缘相对于中心的角度偏移
+  double d_left = tools::limit_rad(left_angle - center_angle);
+  double d_right = tools::limit_rad(right_angle - center_angle);
+
+  // 取较小的和较大的偏移（因为左右边缘距离中心不会超过 90°，所以 d_left 和 d_right 符号相反且绝对值 < π/2）
+  double d_min = std::min(d_left, d_right);
+  double d_max = std::max(d_left, d_right);
+
+
+
+  // double ax = target_armor_xyza(0) - 0.5f * shoot_range * sin(target_yaw);
+  // double ay = target_armor_xyza(1) + 0.5f * shoot_range * cos(target_yaw);
+  // double bx = target_armor_xyza(0) + 0.5f * shoot_range * sin(target_yaw);
+  // double by = target_armor_xyza(1) - 0.5f * shoot_range * cos(target_yaw);
+  // double angle_a = atan2(ay, ax);
+  // double angle_b = atan2(by, bx);
+  // double angle_c = atan2(target_armor_xyza(1), target_armor_xyza(0));
+  // // double allow_fire_ang_max = angle_c - angle_b;
+  // // double allow_fire_ang_min = angle_c - angle_a;
+  // double allow_fire_ang_max = std::max(angle_a, angle_b) - angle_c;
+  // double allow_fire_ang_min = std::min(angle_a, angle_b) - angle_c;
+  // allow_fire_ang_max = tools::limit_rad(allow_fire_ang_max);
+  // allow_fire_ang_min = tools::limit_rad(allow_fire_ang_min);
   
 
   // pitch
@@ -304,19 +332,23 @@ bool Planner::rbShoot(Target target, double gimbal_yaw, bool tower_fixed_pitch){
     suggest_pitch = false;
   }
 
-  // yaw_ang_ref
-  double control_delta_angle =
-      tools::limit_rad(atan2(target_armor_xyza(1), target_armor_xyza(0)) - gimbal_yaw );
-  suggest_fire = (control_delta_angle < allow_fire_ang_max &&
-                  control_delta_angle > allow_fire_ang_min && suggest_pitch) ;
+  // // yaw_ang_ref
+  // double control_delta_angle =
+  //     tools::limit_rad(atan2(target_armor_xyza(1), target_armor_xyza(0)) - gimbal_yaw );
+  // suggest_fire = (control_delta_angle < allow_fire_ang_max &&
+  //                 control_delta_angle > allow_fire_ang_min && suggest_pitch) ;
+
+  // 判断 delta 是否在 [d_min, d_max] 范围内
+  suggest_fire = (delta >= d_min && delta <= d_max) && suggest_pitch;
 
 
 
-  if(!outpost_is_make) suggest_fire = 0;
+  if(!outpost_is_make && target.name == ArmorName::outpost) suggest_fire = 0;
   if(!suggest_fire){
-    tools::logger()->info("not fire! control_delta_angle: {},  allow_fire_ang_max: {}, allow_fire_ang_min: {}",
-      control_delta_angle, allow_fire_ang_max, allow_fire_ang_min
-    );
+    // tools::logger()->info("not fire! control_delta_angle: {},  allow_fire_ang_max: {}, allow_fire_ang_min: {}",
+    //   control_delta_angle, allow_fire_ang_max, allow_fire_ang_min
+    // );
+    
   }
     
     return suggest_fire;
