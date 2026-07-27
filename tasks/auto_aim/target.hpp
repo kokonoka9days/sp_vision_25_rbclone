@@ -44,7 +44,7 @@ public:
   Eigen::VectorXd ekf_x() const;
   const tools::ExtendedKalmanFilter & ekf() const; 
   std::vector<Eigen::Vector4d> armor_xyza_list() const;
-  Eigen::VectorXd get_recent_armor_xyzad() const;
+  Eigen::Matrix<double, 5, 1> get_recent_armor_xyzad() const;
 
   Eigen::Vector3d h_armor_xyz(const Eigen::VectorXd & x, int id) const;
 

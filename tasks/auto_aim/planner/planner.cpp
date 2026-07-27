@@ -497,7 +497,7 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
     // 目标中心方向
     double center_angle = atan2(target_armor_xyza(1), target_armor_xyza(0));
     // 当前云台偏差（相对于中心）
-    double delta = tools::limit_rad(center_angle - plan_yaw);
+    double delta = tools::limit_rad(plan_yaw - center_angle);
 
 
     double left_angle = atan2(left_y, left_x);
@@ -530,10 +530,10 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
       
     return suggest_fire;
   };
-  plan.fire = is_fire(plan.yaw, target, false);
+  plan.fire = is_fire(plan.yaw - yaw_offset_, target, false);
   // tools::logger()->warn("fire:{}", plan.fire);
   plan.target_yaw = (aim_target_yaw + yaw_offset_ )* 57.3;
-  
+
   return plan;
 }
 
@@ -734,7 +734,7 @@ Eigen::Matrix<double, 2, 1> Planner::aim(const Target & target, double bullet_sp
 Eigen::Matrix<double, 2, 1> Planner::rbaim(const Target & target, double bullet_speed)
 {
 
-  Eigen::VectorXd xyzad = target.get_recent_armor_xyzad();
+  Eigen::Matrix<double, 5, 1> xyzad = target.get_recent_armor_xyzad();
   Eigen::Vector3d xyz = xyzad.head<3>();
   double yaw = xyzad(3);
   auto min_dist = xyz.head<2>().norm();

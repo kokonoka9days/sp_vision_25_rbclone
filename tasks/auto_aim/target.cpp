@@ -432,7 +432,7 @@ std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
   return _armor_xyza_list;
 }
 
-Eigen::VectorXd Target::get_recent_armor_xyzad() const
+Eigen::Matrix<double, 5, 1> Target::get_recent_armor_xyzad() const
 {
   Eigen::Vector3d xyz;
   double yaw;
@@ -468,13 +468,15 @@ Eigen::VectorXd Target::get_recent_armor_xyzad() const
 
   double abs_vyaw = abs(ekf_x(7));
   if(abs_vyaw < 90./57.3 
-    && armorId_delta_list[this->last_id].second < 60./57.3){// 判断当前看到的装甲板在预测时间之后是否还在视野内
+    && abs(armorId_delta_list[this->last_id].second) < 60./57.3){// 判断当前看到的装甲板在预测时间之后是否还在视野内
     min_dist = armor_xyza_list[this->last_id].head<2>().norm();
     xyz = armor_xyza_list[this->last_id].head<3>();
     yaw = armor_xyza_list[this->last_id](3);
   }
 
-  return {xyz[0], xyz[1], xyz[2], yaw, min_dist};
+  Eigen::Matrix<double, 5, 1> result;
+  result << xyz[0], xyz[1], xyz[2], yaw, min_dist;
+  return result;
 }
 
 // 检查滤波器半径是否发散
