@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "armor.hpp"
-#include "tools/extended_kalman_filter.hpp"
+#include "kf_example/rv_from_fyt.hpp"
 
 namespace auto_aim
 {
@@ -36,7 +36,7 @@ public:
   void update(const Armor & armor);
 
   Eigen::VectorXd ekf_x() const;
-  const tools::ExtendedKalmanFilter & ekf() const; 
+  const RVfromFYT & ekf() const;
   std::vector<Eigen::Vector4d> armor_xyza_list() const;
   Eigen::Matrix<double, 5, 1> get_recent_armor_xyzad() const;
 
@@ -61,15 +61,13 @@ public:
   //前哨站
   std::pair<bool, double> tower_armor_hs[3] = {std::pair<bool, double>(false, 0), std::pair<bool, double>(false, 0), std::pair<bool, double>(false, 0)};
   // double tower_armor_hs[3] = {0,0,0};  
-  double tower_armor_h;
+  double tower_armor_h = 0.0;
   double tower_armor_hs_datas[3] = {0,0,0}; 
   double last_tower_armor_h[3] = {0,0,0};
   int tower_armor_hs_datas_ptr[3] = {0, 0, 0};
 
   //长短焦
   bool cam_is_short = true;
-  bool last_cam_is_short = true;
-  std::chrono::steady_clock::time_point cam_is_switch_time_point; //相机切换时间点；
   
   int update_count_;
 
@@ -80,14 +78,11 @@ private:
 
   bool is_switch_, is_converged_;
 
-  // 单一 EKF 实例
-  tools::ExtendedKalmanFilter ekf_; 
-  tools::ExtendedKalmanFilter ekf_ca;
+  RVfromFYT ekf_;
 
   std::chrono::steady_clock::time_point t_;
 
-  void update_ypda(const Armor & armor, int id);  // yaw pitch distance angle
-  Eigen::MatrixXd h_jacobian(const Eigen::VectorXd & x, int id) const;
+  void sync_tower_armor_heights();
 };
 
 }  // namespace auto_aim
