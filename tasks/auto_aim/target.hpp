@@ -89,6 +89,7 @@ private:
 
   // 单一 EKF 实例
   tools::ExtendedKalmanFilter ekf_; 
+  tools::ExtendedKalmanFilter ekf_ca;
 
   std::chrono::steady_clock::time_point t_;
 
