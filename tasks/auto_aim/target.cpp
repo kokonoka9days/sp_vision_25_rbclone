@@ -432,6 +432,51 @@ std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
   return _armor_xyza_list;
 }
 
+Eigen::VectorXd Target::get_recent_armor_xyzad() const
+{
+  Eigen::Vector3d xyz;
+  double yaw;
+  auto min_dist = 1e10;
+
+  Eigen::VectorXd ekf_x = this->ekf_x();
+  // 如果delta_angle为0，则该装甲板中心和整车中心的连线在世界坐标系的xy平面过原点
+  static std::vector<std::pair<int ,double>> armorId_delta_list;  
+  if(!armorId_delta_list.empty()) armorId_delta_list.clear();
+  std::vector<Eigen::Vector4d> armor_xyza_list = this->armor_xyza_list();
+
+  auto armor_num = armor_xyza_list.size();
+  // // 如果装甲板未发生过跳变，则只有当前装甲板的位置已知
+  // if (!target.jumped) return {true, armor_xyza_list[0]};
+
+  // 整车旋转中心的球坐标yaw
+  auto center_yaw = std::atan2(ekf_x[2], ekf_x[0]);
+
+  for (int i = 0; i < armor_num; i++) {
+    auto delta_angle = tools::limit_rad(armor_xyza_list[i][3] - center_yaw);
+    // auto dist = armor_xyza_list[i].head<2>().norm();
+    armorId_delta_list.emplace_back(std::make_pair(i, delta_angle));
+  }
+  
+  for (auto & xyza : this->armor_xyza_list()) {
+    auto dist = xyza.head<2>().norm();
+    if (dist < min_dist) {
+      min_dist = dist;
+      xyz = xyza.head<3>();
+      yaw = xyza[3];
+    }
+  }
+
+  double abs_vyaw = abs(ekf_x(7));
+  if(abs_vyaw < 90./57.3 
+    && armorId_delta_list[this->last_id].second < 60./57.3){// 判断当前看到的装甲板在预测时间之后是否还在视野内
+    min_dist = armor_xyza_list[this->last_id].head<2>().norm();
+    xyz = armor_xyza_list[this->last_id].head<3>();
+    yaw = armor_xyza_list[this->last_id](3);
+  }
+
+  return {xyz[0], xyz[1], xyz[2], yaw, min_dist};
+}
+
 // 检查滤波器半径是否发散
 bool Target::diverged() const
 {
