@@ -156,6 +156,7 @@ detect:
   standard_fanblade_path: ./assets/standard_fanblade.jpg
 
 model: "../assets/yolo11_buff_12point_v3.onnx"
+buff_engine_path: "../assets/yolo11_buff_12point_v3_fp16.engine"
 buff_confidence_threshold: 0.6
 buff_keypoint_threshold: 0.3
 buff_keypoint_hard_threshold: 0.15

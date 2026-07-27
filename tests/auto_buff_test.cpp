@@ -185,7 +185,7 @@ const std::string keys =
   "{end-index e    | 0                      | 视频结束帧下标    }"
   "{buff-mode m   | small                  | small 或 big      }"
   "{print-debug p | flase                   | 是否在终端输出误差 }"
-  "{print-time    | flase                  | 是否在终端输出各步骤耗时 }"
+  "{print-time    | true                  | 是否在终端输出各步骤耗时 }"
   "{headless      | false                  | 不显示窗口且不等待按键 }"
   "{print-step    | 1                      | 每隔多少帧输出一次 }"
   "{debug-predict-time | -1                | 蓝色调试框预测时间, 负数使用配置 }"

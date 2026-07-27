@@ -12,11 +12,14 @@ list(APPEND CMAKE_MODULE_PATH ${USER_LOCAL_DIR}/lib/cmake)
 message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}--------------------")
 
 
-# openvino依赖
-set(OPENVINO_MAKE ON)
+# Backend selection. Keep OpenVINO as the default, while allowing the TensorRT
+# engine backend to be enabled from the command line without editing this file.
+option(OPENVINO_MAKE "Build the OpenVINO backend" OFF)
+option(TENSOR_RT_MAKE "Build the TensorRT backend" ON)
 
-# tensorRT依赖
-set(TENSOR_RT_MAKE OFF)
+if(OPENVINO_MAKE AND TENSOR_RT_MAKE)
+    message(FATAL_ERROR "OPENVINO_MAKE and TENSOR_RT_MAKE cannot both be enabled")
+endif()
 
 find_package(OpenCV REQUIRED)
 find_package(fmt REQUIRED)
@@ -28,6 +31,17 @@ find_package(nlohmann_json REQUIRED)
 if(OPENVINO_MAKE)
     set(OpenVINO_DIR "/opt/intel/openvino_2024.6.0/runtime/cmake/")
     find_package(OpenVINO REQUIRED)
+endif()
+
+if(TENSOR_RT_MAKE)
+    if(NOT CMAKE_CUDA_COMPILER AND EXISTS "/usr/local/cuda/bin/nvcc")
+        set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc" CACHE FILEPATH "CUDA compiler")
+    endif()
+    set(CMAKE_CUDA_ARCHITECTURES 89 CACHE STRING "CUDA architectures for TensorRT kernels")
+    set(TENSORRT_ROOT "/opt/TensorRT-8.6.1.6")
+    set(TENSORRT_INCLUDE_DIR "${TENSORRT_ROOT}/include")
+    set(TENSORRT_INFER_LIBRARY "${TENSORRT_ROOT}/lib/libnvinfer.so")
+    set(TENSORRT_PLUGIN_LIBRARY "${TENSORRT_ROOT}/lib/libnvinfer_plugin.so")
 endif()
 
 # add_subdirectory(sp_ws/src)
@@ -46,6 +60,9 @@ add_subdirectory(tasks/auto_aim)
 if(OPENVINO_MAKE)
     add_subdirectory(tasks/auto_buff)
     add_subdirectory(tasks/omniperception)
+endif()
+if(TENSOR_RT_MAKE)
+    add_subdirectory(tasks/auto_buff)
 endif()
 
 
@@ -170,6 +187,9 @@ endif()
 if(TENSOR_RT_MAKE)
     add_executable(trt_camera_detect_test tests/trt_camera_detect_test.cpp)
     target_link_libraries(trt_camera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools auto_aim io)
+
+    add_executable(auto_buff_test tests/auto_buff_test.cpp)
+    target_link_libraries(auto_buff_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
 
     add_executable(auto_aim_test tests/auto_aim_test.cpp)
     target_link_libraries(auto_aim_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
