@@ -129,15 +129,6 @@ void RVfromFYT::prepare_measurement(
   double distance_variance = std::log(std::abs(delta_angle) + 1.0) + 1.0;
   double angle_variance = std::log(std::abs(armor.ypd_in_world[2]) + 1.0) / 200.0 + 9e-2;
 
-  // 相机切换后短时间内增大协方差以允许状态快速调整
-  const double time_since_camera_switch = std::chrono::duration<double>(
-                                            std::chrono::steady_clock::now() - camera_switch_time_)
-                                            .count();
-  if (time_since_camera_switch < 0.7 && update_count > 50) {
-    azimuth_variance = 4e4;
-    distance_variance *= 300.0;
-    angle_variance *= 300.0;
-  }
 
   // 构造测量协方差矩阵 R
   R_ << azimuth_variance, 0.0,            0.0,               0.0,             // yaw

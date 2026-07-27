@@ -11,12 +11,14 @@ namespace auto_aim
  * @brief 基于TJU TrackQueueV3的常加速度状态估计器。
  * 
  * 状态向量 (11维)： [x, y, z, yaw, vx, vy, vz, vyaw, ax, ay, ayaw]
- * 测量向量：         [x, y, z, yaw]（由基类 State2Est 处理）
+ * 测量向量：         [x, y, z, yaw]
  */
 class CAFromTJU : public State2Est
 {
 public:
   static constexpr Eigen::Index kStateDimension = 11;  ///< 状态维度
+  static constexpr Eigen::Index kMeasurementDimension = 4;  ///< 测量维度
+//   static constexpr double kMeasurementVariance = 0.1;  ///< TJU模型默认测量方差
 
   /** 默认构造函数（未初始化） */
   CAFromTJU() = default;
@@ -57,12 +59,26 @@ public:
    */
   void predict_model(double dt, const Eigen::VectorXd & process_noise_diagonal);
 
+  /**
+   * @brief 准备单个装甲板的测量数据
+   *
+   * 从装甲板提取世界坐标和世界偏航角，组成 [x, y, z, yaw]，并使用
+   * TrackQueueV3 的默认测量协方差 R = 0.1I。
+   * @param armor 当前检测到的单个装甲板
+   * @throws std::invalid_argument 如果位置或偏航角包含非有限值
+   */
+  void prepare_measurement(const Armor & armor);
+
 private:
   /**
    * @brief 状态加法，并对偏航角进行归一化
    */
   static Eigen::VectorXd state_add(
     const Eigen::VectorXd & state, const Eigen::VectorXd & delta);
+
+  Eigen::Vector4d z_ = Eigen::Vector4d::Zero();
+  Eigen::Matrix4d R_ = Eigen::Matrix4d::Identity() * kMeasurementVariance;
+  bool measurement_ready_ = false;
 };
 
 }  // namespace auto_aim
