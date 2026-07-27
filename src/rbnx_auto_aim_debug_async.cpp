@@ -15,6 +15,7 @@
 #include "tasks/auto_aim/yolo.hpp"
 #include "tools/exiter.hpp"
 #include "tools/img_tools.hpp"
+#include "tools/reprojection.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
@@ -153,40 +154,8 @@ int main(int argc, char * argv[])
       target_queue.push(std::nullopt);
     } else {
       target_queue.push(targets.front());
-      auto & target = targets.front();
-      auto ekf_x = target.getEKFXest();
-
-      Eigen::Vector3d center_world(ekf_x[0], ekf_x[2], ekf_x[4]);
-      Eigen::Vector3d velocity(ekf_x[1], ekf_x[3], ekf_x[5]);
-      Eigen::Vector3d pred_center = center_world + velocity * 0.5;
-      Eigen::Vector3d v_yaw_axis_tvec = center_world;
-      v_yaw_axis_tvec[2] += ekf_x[7] * 0.1;
-
-      auto center_img = solver.reproject_armor(center_world, 0.0, target.armor_type, target.name);
-      auto pred_point_img =
-        solver.reproject_armor(pred_center, 0.0, target.armor_type, target.name);
-      auto v_yaw_axis_point_img =
-        solver.reproject_armor(v_yaw_axis_tvec, 0.0, target.armor_type, target.name);
-
-      if (!center_img.empty() && !pred_point_img.empty()) {
-        cv::circle(img, center_img[0], 5, cv::Scalar(51, 153, 237), -1);
-        cv::circle(img, pred_point_img[0], 8, cv::Scalar(0, 0, 255), -1);
-        cv::line(img, center_img[0], pred_point_img[0], cv::Scalar(0, 255, 255), 2);
-        if (!v_yaw_axis_point_img.empty()) {
-          cv::line(img, center_img[0], v_yaw_axis_point_img[0], cv::Scalar(0, 255, 0), 2);
-        }
-      }
-
-      for (const auto & xyza : target.armor_xyza_list()) {
-        auto image_points =
-          solver.reproject_armor(xyza.head(3), xyza[3], target.armor_type, target.name);
-        tools::draw_points(img, image_points, {235, 206, 135});
-      }
-
-      auto aim_xyza = planner.debug_xyza;
-      auto image_points =
-        solver.reproject_armor(aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
-      tools::draw_points(img, image_points, {0, 0, 255});
+      tools::draw_reprojection(
+        img, solver, targets.front(), planner.debug_xyza, cv::Scalar(235, 206, 135));
     }
 
     // cv::resize(img, img, {}, 0.5, 0.5);
