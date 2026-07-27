@@ -79,6 +79,7 @@ private:
   bool is_switch_, is_converged_;
 
   RVfromFYT ekf_;
+  tools::ExtendedKalmanFilter* est = nullptr;
 
   std::chrono::steady_clock::time_point t_;
 

@@ -97,28 +97,32 @@ void Target::predict(std::chrono::steady_clock::time_point t,  Eigen::VectorXd u
 
 void Target::predict(double dt, Eigen::VectorXd u_xyz)
 {
-  double v1, v2;
-  if (name == ArmorName::outpost) {
-    ekf_.x[10] = RVfromFYT::kTowerArmorHeightStep;
-    // 前哨站位置固定，收敛后极大限制平移噪声
-    if (this->convergened()) {
-        v1 = 0.1;  // 锁死 X, Y, Z 中心
-    } else {
-        v1 = 20;   // 允许前期寻找中心
+  auto rvFromFytpredict = [&]() -> void {
+    double v1, v2;
+    if (name == ArmorName::outpost) {
+      ekf_.x[10] = RVfromFYT::kTowerArmorHeightStep;
+      // 前哨站位置固定，收敛后极大限制平移噪声
+      if (this->convergened()) {
+          v1 = 0.1;  // 锁死 X, Y, Z 中心
+      } else {
+          v1 = 20;   // 允许前期寻找中心
+      }
+      v2 = 0.1;      // 允许自转速度存在微小波动
     }
-    v2 = 0.1;      // 允许自转速度存在微小波动
-  } 
-  else {
-    v1 = 100;
-    v2 = 400;
-  }
+    else {
+      v1 = 100;
+      v2 = 400;
+    }
 
-  // 前哨站收敛后限制最大转速防飞
-  if (this->convergened() && this->name == ArmorName::outpost) {
-    if (std::abs(this->ekf_.x[7]) > 2) this->ekf_.x[7] = this->ekf_.x[7] > 0 ? 2.51 : -2.51;
-  }
-
-  ekf_.predict_model(dt, u_xyz.head<3>(), v1, v2);
+    // 前哨站收敛后限制最大转速防飞
+    if (this->convergened() && this->name == ArmorName::outpost) {
+      if (std::abs(this->ekf_.x[7]) > 2) this->ekf_.x[7] = this->ekf_.x[7] > 0 ? 2.51 : -2.51;
+    }
+    Eigen::VectorXd noises(2);
+    noises << v1, v2;
+    ekf_.kf_predict(dt, u_xyz.head<3>(), noises);
+  };rvFromFytpredict();
+  
 }
 
 void Target::update(const Armor & armor)

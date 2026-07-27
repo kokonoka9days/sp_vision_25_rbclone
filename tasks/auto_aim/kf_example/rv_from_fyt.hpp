@@ -2,14 +2,7 @@
 #ifndef AUTO_AIM__KF_EXAMPLE__RV_FROM_FYT_HPP
 #define AUTO_AIM__KF_EXAMPLE__RV_FROM_FYT_HPP
 
-#include <Eigen/Dense>
-#include <array>
-#include <chrono>
-#include <utility>
-#include <vector>
-
-#include "tasks/auto_aim/armor.hpp"
-#include "tools/extended_kalman_filter.hpp"
+#include "./state2est.hpp"
 
 namespace auto_aim
 {
@@ -19,11 +12,11 @@ namespace auto_aim
  * 状态向量： [x, vx, y, vy, z, vz, yaw, vyaw, radius, radius_offset, height_offset]
  * 测量向量： [yaw, pitch, distance, armor_yaw]
  */
-class RVfromFYT : public tools::ExtendedKalmanFilter
+class RVfromFYT : public State2Est
 {
 public:
   static constexpr Eigen::Index kStateDimension = 11;   ///< 状态维度
-  static constexpr double kTowerArmorHeightStep = 0.10; ///< 塔装甲高度步长
+  static constexpr double kTowerArmorHeightStep = 0.10; ///< 前哨站装甲板高低差
 
   /** 默认构造函数（未初始化） */
   RVfromFYT() = default;
@@ -39,6 +32,13 @@ public:
   RVfromFYT(
     const Eigen::VectorXd & x0, const Eigen::MatrixXd & P0, int armor_num,
     ArmorName armor_name);
+
+
+  void kf_predict(double dt, const Eigen::VectorXd & u, const Eigen::VectorXd noises);
+
+  void mpc_predict(double dt, 
+      const Eigen::VectorXd & u, 
+      const Eigen::VectorXd noises) {this->kf_predict(dt, u, noises); };
 
   /**
    * @brief 执行预测步骤（运动模型）

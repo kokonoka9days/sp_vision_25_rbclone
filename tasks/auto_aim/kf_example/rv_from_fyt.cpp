@@ -23,7 +23,7 @@ constexpr double kHysteresisMargin = 5.0;
 RVfromFYT::RVfromFYT(
   const Eigen::VectorXd & x0, const Eigen::MatrixXd & P0, int armor_num,
   ArmorName armor_name)
-: tools::ExtendedKalmanFilter(x0, P0, state_add),
+: State2Est(x0, P0, state_add),
   armor_num_(armor_num),
   armor_name_(armor_name)
 {
@@ -35,6 +35,17 @@ RVfromFYT::RVfromFYT(
     throw std::invalid_argument("RVfromFYT requires at least one armor");
   }
 }
+
+
+void RVfromFYT::kf_predict(double dt, 
+     const Eigen::VectorXd & u, 
+     const Eigen::VectorXd noises){
+  auto v1 = noises(0);
+  auto v2 = noises(1);
+  this->predict_model(dt, u.head<3>(), v1, v2);
+}
+
+
 
 /**
  * @brief 预测步骤：使用常速度模型，输入加速度作为控制量，并加入过程噪声
