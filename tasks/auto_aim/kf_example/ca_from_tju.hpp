@@ -1,3 +1,4 @@
+// ca_from_tju.hpp
 #ifndef AUTO_AIM__KF_EXAMPLE__CA_FROM_TJU_HPP
 #define AUTO_AIM__KF_EXAMPLE__CA_FROM_TJU_HPP
 
@@ -7,45 +8,59 @@ namespace auto_aim
 {
 
 /**
- * @brief Constant-acceleration state estimator based on TJU TrackQueueV3.
- *
- * State: [x, y, z, yaw, vx, vy, vz, vyaw, ax, ay, ayaw]
- * Measurement expected by the original model: [x, y, z, yaw]
+ * @brief 基于TJU TrackQueueV3的常加速度状态估计器。
+ * 
+ * 状态向量 (11维)： [x, y, z, yaw, vx, vy, vz, vyaw, ax, ay, ayaw]
+ * 测量向量：         [x, y, z, yaw]（由基类 State2Est 处理）
  */
 class CAFromTJU : public State2Est
 {
 public:
-  static constexpr Eigen::Index kStateDimension = 11;
+  static constexpr Eigen::Index kStateDimension = 11;  ///< 状态维度
 
+  /** 默认构造函数（未初始化） */
   CAFromTJU() = default;
 
   /**
-   * @param x0 Initial 11-dimensional state.
-   * @param P0 Initial 11x11 covariance.
-   * @throws std::invalid_argument if either argument has the wrong dimensions.
+   * @brief 带参构造函数
+   * @param x0 初始状态向量 (11维)
+   * @param P0 初始协方差矩阵 (11x11)
+   * @throws std::invalid_argument 如果维度不匹配
    */
   CAFromTJU(const Eigen::VectorXd & x0, const Eigen::MatrixXd & P0);
 
   /**
-   * @brief Run one EKF prediction.
-   *
-   * The TJU model is autonomous, so @p u is intentionally unused. @p noises
-   * contains the 11 diagonal entries of the process-noise covariance matrix.
+   * @brief 执行一次EKF预测步骤（卡尔曼滤波预测）
+   * 
+   * 此模型为自主模型（无外部输入），因此 @p u 被忽略。
+   * @param dt 预测时间步长 (秒)
+   * @param u 外部输入（此处未使用，保留接口）
+   * @param noises 过程噪声协方差矩阵的对角线元素 (11个非负值)
    */
   void kf_predict(
     double dt, const Eigen::VectorXd & u, const Eigen::VectorXd noises) override;
 
+  /**
+   * @brief MPC预测接口（与 kf_predict 相同，保持兼容）
+   * @param dt 预测时间步长
+   * @param u 外部输入（未使用）
+   * @param noises 过程噪声对角线
+   */
   void mpc_predict(
     double dt, const Eigen::VectorXd & u, const Eigen::VectorXd noises) override;
 
   /**
-   * @brief Apply the constant-acceleration transition and covariance prediction.
-   * @param dt Prediction interval in seconds.
-   * @param process_noise_diagonal Eleven non-negative diagonal entries of Q.
+   * @brief 应用常加速度转移矩阵和协方差预测
+   * @param dt 预测间隔 (秒)
+   * @param process_noise_diagonal 过程噪声协方差矩阵 Q 的 11 个对角线元素（非负）
+   * @throws std::invalid_argument 如果 dt 无效或噪声维度/值非法
    */
   void predict_model(double dt, const Eigen::VectorXd & process_noise_diagonal);
 
 private:
+  /**
+   * @brief 状态加法，并对偏航角进行归一化
+   */
   static Eigen::VectorXd state_add(
     const Eigen::VectorXd & state, const Eigen::VectorXd & delta);
 };
