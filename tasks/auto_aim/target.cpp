@@ -26,8 +26,7 @@ Target::Target(
   t_(t),
   is_switch_(false),
   is_converged_(false),
-  switch_count_(0),
-  motion_state_(MotionState::TRANSLATION) // 默认初始状态为平移模型
+  switch_count_(0)
 {
   auto r = radius;
   priority = armor.priority;
@@ -74,8 +73,7 @@ Target::Target(
 
 // 供手动初始化使用的构造函数
 Target::Target(double x, double vyaw, double radius, double h) 
-: armor_num_(4),
-  motion_state_(MotionState::TRANSLATION)
+: armor_num_(4)
 {
   Eigen::VectorXd x0 = Eigen::VectorXd::Zero(11);
   x0 << x, 0, 0, 0, 0, 0, 0, vyaw, radius, 0, h;
@@ -108,42 +106,6 @@ void Target::predict(std::chrono::steady_clock::time_point t,  Eigen::VectorXd u
 
 void Target::predict(double dt, Eigen::VectorXd u_xyz)
 {
-  double vyaw = std::abs(ekf_.x[7]);
-  double v_linear = std::hypot(ekf_.x[1], ekf_.x[3]); // 计算XY方向合成线速度 
-  
-  // 状态机滞回阈值配置
-  const double OMEGA_HIGH = 3;     // 进入旋转的角速度阈值 (rad/s)
-  const double OMEGA_LOW = 1.5;    // 退出旋转的角速度阈值 (rad/s)
-  const double V_HIGH = 0.6;       // 进入平移旋转的线速度阈值 (m/s)
-  const double V_LOW = 0.3;        // 退出平移旋转的线速度阈值 (m/s)
-
-  // ================= 运动状态转移逻辑 =================
-  // 核心目的是根据车辆当前的平移和自转速度，动态调整过程噪声Q，使得滤波器既能跟得紧，又不会乱漂
-  switch (motion_state_) {
-    case MotionState::TRANSLATION:
-      if (vyaw > OMEGA_HIGH) {
-        if (v_linear > V_HIGH) motion_state_ = MotionState::TRANSLATION_ROTATION;
-        else motion_state_ = MotionState::IN_PLACE_ROTATION;
-      }
-      break;
-
-    case MotionState::IN_PLACE_ROTATION:
-      if (vyaw < OMEGA_LOW) {
-        motion_state_ = MotionState::TRANSLATION;
-      } else if (v_linear > V_HIGH) {
-        motion_state_ = MotionState::TRANSLATION_ROTATION;
-      }
-      break;
-
-    case MotionState::TRANSLATION_ROTATION:
-      if (vyaw < OMEGA_LOW) {
-        motion_state_ = MotionState::TRANSLATION;
-      } else if (v_linear < V_LOW) {
-        motion_state_ = MotionState::IN_PLACE_ROTATION;
-      }
-      break;
-  }
-  
   // 11维基础转移矩阵 F (x = F*x)
   Eigen::MatrixXd F = Eigen::MatrixXd::Identity(11, 11);
   F(0, 1) = dt; F(2, 3) = dt; F(4, 5) = dt; F(6, 7) = dt;
@@ -160,18 +122,8 @@ void Target::predict(double dt, Eigen::VectorXd u_xyz)
     v2 = 0.1;      // 允许自转速度存在微小波动
   } 
   else {
-    // 根据状态机分配不同的噪声
-    switch (motion_state_) {
-      case MotionState::TRANSLATION:
-        v1 = 100; v2 = 400; // 灵活平移
-        break;
-      case MotionState::IN_PLACE_ROTATION:
-        v1 = 100;   v2 = 400; // 抑制平移漂移，紧跟自转
-        break;
-      case MotionState::TRANSLATION_ROTATION:
-        v1 = 100; v2 = 400; // 高机动状态，全部放开
-        break;
-    }
+    v1 = 100;
+    v2 = 400;
   }
 
   // 构造过程噪声矩阵 Q
@@ -379,10 +331,6 @@ void Target::update_ypda(const Armor & armor, int id)
   auto r2_pitch = 4e-3;
   auto r2_angle = log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2;
   auto r2_d = log(std::abs(delta_angle) + 1) + 1;
-
-  if (motion_state_ == MotionState::IN_PLACE_ROTATION) {
-    r2_angle *= 3.0;  // 旋转时进一步增加对角度的不信任
-}
 
   // // 前哨站换板瞬间，放宽距离和高度噪声信任度防跳变
   // if (name == ArmorName::outpost && is_switch_) {
