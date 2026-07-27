@@ -32,6 +32,16 @@ Tracker::Tracker(const std::string & config_path, Solver * solver)
 
 std::string Tracker::state() const { return state_; }
 
+void Tracker::reset()
+{
+  detect_count_ = 0;
+  temp_lost_count_ = 0;
+  state_ = "lost";
+  pre_state_ = "lost";
+  last_timestamp_ = std::chrono::steady_clock::now();
+  last_mode_.reset();
+}
+
 std::list<Target> Tracker::sb_track(
   std::list<Armor> & armors, std::chrono::steady_clock::time_point t,bool cam_is_short, bool use_enemy_color)
 {
@@ -151,8 +161,8 @@ std::list<Target> Tracker::track(
 
   bool found = 0;
 
-  static uint8_t last_mode = g.mode;
-  bool mode_switch_0to1 = (last_mode == 0 && g.mode == 1);
+  if (!last_mode_.has_value()) last_mode_ = g.mode;
+  bool mode_switch_0to1 = (*last_mode_ == 0 && g.mode == 1);
   //按下右键时，mouse为1则跟随上一次的目标，不按则瞄准最近的装甲板
   if(!mode_switch_0to1)
   {
@@ -182,7 +192,7 @@ std::list<Target> Tracker::track(
      
     }
   }
-  last_mode = g.mode;
+  last_mode_ = g.mode;
   // found = set_target(armors, t);
 
   state_machine(found);
@@ -423,6 +433,7 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
 {
   if (armors.empty()) return false;
 
+  const bool cam_is_short = target_.cam_is_short;
   auto & armor = armors.front();
   solver_->solve(armor);
 
@@ -450,6 +461,9 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
     Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1}};
     target_ = Target(armor, t, 0.2, 4, P0_dig);
   }
+
+  target_.cam_is_short = cam_is_short;
+  target_.last_cam_is_short = cam_is_short;
 
   return true;
 }
