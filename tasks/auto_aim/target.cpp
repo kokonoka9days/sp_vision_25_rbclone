@@ -42,7 +42,7 @@ Target::Target(
  if(name == ArmorName::outpost){
   tower_armor_hs[0].first = true;       // 标记 0 号位已成功初始化
   tower_armor_hs[0].second = center_z;  // 记录真实高度
-}
+  }
 
   cam_is_switch_time_point = std::chrono::steady_clock::time_point{};
 
