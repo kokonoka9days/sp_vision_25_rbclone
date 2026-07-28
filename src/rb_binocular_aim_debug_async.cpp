@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <cmath>
 #include <cstdint>
 #include <deque>
 #include <mutex>
@@ -32,94 +31,7 @@ const std::string keys =
   "{help h usage ? |                           | 输出命令行参数说明}"
   "{short_camera   | ../configs/sb_short.yaml | 短焦相机配置文件路径}"
   "{long_camera    | ../configs/sb_long.yaml  | 长焦相机配置文件路径}"
-  "{long_no_target_timeout | 1000 | 长焦连续无目标后切回短焦的超时时间(ms)}"
-  "{handover_stable_frames | 3 | 接力取得控制前所需的连续稳定跟踪帧数}"
-  "{handover_max_angular_speed | 0.5 | 接力允许的最大云台角速度(rad/s)}";
-
-namespace
-{
-class ControlHandoverGate
-{
-public:
-  ControlHandoverGate(int required_stable_frames, double max_angular_speed)
-  : required_stable_frames_(required_stable_frames), max_angular_speed_(max_angular_speed)
-  {
-  }
-
-  bool update(
-    const Eigen::Quaterniond & gimbal_q, std::chrono::steady_clock::time_point timestamp,
-    bool has_tracking_observation)
-  {
-    update_angular_speed(gimbal_q, timestamp);
-
-    if (!has_tracking_observation) {
-      revoke();
-      return false;
-    }
-
-    // 角速度只用于接力前的稳定判定。接管后由自瞄自身驱动的正常转动不能撤销控制。
-    if (control_ready_) return true;
-
-    if (
-      !angular_speed_.has_value() || !std::isfinite(*angular_speed_) ||
-      *angular_speed_ > max_angular_speed_) {
-      stable_observation_count_ = 0;
-      return false;
-    }
-
-    stable_observation_count_++;
-    if (stable_observation_count_ >= required_stable_frames_) {
-      control_ready_ = true;
-      tools::logger()->info(
-        "[BinocularAim] 接力完成: 连续稳定跟踪 {} 帧，云台角速度 {:.3f}rad/s",
-        stable_observation_count_, *angular_speed_);
-    }
-
-    return control_ready_;
-  }
-
-  void reset()
-  {
-    revoke();
-    last_q_.reset();
-    last_timestamp_.reset();
-    angular_speed_.reset();
-  }
-
-private:
-  void revoke()
-  {
-    stable_observation_count_ = 0;
-    control_ready_ = false;
-  }
-
-  void update_angular_speed(
-    const Eigen::Quaterniond & gimbal_q, std::chrono::steady_clock::time_point timestamp)
-  {
-    if (last_q_.has_value() && last_timestamp_.has_value()) {
-      const double dt = tools::delta_time(*last_timestamp_, timestamp);
-      if (dt > 0.0 && dt <= 0.2) {
-        angular_speed_ = last_q_->angularDistance(gimbal_q) / dt;
-      } else {
-        angular_speed_.reset();
-      }
-    } else {
-      angular_speed_.reset();
-    }
-
-    last_q_ = gimbal_q;
-    last_timestamp_ = timestamp;
-  }
-
-  int required_stable_frames_;
-  double max_angular_speed_;
-  int stable_observation_count_ = 0;
-  bool control_ready_ = false;
-  std::optional<Eigen::Quaterniond> last_q_;
-  std::optional<std::chrono::steady_clock::time_point> last_timestamp_;
-  std::optional<double> angular_speed_;
-};
-}  // namespace
+  "{long_no_target_timeout | 1000 | 长焦连续无目标后切回短焦的超时时间(ms)}";
 
 int main(int argc, char * argv[])
 {
@@ -135,12 +47,9 @@ int main(int argc, char * argv[])
   const auto short_camera_config_path = cli.get<std::string>("short_camera");
   const auto long_camera_config_path = cli.get<std::string>("long_camera");
   const auto long_no_target_timeout_ms = cli.get<int>("long_no_target_timeout");
-  const auto handover_stable_frames = cli.get<int>("handover_stable_frames");
-  const auto handover_max_angular_speed = cli.get<double>("handover_max_angular_speed");
   if (
     short_camera_config_path.empty() || long_camera_config_path.empty() ||
-    long_no_target_timeout_ms <= 0 || handover_stable_frames <= 0 ||
-    !std::isfinite(handover_max_angular_speed) || handover_max_angular_speed <= 0.0) {
+    long_no_target_timeout_ms <= 0) {
     cli.printMessage();
     return 1;
   }
@@ -279,7 +188,6 @@ int main(int argc, char * argv[])
 
   std::deque<PendingFrame> pending_frames;
   LongCameraWatchdog long_camera_watchdog;
-  ControlHandoverGate handover_gate(handover_stable_frames, handover_max_angular_speed);
   std::optional<std::chrono::steady_clock::time_point> last_tracker_timestamp;
   cv::Mat img;
   std::chrono::steady_clock::time_point t;
@@ -373,7 +281,6 @@ int main(int argc, char * argv[])
               "[BinocularAim] 长焦连续 {}ms 未检测到目标，回退短焦", no_target_ms);
             long_camera_watchdog.active = false;
             short_camera_tracker.reset();
-            handover_gate.reset();
             target_queue.push(std::nullopt);
             continue;
           }
@@ -390,23 +297,10 @@ int main(int argc, char * argv[])
     tools::draw_text(
       img, frame_is_short ? "Camera: short" : "Camera: long", {40, 120}, {255, 255, 0});
 
-    bool has_tracking_observation = false;
-    if (!targets.empty() && frame_tracker.state() == "tracking") {
-      const auto & tracked_target = targets.front();
-      has_tracking_observation = std::any_of(
-        armors.begin(), armors.end(), [&](const auto_aim::Armor & armor) {
-          return armor.name == tracked_target.name && armor.type == tracked_target.armor_type;
-        });
-    }
-
-    const bool control_ready =
-      handover_gate.update(q, t, has_tracking_observation);
-
     if (targets.empty()) {
       target_queue.push(std::nullopt);
     } else {
-      target_queue.push(control_ready ? std::optional<auto_aim::Target>(targets.front())
-                                      : std::nullopt);
+      target_queue.push(targets.front());
       auto & target = targets.front();
       const auto ekf_x = target.getEKFXest();
 
@@ -447,11 +341,10 @@ int main(int argc, char * argv[])
         aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
       tools::draw_points(img, aim_points, {0, 0, 255});
 
-      if (control_ready && binocular_aim.ChangeTheScope(target, frame_tracker, false)) {
+      if (binocular_aim.ChangeTheScope(target, frame_tracker, false)) {
         auto & activated_tracker =
           binocular_aim.is_short ? short_camera_tracker : long_camera_tracker;
         activated_tracker.reset();
-        handover_gate.reset();
         target_queue.push(std::nullopt);
 
         if (binocular_aim.is_short) {
