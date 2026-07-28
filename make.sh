@@ -9,7 +9,7 @@
 
 cmake -B build
 # make -C build/ -j12
-# make -C build/ -j`nproc`
+make -C build/ -j`nproc`
 # exec "$@"
-make -C build/ -j4
+# make -C build/ -j4
 # make -C build/ -j10

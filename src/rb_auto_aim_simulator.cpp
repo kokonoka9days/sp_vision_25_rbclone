@@ -38,6 +38,12 @@ using namespace std::chrono_literals;
 namespace
 {
 
+constexpr uint32_t kImageWidth = 1440;
+constexpr uint32_t kImageHeight = 1080;
+constexpr uint32_t kImageStep = kImageWidth * 3;
+constexpr std::size_t kImageDataSize =
+  static_cast<std::size_t>(kImageStep) * kImageHeight;
+
 const std::string kKeys =
   "{help h usage ?    |                                       | 输出命令行参数说明}"
   "{@config-path      | ../configs/rb_auto_aim_simulator.yaml | yaml配置文件路径}"
@@ -49,6 +55,28 @@ const std::string kKeys =
 int64_t stamp_ns(const builtin_interfaces::msg::Time & stamp)
 {
   return static_cast<int64_t>(stamp.sec) * 1000000000LL + stamp.nanosec;
+}
+
+void log_ros_environment()
+{
+  const char * rmw = std::getenv("RMW_IMPLEMENTATION");
+  const char * domain = std::getenv("ROS_DOMAIN_ID");
+  const char * transports = std::getenv("FASTDDS_BUILTIN_TRANSPORTS");
+  tools::logger()->info(
+    "ROS 2环境: RMW_IMPLEMENTATION={}, ROS_DOMAIN_ID={}, FASTDDS_BUILTIN_TRANSPORTS={}",
+    rmw ? rmw : "<unset>", domain ? domain : "<unset>", transports ? transports : "<unset>");
+
+  if (rmw && std::string(rmw) != "rmw_fastrtps_cpp") {
+    tools::logger()->warn(
+      "RMW_IMPLEMENTATION={}，与发送端要求的rmw_fastrtps_cpp不一致", rmw);
+  }
+  if (domain && std::string(domain) != "0") {
+    tools::logger()->warn("ROS_DOMAIN_ID={}，与发送端要求的0不一致", domain);
+  }
+  if (transports && std::string(transports) != "SHM") {
+    tools::logger()->warn(
+      "FASTDDS_BUILTIN_TRANSPORTS={}，同机共享内存模式应设为SHM", transports);
+  }
 }
 
 struct SimulatorFrame
@@ -158,7 +186,7 @@ public:
   SimulatorInput(
     const std::string & image_topic, const std::string & camera_info_topic,
     const std::string & tf_topic)
-  : Node("rb_auto_aim_simulator")
+  : Node("rb_auto_aim_simulator"), image_topic_(image_topic)
   {
     image_callback_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     metadata_callback_group_ =
@@ -166,8 +194,8 @@ public:
 
     rclcpp::SubscriptionOptions image_options;
     image_options.callback_group = image_callback_group_;
-    auto image_qos = rclcpp::SensorDataQoS();
-    image_qos.keep_last(1);
+    const auto image_qos =
+      rclcpp::SensorDataQoS().keep_last(1).best_effort().durability_volatile();
     image_sub_ = create_subscription<sensor_msgs::msg::Image>(
       image_topic, image_qos,
       [this](sensor_msgs::msg::Image::ConstSharedPtr msg) { on_image(std::move(msg)); },
@@ -193,6 +221,22 @@ public:
       return pending_image_.has_value() && !transform_states_.empty() && !camera_infos_.empty();
     });
     if (!pending_image_ || transform_states_.empty() || camera_infos_.empty()) {
+      const auto now = std::chrono::steady_clock::now();
+      if (now - last_wait_warning_ >= 2s) {
+        last_wait_warning_ = now;
+        const auto received_count = image_message_count_;
+        const bool has_pending_image = pending_image_.has_value();
+        const bool has_camera_info = !camera_infos_.empty();
+        const bool has_tf = !transform_states_.empty();
+        lock.unlock();
+        RCLCPP_WARN(
+          get_logger(),
+          "输入尚未就绪: image_topic=%s publishers=%zu received=%zu latest_image=%s "
+          "camera_info=%s tf_chain=%s",
+          image_topic_.c_str(), image_sub_->get_publisher_count(), received_count,
+          has_pending_image ? "yes" : "no", has_camera_info ? "yes" : "no",
+          has_tf ? "yes" : "no");
+      }
       return std::nullopt;
     }
 
@@ -229,7 +273,7 @@ public:
     const auto camera_info = *nearest_camera_info;
     lock.unlock();
 
-    // bgr8 is exposed as a read-only view. image_owner keeps the ROS buffer alive.
+    // to_bgr reads through a shared RGB view; the returned BGR matrix owns its converted buffer.
     auto image = to_bgr(*pending_image.message);
     return SimulatorFrame{
       std::move(image),
@@ -254,46 +298,11 @@ private:
 
   static cv::Mat to_bgr(const sensor_msgs::msg::Image & msg)
   {
-    int type = 0;
-    int conversion = -1;
-    std::size_t bytes_per_pixel = 0;
-
-    if (msg.encoding == "bgr8") {
-      type = CV_8UC3;
-      bytes_per_pixel = 3;
-    } else if (msg.encoding == "rgb8") {
-      type = CV_8UC3;
-      bytes_per_pixel = 3;
-      conversion = cv::COLOR_RGB2BGR;
-    } else if (msg.encoding == "bgra8") {
-      type = CV_8UC4;
-      bytes_per_pixel = 4;
-      conversion = cv::COLOR_BGRA2BGR;
-    } else if (msg.encoding == "rgba8") {
-      type = CV_8UC4;
-      bytes_per_pixel = 4;
-      conversion = cv::COLOR_RGBA2BGR;
-    } else if (msg.encoding == "mono8") {
-      type = CV_8UC1;
-      bytes_per_pixel = 1;
-      conversion = cv::COLOR_GRAY2BGR;
-    } else {
-      throw std::runtime_error("不支持的图像编码: " + msg.encoding);
-    }
-
-    const auto minimum_step = static_cast<std::size_t>(msg.width) * bytes_per_pixel;
-    const auto required_size = static_cast<std::size_t>(msg.step) * msg.height;
-    if (msg.step < minimum_step || msg.data.size() < required_size) {
-      throw std::runtime_error("ROS图像的step或data长度无效");
-    }
-
-    const cv::Mat source(
-      static_cast<int>(msg.height), static_cast<int>(msg.width), type,
+    const cv::Mat rgb(
+      static_cast<int>(msg.height), static_cast<int>(msg.width), CV_8UC3,
       const_cast<unsigned char *>(msg.data.data()), msg.step);
-    if (conversion < 0) return source;
-
     cv::Mat bgr;
-    cv::cvtColor(source, bgr, conversion);
+    cv::cvtColor(rgb, bgr, cv::COLOR_RGB2BGR);
     return bgr;
   }
 
@@ -317,25 +326,18 @@ private:
   void on_image(sensor_msgs::msg::Image::ConstSharedPtr msg)
   {
     try {
-      std::size_t bytes_per_pixel = 0;
-      if (msg->encoding == "mono8") {
-        bytes_per_pixel = 1;
-      } else if (msg->encoding == "bgr8" || msg->encoding == "rgb8") {
-        bytes_per_pixel = 3;
-      } else if (msg->encoding == "bgra8" || msg->encoding == "rgba8") {
-        bytes_per_pixel = 4;
-      } else {
-        throw std::runtime_error("不支持的图像编码: " + msg->encoding);
-      }
-
-      const auto minimum_step = static_cast<std::size_t>(msg->width) * bytes_per_pixel;
-      const auto required_size = static_cast<std::size_t>(msg->step) * msg->height;
-      if (msg->step < minimum_step || msg->data.size() < required_size) {
-        throw std::runtime_error("ROS图像的step或data长度无效");
+      if (
+        msg->width != kImageWidth || msg->height != kImageHeight || msg->encoding != "rgb8" ||
+        msg->step != kImageStep || msg->data.size() < kImageDataSize) {
+        throw std::runtime_error(fmt::format(
+          "无效图像消息: {}x{}, encoding={}, step={}, data={} (期望 {}x{}, rgb8, {}, {})",
+          msg->width, msg->height, msg->encoding, msg->step, msg->data.size(), kImageWidth,
+          kImageHeight, kImageStep, kImageDataSize));
       }
 
       const auto received_at = std::chrono::steady_clock::now();
       const auto image_stamp = stamp_ns(msg->header.stamp);
+      bool first_image = false;
       {
         std::lock_guard lock(mutex_);
         if (last_image_received_at_) {
@@ -349,10 +351,17 @@ private:
           }
         }
         last_image_received_at_ = received_at;
+        first_image = image_message_count_ == 0;
+        ++image_message_count_;
         pending_image_ = PendingImage{
           std::move(msg), received_at, source_fps_, image_stamp};
       }
       frame_ready_.notify_one();
+      if (first_image) {
+        tools::logger()->info(
+          "已收到首帧原始图像: topic={}, size={}x{}, encoding=rgb8, step={}", image_topic_,
+          kImageWidth, kImageHeight, kImageStep);
+      }
     } catch (const std::exception & e) {
       RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 2000, "%s", e.what());
     }
@@ -433,9 +442,12 @@ private:
   std::atomic<bool> camera_info_received_ = false;
   std::atomic<bool> handeye_received_ = false;
   bool warned_tf_delay_ = false;
+  std::chrono::steady_clock::time_point last_wait_warning_{};
   std::optional<std::chrono::steady_clock::time_point> last_image_received_at_;
+  std::size_t image_message_count_ = 0;
   double source_period_seconds_ = 0.0;
   double source_fps_ = 0.0;
+  std::string image_topic_;
 
   rclcpp::CallbackGroup::SharedPtr image_callback_group_;
   rclcpp::CallbackGroup::SharedPtr metadata_callback_group_;
@@ -495,6 +507,7 @@ int main(int argc, char * argv[])
     return 2;
   }
 
+  log_ros_environment();
   rclcpp::init(0, nullptr);
   auto input = std::make_shared<SimulatorInput>(image_topic, camera_info_topic, tf_topic);
   rclcpp::executors::MultiThreadedExecutor executor;
