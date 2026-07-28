@@ -240,6 +240,28 @@ std::vector<Eigen::Vector4d> RVfromFYT::armor_xyza_list() const
   return armors;
 }
 
+Eigen::Vector4d RVfromFYT::posterior_residual_squared(
+  const Eigen::Vector4d & observation_xyzyaw, int armor_id) const
+{
+  if (x.size() != kStateDimension) {
+    throw std::logic_error("RVfromFYT must be initialized before residual calculation");
+  }
+  if (armor_id < 0 || armor_id >= armor_num_) {
+    throw std::out_of_range("RVfromFYT armor_id is out of range");
+  }
+  if (!observation_xyzyaw.allFinite()) {
+    throw std::invalid_argument("RVfromFYT observation must contain only finite values");
+  }
+
+  const Eigen::Vector3d posterior_xyz = h_armor_xyz(x, armor_id);
+  const double posterior_yaw =
+    tools::limit_rad(x[6] + armor_id * 2.0 * CV_PI / armor_num_);
+  Eigen::Vector4d residual;
+  residual.head<3>() = observation_xyzyaw.head<3>() - posterior_xyz;
+  residual[3] = tools::limit_rad(observation_xyzyaw[3] - posterior_yaw);
+  return residual.array().square().matrix();
+}
+
 /**
  * @brief 观测模型：从状态和装甲ID计算观测向量
  */

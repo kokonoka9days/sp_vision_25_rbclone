@@ -69,6 +69,13 @@ public:
    */
   void prepare_measurement(const Armor & armor);
 
+  /**
+   * @brief 计算 [x, y, z, yaw] 观测量与当前后验状态的逐分量平方残差
+   * @return [dx^2, dy^2, dz^2, dyaw^2]
+   */
+  Eigen::Vector4d posterior_residual_squared(
+    const Eigen::Vector4d & observation_xyzyaw, int armor_id = 0) const override;
+
 private:
   /**
    * @brief 状态加法，并对偏航角进行归一化

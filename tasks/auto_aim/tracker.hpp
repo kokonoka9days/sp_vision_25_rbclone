@@ -12,7 +12,6 @@
 #include "solver.hpp"
 #include "target.hpp"
 #include "tasks/omniperception/perceptron.hpp"
-#include "tools/fps_solve.hpp"
 #include "tools/thread_safe_queue.hpp"
 
 namespace tools
@@ -70,10 +69,6 @@ private:
   std::chrono::steady_clock::time_point last_timestamp_;
   ArmorPriority omni_target_priority_;
   bool cam_is_switch = false, last_cam_is_short = true;
-  std::optional<int> fft_last_armor_id_;
-  std::optional<double> fft_last_armor_z_;
-  tools::fpsSolve fft_fps_solver_;
-  bool fft_add_sample_flag_ = false;
 
   void state_machine(bool found);
 

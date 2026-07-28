@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.16.3)
 
 project(sp_vision)
 
+enable_testing()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_BUILD_TYPE Release)
 
@@ -103,6 +105,24 @@ target_link_libraries(split_video ${OpenCV_LIBS} fmt::fmt tools)
 target_link_libraries(test_simple ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
 
 ##################tests##################
+add_executable(fft_fit_test tests/fft_fit_test.cpp tools/fft.cpp)
+add_test(NAME fft_fit_test COMMAND fft_fit_test)
+
+add_executable(
+    kf_posterior_residual_test
+    tests/kf_posterior_residual_test.cpp
+    tasks/auto_aim/armor.cpp
+    tasks/auto_aim/target.cpp
+    tasks/auto_aim/kf_example/ca_from_tju.cpp
+    tasks/auto_aim/kf_example/rv_from_fyt.cpp)
+target_link_libraries(
+    kf_posterior_residual_test
+    ${OpenCV_LIBS}
+    fmt::fmt
+    spdlog::spdlog
+    tools)
+add_test(NAME kf_posterior_residual_test COMMAND kf_posterior_residual_test)
+
 if(OPENVINO_MAKE)
     add_executable(auto_aim_test tests/auto_aim_test.cpp)
     target_link_libraries(auto_aim_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)

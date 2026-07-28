@@ -10,6 +10,7 @@
 
 #include "armor.hpp"
 #include "kf_example/rv_from_fyt.hpp"
+#include "tools/fft.hpp"
 
 namespace auto_aim
 {
@@ -23,8 +24,9 @@ public:
   bool jumped;
   int last_id;  // debug only
   Eigen::Vector3d xyz_in_world;
+  Eigen::Vector4d posterior_residual_squared = Eigen::Vector4d::Zero();
 
-  Target() = default;
+  Target();
   Target(
     const Armor & armor, std::chrono::steady_clock::time_point t, double radius, int armor_num,
     Eigen::VectorXd P0_dig);
@@ -32,7 +34,7 @@ public:
 
   void predict(std::chrono::steady_clock::time_point t);
   void predict(double dt, Eigen::VectorXd u_xyz = Eigen::VectorXd::Zero(3));
-  void predict(std::chrono::steady_clock::time_point t,  Eigen::VectorXd u_xyz);
+  void predict(std::chrono::steady_clock::time_point t, Eigen::VectorXd u_xyz);
   void update(const Armor & armor);
 
   Eigen::VectorXd ekf_x() const;
@@ -70,6 +72,8 @@ public:
   bool cam_is_short = true;
   
   int update_count_;
+
+  std::optional<tools::Wave> wave_;
 
 private:
   int armor_num_;

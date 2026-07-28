@@ -36,41 +36,19 @@ std::string Tracker::state() const { return state_; }
 void Tracker::set_fft(tools::FFTExample * fft)
 {
   fft_ = fft;
-  fft_fps_solver_.reset();
-  fft_add_sample_flag_ = false;
   reset_fft_sample_state();
 }
 
 void Tracker::reset_fft_sample_state()
 {
-  fft_last_armor_id_.reset();
-  fft_last_armor_z_.reset();
-  if (fft_) fft_->reset_low_pass();
+  if (fft_) fft_->reset();
 }
 
 void Tracker::update_fft_sample(
   const Armor & armor, std::chrono::steady_clock::time_point t)
 {
   if (!fft_) return;
-
-  const int armor_id = target_.last_id;
-  const double armor_z = armor.xyz_in_world.z();
-  if (
-    fft_last_armor_id_ && fft_last_armor_z_ && *fft_last_armor_id_ == armor_id) {
-    const double z_delta = armor_z - *fft_last_armor_z_;
-    const double filtered_z_delta = fft_->low_pass(z_delta);
-    bool should_add_sample = fft_fps_solver_.get_mean_fps() < 150.0;
-    if (!should_add_sample) {
-      fft_add_sample_flag_ = !fft_add_sample_flag_;
-      should_add_sample = fft_add_sample_flag_;
-    }
-    if (should_add_sample) fft_->add_sample(t, filtered_z_delta);
-  } else {
-    fft_->reset_low_pass();
-  }
-
-  fft_last_armor_id_ = armor_id;
-  fft_last_armor_z_ = armor_z;
+  fft_->add_sample(t, target_.last_id, armor.xyz_in_world.z());
 }
 
 std::list<Target> Tracker::sb_track(
@@ -154,7 +132,6 @@ std::list<Target> Tracker::track(
 {
   auto dt = tools::delta_time(t, last_timestamp_);
   last_timestamp_ = t;
-  if (fft_) fft_fps_solver_.update(t);
   if(gimbal_ == nullptr) {
     tools::logger()->error("[Tracker] gimbal_不能为空指针，请先调用set_gimbal()设置云台指针");
     return {};
@@ -499,6 +476,13 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
 }
 bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t)
 {
+  if(fft_ != nullptr ){
+    auto wave = fft_->get_wave();
+    target_.wave_ = wave.valid()
+              ? std::make_optional(std::move(wave))
+              : std::nullopt;
+
+  }
   target_.predict(t);
   
   bool found = false;
@@ -509,13 +493,13 @@ bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock
     if (armor.name == target_.name && armor.type == target_.armor_type) {
       solver_->solve(armor);
       target_.update(armor);
+
       update_fft_sample(armor, t);
       found = true;
       break; // 找到最优匹配后立即退出
     }
   }
 
-  if (!found) reset_fft_sample_state();
   return found;
 }
 

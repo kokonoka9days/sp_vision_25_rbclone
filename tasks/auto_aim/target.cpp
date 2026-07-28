@@ -2,11 +2,29 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
+#include <utility>
 
 #include "tools/math_tools.hpp"
 
 namespace auto_aim
 {
+
+Target::Target()
+: name(ArmorName::not_armor),
+  armor_type(ArmorType::small),
+  priority(ArmorPriority::fifth),
+  jumped(false),
+  last_id(0),
+  xyz_in_world(Eigen::Vector3d::Zero()),
+  update_count_(0),
+  armor_num_(0),
+  switch_count_(0),
+  is_switch_(false),
+  is_converged_(false),
+  t_(std::chrono::steady_clock::now())
+{
+}
 
 Target::Target(
   const Armor & armor, std::chrono::steady_clock::time_point t, double radius, int armor_num,
@@ -69,7 +87,8 @@ Target::Target(double x, double vyaw, double radius, double h)
   armor_num_(4),
   switch_count_(0),
   is_switch_(false),
-  is_converged_(false)
+  is_converged_(false),
+  t_(std::chrono::steady_clock::now())
 {
   Eigen::VectorXd x0 = Eigen::VectorXd::Zero(11);
   x0 << x, 0, 0, 0, 0, 0, 0, vyaw, radius, 0, h;
@@ -84,19 +103,40 @@ Target::Target(double x, double vyaw, double radius, double h)
 
 void Target::predict(std::chrono::steady_clock::time_point t)
 {
-  auto dt = tools::delta_time(t, t_);
-  predict(dt);
-  t_ = t;
+  predict(t, Eigen::VectorXd::Zero(3));
 }
-void Target::predict(std::chrono::steady_clock::time_point t,  Eigen::VectorXd u_xyz)
+
+void Target::predict(std::chrono::steady_clock::time_point t, Eigen::VectorXd u_xyz)
 {
-  auto dt = tools::delta_time(t, t_);
-  predict(dt, u_xyz);
+  if (t <= t_) return;
+  const double dt = tools::delta_time(t, t_);
+  predict(dt, std::move(u_xyz));
+  // Avoid duration conversion rounding accumulating in the online timestamp path.
   t_ = t;
 }
 
 void Target::predict(double dt, Eigen::VectorXd u_xyz)
 {
+  if (ekf_.x.size() != RVfromFYT::kStateDimension) {
+    throw std::logic_error("Target must be initialized before prediction");
+  }
+  if (!std::isfinite(dt)) {
+    throw std::invalid_argument("Target::predict requires a finite dt");
+  }
+  if (u_xyz.size() < 3 || !u_xyz.head<3>().allFinite()) {
+    throw std::invalid_argument("Target::predict requires a finite 3D acceleration");
+  }
+  if (dt == 0.0) return;
+
+  const auto duration =
+    std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+      std::chrono::duration<double>(dt));
+  const auto prediction_time = t_ + duration;
+  if (wave_ && wave_->valid()) {
+    const auto midpoint = t_ + duration / 2;
+    u_xyz[2] += wave_->get_acceleration(midpoint);
+  }
+
   auto rvFromFytpredict = [&]() -> void {
     double v1, v2;
     if (name == ArmorName::outpost) {
@@ -122,7 +162,8 @@ void Target::predict(double dt, Eigen::VectorXd u_xyz)
     noises << v1, v2;
     ekf_.kf_predict(dt, u_xyz.head<3>(), noises);
   };rvFromFytpredict();
-  
+
+  t_ = prediction_time;
 }
 
 void Target::update(const Armor & armor)
@@ -211,6 +252,11 @@ void Target::update(const Armor & armor)
   xyz_in_world = armor.xyz_in_world;
 
   ekf_.correct(id);
+
+  Eigen::Vector4d observation_xyzyaw;
+  observation_xyzyaw << armor.xyz_in_world, armor.ypr_in_world[0];
+  posterior_residual_squared =
+    ekf_.posterior_residual_squared(observation_xyzyaw, id);
 }
 
 // 获取 EKF 状态向量

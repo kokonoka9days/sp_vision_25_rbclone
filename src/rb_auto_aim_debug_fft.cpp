@@ -150,7 +150,11 @@ int main(int argc, char * argv[])
         if(fft.get_is_periodic()){
           data["fft_value"] = fft.get_value(target->getTimePoint());
           data["target_xyz_in_world_z"] = target->xyz_in_world[2];
-          data["fft_original_value"] = fft.get_val_buf_front(); // 低通后的同ID装甲板z差值
+          data["fft_original_value"] = fft.get_latest_value();
+          data["fft_frequency"] = fft.get_frequency();
+          data["fft_amplitude"] = fft.get_amplitude();
+          data["fft_fit_quality"] = fft.get_fit_quality();
+          data["fft_snr"] = fft.get_signal_to_noise_ratio();
         }
         data["plan_thread_dt_s"] = tools::delta_time(plan_t_end, plan_t_start)*1000;
         plotter.plot(data);  
@@ -161,12 +165,15 @@ int main(int argc, char * argv[])
   });
 
   auto fft_thread = std::thread([&]() {
+    bool was_periodic = false;
     while (!quit) {
       auto fft_t_start = std::chrono::steady_clock::now();
-      if(fft.analyze()){
+      const bool is_periodic = fft.analyze();
+      if (is_periodic && !was_periodic) {
         tools::logger()->info("[main] 轮腿上下起伏, 计算花费时长：{}ms", tools::delta_time(std::chrono::steady_clock::now(), fft_t_start)*1000);
-      }else
-        std::this_thread::sleep_for(1s);
+      }
+      was_periodic = is_periodic;
+      std::this_thread::sleep_for(250ms);
     }
   });
 

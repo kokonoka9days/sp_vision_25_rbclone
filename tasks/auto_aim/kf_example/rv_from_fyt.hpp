@@ -95,6 +95,15 @@ public:
    */
   std::vector<Eigen::Vector4d> armor_xyza_list() const;
 
+  /**
+   * @brief 计算 [x, y, z, yaw] 观测量与指定装甲板后验估计量的逐分量平方残差
+   * @param observation_xyzyaw 装甲板观测量 [x, y, z, yaw]
+   * @param armor_id 装甲板 ID
+   * @return [dx^2, dy^2, dz^2, dyaw^2]
+   */
+  Eigen::Vector4d posterior_residual_squared(
+    const Eigen::Vector4d & observation_xyzyaw, int armor_id = 0) const override;
+
 private:
   int armor_num_ = 0;                         ///< 装甲板数量
   ArmorName armor_name_ = ArmorName::not_armor; ///< 装甲类型

@@ -12,6 +12,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -29,9 +30,13 @@
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/tracker.hpp"
 #include "tasks/auto_aim/yolo.hpp"
+#include "tools/fft.hpp"
+#include "tools/fps_solve.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
+#include "tools/plotter.hpp"
+#include "tools/reprojection.hpp"
 
 using namespace std::chrono_literals;
 
@@ -456,35 +461,64 @@ private:
   rclcpp::Subscription<tf2_msgs::msg::TFMessage>::SharedPtr tf_sub_;
 };
 
-void draw_target_debug(
-  cv::Mat & image, const auto_aim::Target & target, auto_aim::Solver & solver,
-  const auto_aim::Planner & planner, bool has_plan)
+void plot_target_debug(
+  tools::Plotter & plotter, tools::FFTExample & fft, auto_aim::Target & target,
+  const auto_aim::Plan & plan, const Eigen::Vector3d & ypr,
+  std::chrono::steady_clock::time_point plot_start, double fps, double mean_fps,
+  double latency_ms, double perception_ms, double planner_ms)
 {
-  for (const Eigen::Vector4d & xyza : target.armor_xyza_list()) {
-    const auto points =
-      solver.reproject_armor(xyza.head<3>(), xyza[3], target.armor_type, target.name);
-    tools::draw_points(image, points, {235, 206, 135});
-  }
-
-  if (has_plan) {
-    const Eigen::Vector4d aim_xyza = planner.debug_xyza;
-    const auto points = solver.reproject_armor(
-      aim_xyza.head<3>(), aim_xyza[3], target.armor_type, target.name);
-    tools::draw_points(image, points, {0, 0, 255});
-  }
+  nlohmann::json data;
+  data["t"] =
+    std::chrono::duration<double>(std::chrono::steady_clock::now() - plot_start).count();
+  data["gimbal_yaw"] = ypr[0];
+  data["gimbal_pitch"] = ypr[1];
+  data["plan_mode"] = plan.control ? (plan.fire ? 2 : 1) : 0;
+  data["plan_yaw"] = plan.yaw / CV_PI * 180.0;
+  data["plan_yaw_vel"] = plan.yaw_vel;
+  data["plan_yaw_acc"] = plan.yaw_acc;
+  data["plan_pitch"] = plan.pitch / CV_PI * 180.0;
+  data["plan_pitch_vel"] = plan.pitch_vel;
+  data["plan_pitch_acc"] = plan.pitch_acc;
+  data["fire"] = plan.fire ? 1 : 0;
+  data["target_yaw"] = plan.target_yaw;
+  data["target_pitch"] = plan.target_pitch;
+  data["target_z"] = target.ekf_x()[4];
+  data["target_vz"] = target.ekf_x()[5];
+  data["tower_h1"] = target.tower_armor_hs[0].second;
+  data["tower_h2"] = target.tower_armor_hs[1].second;
+  data["tower_h3"] = target.tower_armor_hs[2].second;
+  data["tower_armor_h"] = target.tower_armor_h;
 
   const auto ekf = target.ekf_x();
-  const Eigen::Vector3d center(ekf[0], ekf[2], ekf[4]);
-  const Eigen::Vector3d velocity(ekf[1], ekf[3], ekf[5]);
-  const Eigen::Vector3d predicted = center + velocity * 0.5;
-  const auto center_points = solver.reproject_armor(center, 0.0, target.armor_type, target.name);
-  const auto predicted_points =
-    solver.reproject_armor(predicted, 0.0, target.armor_type, target.name);
-  if (!center_points.empty() && !predicted_points.empty()) {
-    cv::circle(image, center_points[0], 5, {51, 153, 237}, -1);
-    cv::circle(image, predicted_points[0], 7, {0, 0, 255}, -1);
-    cv::line(image, center_points[0], predicted_points[0], {0, 255, 255}, 2);
+  data["ekf_x"] = ekf[0];
+  data["ekf_vx"] = ekf[1];
+  data["ekf_y"] = ekf[2];
+  data["ekf_vy"] = ekf[3];
+  data["ekf_z"] = ekf[4];
+  data["ekf_vz"] = ekf[5];
+  data["ekf_yaw"] = ekf[6] / CV_PI * 180.0;
+  data["ekf_vyaw"] = ekf[7] / CV_PI * 180.0;
+  data["ekf_r"] = ekf[8];
+
+  const bool is_periodic = fft.get_is_periodic();
+  data["fft_periodic"] = is_periodic ? 1 : 0;
+  data["fft_input_z"] = fft.get_latest_value();
+  data["fft_frequency"] = fft.get_frequency();
+  data["fft_amplitude"] = fft.get_amplitude();
+  data["fft_fit_quality"] = fft.get_fit_quality();
+  data["fft_snr"] = fft.get_signal_to_noise_ratio();
+  if (is_periodic) {
+    data["fft_value"] = fft.get_value(target.getTimePoint());
+    data["target_xyz_in_world_z"] = target.xyz_in_world.z();
+    data["fft_original_value"] = fft.get_latest_value();
   }
+  data["fps"] = fps;
+  data["mean_fps"] = mean_fps;
+  data["latency_ms"] = latency_ms;
+  data["perception_ms"] = perception_ms;
+  data["planner_ms"] = planner_ms;
+  data["plan_thread_dt_s"] = planner_ms;
+  plotter.plot(data);
 }
 
 }  // namespace
@@ -538,9 +572,14 @@ int main(int argc, char * argv[])
 
     auto_aim::Planner planner(config_path);
     auto_aim::Solver display_solver(config_path);
+    tools::FFTExample fft;
+    tools::Plotter plotter;
+    tools::fpsSolve fps_solver;
+    const auto plot_start = std::chrono::steady_clock::now();
 
     std::thread capture_thread;
     std::thread perception_thread;
+    std::thread fft_thread;
     try {
       capture_thread = std::thread([&] {
         try {
@@ -566,6 +605,7 @@ int main(int argc, char * argv[])
           auto_aim::YOLO detector(config_path, false);
           auto_aim::Solver solver(config_path);
           auto_aim::Tracker tracker(config_path, &solver);
+          tracker.set_fft(&fft);
           int frame_count = 0;
 
           while (!stop_pipeline) {
@@ -602,17 +642,42 @@ int main(int argc, char * argv[])
           report_worker_error(std::current_exception());
         }
       });
+
+      fft_thread = std::thread([&] {
+        try {
+          bool was_periodic = false;
+          while (!stop_pipeline) {
+            const auto analysis_start = std::chrono::steady_clock::now();
+            const bool is_periodic = fft.analyze();
+            if (is_periodic != was_periodic) {
+              const double elapsed_ms = std::chrono::duration<double, std::milli>(
+                                          std::chrono::steady_clock::now() - analysis_start)
+                                          .count();
+              if (is_periodic) {
+                tools::logger()->info("[FFT] 检测到周期运动，分析耗时 {:.2f} ms", elapsed_ms);
+              } else {
+                tools::logger()->info("[FFT] 周期运动已消失");
+              }
+              was_periodic = is_periodic;
+            }
+            for (int i = 0; i < 5 && !stop_pipeline; ++i) std::this_thread::sleep_for(50ms);
+          }
+        } catch (...) {
+          report_worker_error(std::current_exception());
+        }
+      });
     } catch (...) {
       stop_workers();
       if (capture_thread.joinable()) capture_thread.join();
+      if (perception_thread.joinable()) perception_thread.join();
+      if (fft_thread.joinable()) fft_thread.join();
       throw;
     }
 
     tools::logger()->info(
-      "三线程流水线已启动: image_wait -> perception -> planner/display; image={}, tf={}",
+      "ROS流水线已启动: image_wait -> perception/FFT -> planner/display/plotter; image={}, tf={}",
       image_topic, tf_topic);
 
-    auto last_frame_time = std::chrono::steady_clock::now();
     std::exception_ptr main_error;
     try {
       while (!stop_pipeline && rclcpp::ok()) {
@@ -635,20 +700,29 @@ int main(int argc, char * argv[])
           std::chrono::duration<double, std::milli>(planner_end - planner_begin).count();
 
         if (perception->target) {
-          draw_target_debug(
-            display_image, *perception->target, display_solver, planner, plan.control);
+          const std::optional<Eigen::Vector4d> aim_xyza =
+            plan.control ? std::make_optional(planner.debug_xyza) : std::nullopt;
+          tools::draw_reprojection(
+            display_image, display_solver, *perception->target, aim_xyza,
+            cv::Scalar(235, 206, 135));
         }
 
         const auto now = std::chrono::steady_clock::now();
-        const auto dt = std::chrono::duration<double>(now - last_frame_time).count();
-        last_frame_time = now;
-        const double fps = dt > 0.0 ? 1.0 / dt : 0.0;
+        const double fps = fps_solver.update(now);
+        const double mean_fps = fps_solver.get_mean_fps();
         const double latency_ms =
           std::chrono::duration<double, std::milli>(now - frame.received_at).count();
 
+        if (perception->target) {
+          plot_target_debug(
+            plotter, fft, *perception->target, plan, perception->ypr, plot_start, fps, mean_fps,
+            latency_ms, perception->perception_ms, planner_ms);
+        }
+
         tools::draw_text(
-          display_image, fmt::format("FPS {:.1f} latency {:.1f} ms", fps, latency_ms), {40, 40},
-          {0, 255, 0});
+          display_image,
+          fmt::format("FPS {:.1f} mean {:.1f} latency {:.1f} ms", fps, mean_fps, latency_ms),
+          {40, 40}, {0, 255, 0});
         tools::draw_text(
           display_image,
           fmt::format(
@@ -665,13 +739,20 @@ int main(int argc, char * argv[])
         tools::draw_text(
           display_image, fmt::format("Roll {:.2f}", perception->ypr[2] * 180.0 / CV_PI),
           {40, 200}, {0, 255, 255});
+        tools::draw_text(
+          display_image,
+          fmt::format(
+            "FFT {} f {:.3f} Hz A {:.3f} R2 {:.2f}",
+            fft.get_is_periodic() ? "periodic" : "waiting", fft.get_frequency(),
+            fft.get_amplitude(), fft.get_fit_quality()),
+          {40, 240}, {255, 128, 0});
         if (plan.control) {
           tools::draw_text(
             display_image,
             fmt::format(
               "Plan yaw {:.2f} pitch {:.2f} fire {}", plan.yaw * 180.0 / CV_PI,
               plan.pitch * 180.0 / CV_PI, plan.fire),
-            {40, 240}, {255, 255, 0});
+            {40, 280}, {255, 255, 0});
         }
 
         cv::Mat display;
@@ -687,6 +768,7 @@ int main(int argc, char * argv[])
     stop_workers();
     if (capture_thread.joinable()) capture_thread.join();
     if (perception_thread.joinable()) perception_thread.join();
+    if (fft_thread.joinable()) fft_thread.join();
 
     if (main_error) std::rethrow_exception(main_error);
     {

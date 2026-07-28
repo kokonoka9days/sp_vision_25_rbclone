@@ -386,7 +386,7 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   
   target.predict(bullet_traj.fly_time);
 
-  tools::logger()->info("h:{}, xy_d:{}, xyz_d:{}, fly_time:{}, ", target_h, min_dist, xyz.norm(), bullet_traj.fly_time);
+  // tools::logger()->info("h:{}, xy_d:{}, xyz_d:{}, fly_time:{}, ", target_h, min_dist, xyz.norm(), bullet_traj.fly_time);
 
   // 2. Get trajectory
   double yaw0;

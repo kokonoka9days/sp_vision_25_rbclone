@@ -198,6 +198,22 @@ void CAFromTJU::prepare_measurement(const Armor & armor)
      measurement_ready_ = true;
 }
 
+Eigen::Vector4d CAFromTJU::posterior_residual_squared(
+  const Eigen::Vector4d & observation_xyzyaw, int armor_id) const
+{
+  (void)armor_id;
+  if (x.size() != kStateDimension) {
+    throw std::logic_error("CAFromTJU must be initialized before residual calculation");
+  }
+  if (!observation_xyzyaw.allFinite()) {
+    throw std::invalid_argument("CAFromTJU observation must contain only finite values");
+  }
+
+  Eigen::Vector4d residual = observation_xyzyaw - x.head<4>();
+  residual[3] = tools::limit_rad(residual[3]);
+  return residual.array().square().matrix();
+}
+
 /**
  * @brief 状态加法，并对偏航角归一化
  */
