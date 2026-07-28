@@ -822,7 +822,7 @@ int capture_dataset(
 
 const std::string keys =
   "{help h usage ?              |                              | 输出命令行帮助}"
-  "{mode                         | fit                  | 运行模式：capture、fit 或 "
+  "{mode                         | capture-fit                  | 运行模式：capture、fit 或 "
   "capture-fit}"
   "{config-path c                | ../configs/auto_drone.yaml | 标定配置 YAML 路径}"
   "{max-board-rmse-px           | 1.5                          | 棋盘格单帧最大重投影 RMS，单位 px}"
