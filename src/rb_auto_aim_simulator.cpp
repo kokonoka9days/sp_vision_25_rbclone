@@ -500,13 +500,20 @@ void plot_target_debug(
   data["ekf_vyaw"] = ekf[7] / CV_PI * 180.0;
   data["ekf_r"] = ekf[8];
 
+  if(target.rv_residual.has_value()) {
+    data["rv_residual_x"] = target.rv_residual->x();
+    data["rv_residual_y"] = target.rv_residual->y();
+    data["rv_residual_z"] = target.rv_residual->z();
+    data["rv_residual_yaw"] = target.rv_residual->w();
+  }
+
   const bool is_periodic = fft.get_is_periodic();
   data["fft_periodic"] = is_periodic ? 1 : 0;
   data["fft_input_z"] = fft.get_latest_value();
-  data["fft_frequency"] = fft.get_frequency();
-  data["fft_amplitude"] = fft.get_amplitude();
-  data["fft_fit_quality"] = fft.get_fit_quality();
-  data["fft_snr"] = fft.get_signal_to_noise_ratio();
+  // data["fft_frequency"] = fft.get_frequency();
+  // data["fft_amplitude"] = fft.get_amplitude();
+  // data["fft_fit_quality"] = fft.get_fit_quality();
+  // data["fft_snr"] = fft.get_signal_to_noise_ratio();
   if (is_periodic) {
     data["fft_value"] = fft.get_value(target.getTimePoint());
     data["target_xyz_in_world_z"] = target.xyz_in_world.z();

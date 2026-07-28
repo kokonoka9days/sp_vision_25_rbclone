@@ -177,6 +177,7 @@ private:
   double stale_timeout_seconds_ = 0.5;   ///< 数据超时阈值（无新数据则重置）
   double min_frequency_ = 0.3;           ///< 搜索频率下限 (Hz)
   double max_frequency_ = 3.0;           ///< 搜索频率上限 (Hz)
+  double min_amplitude_ = 0.055;         ///< 周期运动的最小拟合幅值
   double min_observed_cycles_ = 1.5;     ///< 首次确认至少覆盖的周期数
   std::size_t periodic_confirmations_ = 2;    ///< 首次确认需要连续通过的分析次数
   std::size_t nonperiodic_confirmations_ = 4; ///< 周期消失需要连续失败的分析次数

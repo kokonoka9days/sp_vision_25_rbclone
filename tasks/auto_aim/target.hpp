@@ -24,7 +24,8 @@ public:
   bool jumped;
   int last_id;  // debug only
   Eigen::Vector3d xyz_in_world;
-  Eigen::Vector4d posterior_residual_squared = Eigen::Vector4d::Zero();
+  // rvFromFYT 残差平方和，x y z yaw
+  std::optional<Eigen::Vector4d> rv_residual = std::nullopt;
 
   Target();
   Target(
@@ -83,7 +84,7 @@ private:
   bool is_switch_, is_converged_;
 
   RVfromFYT ekf_;
-  State2Est* est = nullptr;
+  State2Est* est = &ekf_;
 
   std::chrono::steady_clock::time_point t_;
 

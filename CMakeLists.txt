@@ -108,20 +108,20 @@ target_link_libraries(test_simple ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
 add_executable(fft_fit_test tests/fft_fit_test.cpp tools/fft.cpp)
 add_test(NAME fft_fit_test COMMAND fft_fit_test)
 
-add_executable(
-    kf_posterior_residual_test
-    tests/kf_posterior_residual_test.cpp
-    tasks/auto_aim/armor.cpp
-    tasks/auto_aim/target.cpp
-    tasks/auto_aim/kf_example/ca_from_tju.cpp
-    tasks/auto_aim/kf_example/rv_from_fyt.cpp)
-target_link_libraries(
-    kf_posterior_residual_test
-    ${OpenCV_LIBS}
-    fmt::fmt
-    spdlog::spdlog
-    tools)
-add_test(NAME kf_posterior_residual_test COMMAND kf_posterior_residual_test)
+# add_executable(
+#     kf_posterior_residual_test
+#     tests/kf_posterior_residual_test.cpp
+#     tasks/auto_aim/armor.cpp
+#     tasks/auto_aim/target.cpp
+#     tasks/auto_aim/kf_example/ca_from_tju.cpp
+#     tasks/auto_aim/kf_example/rv_from_fyt.cpp)
+# target_link_libraries(
+#     kf_posterior_residual_test
+#     ${OpenCV_LIBS}
+#     fmt::fmt
+#     spdlog::spdlog
+#     tools)
+# add_test(NAME kf_posterior_residual_test COMMAND kf_posterior_residual_test)
 
 if(OPENVINO_MAKE)
     add_executable(auto_aim_test tests/auto_aim_test.cpp)

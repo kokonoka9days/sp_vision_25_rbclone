@@ -137,6 +137,7 @@ void Target::predict(double dt, Eigen::VectorXd u_xyz)
     u_xyz[2] += wave_->get_acceleration(midpoint);
   }
 
+  // rv predict
   auto rvFromFytpredict = [&]() -> void {
     double v1, v2;
     if (name == ArmorName::outpost) {
@@ -162,8 +163,11 @@ void Target::predict(double dt, Eigen::VectorXd u_xyz)
     noises << v1, v2;
     ekf_.kf_predict(dt, u_xyz.head<3>(), noises);
   };rvFromFytpredict();
+  
 
   t_ = prediction_time;
+
+  rv_residual = std::nullopt;
 }
 
 void Target::update(const Armor & armor)
@@ -255,7 +259,7 @@ void Target::update(const Armor & armor)
 
   Eigen::Vector4d observation_xyzyaw;
   observation_xyzyaw << armor.xyz_in_world, armor.ypr_in_world[0];
-  posterior_residual_squared =
+  rv_residual =
     ekf_.posterior_residual_squared(observation_xyzyaw, id);
 }
 

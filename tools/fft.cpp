@@ -470,7 +470,7 @@ bool FFTExample::analyze(bool force)
   // 有效性判据
   const bool valid =
     std::isfinite(best_fit.sse) && fit_quality >= 0.55 && signal_to_noise_ratio >= 1.2 &&
-    peak_ratio >= 1.05 && amplitude >= 0.01 && amplitude <= 0.5 &&
+    peak_ratio >= 1.05 && amplitude >= min_amplitude_ && amplitude <= 0.5 &&
     duration * best_fit.frequency >= min_observed_cycles_;
 
   // ---------- 更新内部状态（加锁） ----------

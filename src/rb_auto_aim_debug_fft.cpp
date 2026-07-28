@@ -164,17 +164,25 @@ int main(int argc, char * argv[])
     }
   });
 
-  auto fft_thread = std::thread([&]() {
+  auto fft_thread = std::thread([&] {
     bool was_periodic = false;
     while (!quit) {
-      auto fft_t_start = std::chrono::steady_clock::now();
+      const auto analysis_start = std::chrono::steady_clock::now();
       const bool is_periodic = fft.analyze();
-      if (is_periodic && !was_periodic) {
-        tools::logger()->info("[main] 轮腿上下起伏, 计算花费时长：{}ms", tools::delta_time(std::chrono::steady_clock::now(), fft_t_start)*1000);
+      if (is_periodic != was_periodic) {
+        const double elapsed_ms = std::chrono::duration<double, std::milli>(
+                                    std::chrono::steady_clock::now() - analysis_start)
+                                    .count();
+        if (is_periodic) {
+          tools::logger()->info("[FFT] 检测到周期运动，分析耗时 {:.2f} ms", elapsed_ms);
+        } else {
+          tools::logger()->info("[FFT] 周期运动已消失");
+        }
+        was_periodic = is_periodic;
       }
-      was_periodic = is_periodic;
-      std::this_thread::sleep_for(250ms);
+      for (int i = 0; i < 5 && !quit; ++i) std::this_thread::sleep_for(50ms);
     }
+    
   });
 
   cv::Mat img;

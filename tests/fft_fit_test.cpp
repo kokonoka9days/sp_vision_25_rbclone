@@ -114,5 +114,20 @@ int main()
     return 1;
   }
 
+  fft.reset();
+  constexpr double below_threshold_amplitude = 0.05;
+  const auto low_amplitude_origin = time_origin + std::chrono::seconds(40);
+  t = 0.0;
+  while (t < 5.2) {
+    fft.add_sample(
+      at_seconds(low_amplitude_origin, t), 0,
+      below_threshold_amplitude * std::sin(2.0 * M_PI * 0.8 * t));
+    t += 1.0 / 30.0;
+  }
+  if (fft.analyze() || fft.analyze()) {
+    std::cerr << "periodic input below the amplitude threshold was accepted\n";
+    return 1;
+  }
+
   return 0;
 }

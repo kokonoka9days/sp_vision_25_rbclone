@@ -73,7 +73,7 @@ int main()
   target_observation << armor.xyz_in_world, armor.ypr_in_world[0];
   const Eigen::Vector4d expected_target =
     target.ekf().posterior_residual_squared(target_observation, target.last_id);
-  if (!near(target.posterior_residual_squared, expected_target)) {
+  if (!near(target.rv_residual, expected_target)) {
     std::cerr << "Target did not store the RVfromFYT posterior residual\n";
     return 1;
   }
