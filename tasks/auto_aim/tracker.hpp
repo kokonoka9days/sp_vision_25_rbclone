@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include <chrono>
 #include <list>
+#include <optional>
 #include <string>
 
 #include "io/gimbal/gimbal.hpp"
@@ -11,7 +12,13 @@
 #include "solver.hpp"
 #include "target.hpp"
 #include "tasks/omniperception/perceptron.hpp"
+#include "tools/fps_solve.hpp"
 #include "tools/thread_safe_queue.hpp"
+
+namespace tools
+{
+class FFTExample;
+}
 
 namespace auto_aim
 {
@@ -44,10 +51,12 @@ public:
 
   inline void setSolver(Solver * solver__){this->solver_ = solver__; }
   void set_gimbal(io::Gimbal* gimbal) { gimbal_ = gimbal; }
+  void set_fft(tools::FFTExample * fft);
   inline size_t get_update_count(){return this->target_.update_count_;}
 private:
   Solver * solver_;
   io::Gimbal* gimbal_ = nullptr; // 新增一个云台指针，默认为空
+  tools::FFTExample * fft_ = nullptr;  // non-owning
   Color enemy_color_;
   std::string enemy_color_str_;
   int min_detect_count_;
@@ -61,12 +70,19 @@ private:
   std::chrono::steady_clock::time_point last_timestamp_;
   ArmorPriority omni_target_priority_;
   bool cam_is_switch = false, last_cam_is_short = true;
+  std::optional<int> fft_last_armor_id_;
+  std::optional<double> fft_last_armor_z_;
+  tools::fpsSolve fft_fps_solver_;
+  bool fft_add_sample_flag_ = false;
 
   void state_machine(bool found);
 
   bool set_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
 
   bool update_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
+
+  void reset_fft_sample_state();
+  void update_fft_sample(const Armor & armor, std::chrono::steady_clock::time_point t);
 
   
 };

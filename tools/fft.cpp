@@ -1,5 +1,9 @@
 #include "fft.hpp"
 
+#include <algorithm>
+
+using std::isnan;
+
 #include <boost/math/interpolators/pchip.hpp>
 #include <unsupported/Eigen/FFT>
 #include <numeric>
@@ -9,14 +13,97 @@
 namespace tools
 {
 
-bool FFTExample::analyze(bool force) {
+void FFTExample::add_sample(double t, double val)
+{
+  std::lock_guard<std::mutex> lock(mtx_);
+  t_buf_.push_back(t);
+  val_buf_.push_back(val);
+}
+
+void FFTExample::add_sample(TimePoint t, double val)
+{
+  std::lock_guard<std::mutex> lock(mtx_);
+  if (!time_origin_) time_origin_ = t;
+  const double elapsed = std::chrono::duration<double>(t - *time_origin_).count();
+  t_buf_.push_back(elapsed);
+  val_buf_.push_back(val);
+}
+
+double FFTExample::low_pass(double value, double alpha)
+{
+  std::lock_guard<std::mutex> lock(mtx_);
+  alpha = std::clamp(alpha, 0.0, 1.0);
+  if (!low_pass_initialized_) {
+    low_pass_value_ = value;
+    low_pass_initialized_ = true;
+  } else {
+    low_pass_value_ = alpha * value + (1.0 - alpha) * low_pass_value_;
+  }
+  return low_pass_value_;
+}
+
+void FFTExample::reset_low_pass()
+{
+  std::lock_guard<std::mutex> lock(mtx_);
+  low_pass_initialized_ = false;
+  low_pass_value_ = 0.0;
+}
+
+double FFTExample::get_acceleration(double t) const
+{
+  std::lock_guard<std::mutex> lock(mtx_);
+  if (!is_periodic_) return 0.0;
+  const double omega = 2 * M_PI * last_freq_;
+  return -omega * omega * last_amp_ * std::cos(omega * t + last_phase_ + phase_offset_);
+}
+
+double FFTExample::get_value(double t) const
+{
+  std::lock_guard<std::mutex> lock(mtx_);
+  if (!is_periodic_) return 0.0;
+  return last_amp_ * std::cos(2 * M_PI * last_freq_ * t + last_phase_ + phase_offset_);
+}
+
+double FFTExample::get_value(TimePoint t) const
+{
+  std::lock_guard<std::mutex> lock(mtx_);
+  if (!is_periodic_ || !time_origin_) return 0.0;
+  const double elapsed = std::chrono::duration<double>(t - *time_origin_).count();
+  return last_amp_ *
+         std::cos(2 * M_PI * last_freq_ * elapsed + last_phase_ + phase_offset_);
+}
+
+double FFTExample::get_val_buf_front() const
+{
+  std::lock_guard<std::mutex> lock(mtx_);
+  return val_buf_.empty() ? 0.0 : val_buf_.front();
+}
+
+bool FFTExample::get_is_periodic() const
+{
+  std::lock_guard<std::mutex> lock(mtx_);
+  return is_periodic_;
+}
+
+void FFTExample::set_phase_offset(double offset)
+{
+  std::lock_guard<std::mutex> lock(mtx_);
+  phase_offset_ = offset;
+}
+
+double FFTExample::get_mean_val() const
+{
+  std::lock_guard<std::mutex> lock(mtx_);
+  return mean_val;
+}
+
+bool FFTExample::analyze(bool force)
+{
     // 加锁拷贝缓冲区数据到局部变量
     std::vector<double> t_vec, val_vec;
     {
         std::lock_guard<std::mutex> lock(mtx_);
-        if (!force && (t_buf_.size() < min_points_)) {
-            return is_periodic_;
-        }
+        if (!force && (t_buf_.size() < min_points_)) return is_periodic_;
         last_analysis_frames_ = 0;
         if (t_buf_.size() < min_points_) return false;
 
@@ -24,7 +111,8 @@ bool FFTExample::analyze(bool force) {
         val_vec.assign(val_buf_.begin(), val_buf_.end());
     } // 锁在此释放，后续计算不再持有锁
 
-    this->mean_val = std::accumulate(val_vec.begin(), val_vec.end(), 0.0) / val_vec.size();
+    const double mean_val =
+      std::accumulate(val_vec.begin(), val_vec.end(), 0.0) / val_vec.size();
 
     double t_min = t_vec.front(), t_max = t_vec.back();
     int n_uniform = static_cast<int>((t_max - t_min) / 0.01) + 1;
@@ -40,21 +128,27 @@ bool FFTExample::analyze(bool force) {
 
     double period = detect_period_by_autocorr(val_uniform, 0.01);
     if (period <= 0.0) {
+        std::lock_guard<std::mutex> lock(mtx_);
         is_periodic_ = false;
         return false;
     }
 
     double freq, amp, phase;
     if (!extract_base_harmonic(val_uniform, 0.01, freq, amp, phase)) {
+        std::lock_guard<std::mutex> lock(mtx_);
         is_periodic_ = false;
         return false;
     }
 
-    is_periodic_ = true;
-    last_freq_ = freq;
-    last_amp_ = amp;
-    last_phase_ = phase;
-    last_period_ = 1.0 / freq;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        is_periodic_ = true;
+        last_freq_ = freq;
+        last_amp_ = amp;
+        last_phase_ = phase;
+        last_period_ = 1.0 / freq;
+        this->mean_val = mean_val;
+    }
 
     return true;
 }

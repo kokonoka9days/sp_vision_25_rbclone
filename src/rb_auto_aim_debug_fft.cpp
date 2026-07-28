@@ -24,6 +24,7 @@
 #include "tools/thread_safe_queue.hpp"
 #include "tools/recorder.hpp"
 #include "tools/fft.hpp"
+#include "tools/fps_solve.hpp"
 
 using namespace std::chrono_literals;
 using namespace tools;
@@ -51,8 +52,10 @@ int main(int argc, char * argv[])
   auto_aim::YOLO yolo(config_path, true);
   // auto_aim::Detector detector(config_path, true);
   auto_aim::Solver solver(config_path);
+  tools::FFTExample fft;
   auto_aim::Tracker tracker(config_path, &solver);
   tracker.set_gimbal(&gimbal);
+  tracker.set_fft(&fft);
 
   auto_aim::Planner planner(config_path);
   bool stopkey = false;
@@ -60,7 +63,6 @@ int main(int argc, char * argv[])
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
   target_queue.push(std::nullopt);
 
-  tools::FFTExample fft;
   auto t0 = std::chrono::steady_clock::now();
 
   std::atomic<bool> quit = false;
@@ -146,9 +148,9 @@ int main(int argc, char * argv[])
         data["ekf_r"] = ekf_satic(8);   
 
         if(fft.get_is_periodic()){
-          data["fft_value"] = fft.get_value(tools::delta_time(target->getTimePoint(), t0));
+          data["fft_value"] = fft.get_value(target->getTimePoint());
           data["target_xyz_in_world_z"] = target->xyz_in_world[2];
-          data["fft_original_value"] = fft.get_val_buf_front(); //低通过后的数据
+          data["fft_original_value"] = fft.get_val_buf_front(); // 低通后的同ID装甲板z差值
         }
         data["plan_thread_dt_s"] = tools::delta_time(plan_t_end, plan_t_start)*1000;
         plotter.plot(data);  
@@ -170,7 +172,7 @@ int main(int argc, char * argv[])
 
   cv::Mat img;
   std::chrono::steady_clock::time_point t;
-  std::chrono::steady_clock::time_point last_t;
+  tools::fpsSolve fps_solver;
   int frame_count = 0;
 
   while (!exiter.exit()) {
@@ -194,52 +196,10 @@ int main(int argc, char * argv[])
     // recor.record(img, q, t);
 
     auto now = std::chrono::steady_clock::now();
-    double fps = 1./tools::delta_time(now, last_t);
-    // 计算平均帧率
-    static std::tuple<size_t, double, std::array<double, 200>> fpss = {0, 0, std::array<double, 200>{0}};
-    static auto& cnt = std::get<0>(fpss);
-    static auto& sum = std::get<1>(fpss);
-    static auto& arr = std::get<2>(fpss);
-
-    if (cnt < 200) {
-        arr[cnt] = fps;
-        sum += fps;
-        cnt++;
-    } else {
-        size_t idx = cnt % 200;
-        sum -= arr[idx];   // 先减旧值
-        arr[idx] = fps;    // 再更新
-        sum += fps;        // 再加新值
-        cnt++;
-    }
-    double mean_fps = sum / (cnt > 200 ? 200 : cnt);
-
-    // 低通滤波过滤z轴数据
-    static double filtered_z = 0.0;
-    static bool first_sample = true;
-    double raw_z = targets.front().xyz_in_world[2];
-    // 初始化
-    if (first_sample) {
-        filtered_z = raw_z;
-        first_sample = false;
-    } else {
-        // 滤波系数 alpha（可根据实际调整，值越小滤波越平滑，滞后越大）
-        const double alpha = 0.2; // 建议范围 0.1~0.3
-        filtered_z = alpha * raw_z + (1.0 - alpha) * filtered_z;
-    }
-
-    // fft采集数据
-    if(mean_fps < 150){
-      fft.add_sample(tools::delta_time(t, t0), filtered_z);
-    }else{// 大于150fps降采样,隔一帧要一个数据
-      static bool add_sample_flag = false;
-      add_sample_flag = !add_sample_flag;
-      if(add_sample_flag)
-        fft.add_sample(tools::delta_time(t, t0), filtered_z);
-    }
+    const double fps = fps_solver.update(now);
+    const double mean_fps = fps_solver.get_mean_fps();
 
     tools::draw_text(img, "mean_fps: "+std::to_string(mean_fps), cv::Point(40, 130), {0, 0, 244});
-    last_t = now;
     tools::logger()->info("fps:: {:.2f}, mean_fps:: {:.2f}", fps, mean_fps);
 
     // 欧拉角解算
@@ -279,7 +239,7 @@ int main(int argc, char * argv[])
   }
   quit = true;
   if (plan_thread.joinable()) plan_thread.join();
-  // if (fft_thread.joinable()) fft_thread.join();
+  if (fft_thread.joinable()) fft_thread.join();
   
   // 获取当前下位机发来的云台状态数据
   auto current_state = gimbal.state();

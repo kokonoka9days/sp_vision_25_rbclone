@@ -14,4 +14,5 @@ add_library(tools OBJECT
     pid.cpp
     crc.cpp
     fft.cpp
+    fps_solve.cpp
 )

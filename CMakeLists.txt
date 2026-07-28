@@ -74,10 +74,10 @@ if(TENSOR_RT_MAKE)
     add_executable(rbnx_auto_aim_debug_async src/rbnx_auto_aim_debug_async.cpp)
     target_link_libraries(rbnx_auto_aim_debug_async ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim  tools io)
 
+endif()
+if(OPENVINO_MAKE OR TENSOR_RT_MAKE)
     add_executable(rb_auto_aim_debug_fft src/rb_auto_aim_debug_fft.cpp)
-    target_link_libraries(rb_auto_aim_debug_fft ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim  tools io)
-
-
+    target_link_libraries(rb_auto_aim_debug_fft ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
 endif()
 # rv
 add_executable(rb_rv_aim_debug src/rb_rv_aim_debug.cpp)

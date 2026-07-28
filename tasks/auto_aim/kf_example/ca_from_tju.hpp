@@ -77,7 +77,7 @@ private:
     const Eigen::VectorXd & state, const Eigen::VectorXd & delta);
 
   Eigen::Vector4d z_ = Eigen::Vector4d::Zero();
-  Eigen::Matrix4d R_ = Eigen::Matrix4d::Identity() * kMeasurementVariance;
+  Eigen::Matrix4d R_ = Eigen::Matrix4d::Identity() ;
   bool measurement_ready_ = false;
 };
 
