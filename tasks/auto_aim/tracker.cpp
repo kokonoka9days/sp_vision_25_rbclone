@@ -177,6 +177,9 @@ std::list<Target> Tracker::track(
     if (state_ == "lost") {
         found = set_target(armors, t);
     }
+    else if (armors.empty()) {
+      found = update_target(armors, t);
+    }
     else {
       if(target_.name == armors.front().name 
         && target_.armor_type == armors.front().type)
