@@ -44,7 +44,6 @@ if(TENSOR_RT_MAKE)
     set(TENSORRT_PLUGIN_LIBRARY "${TENSORRT_ROOT}/lib/libnvinfer_plugin.so")
 endif()
 
-# add_subdirectory(sp_ws/src)
 find_package(Ceres REQUIRED)
 
 include_directories(${EIGEN3_INCLUDE_DIR})
@@ -57,12 +56,11 @@ include_directories(${PROJECT_SOURCE_DIR}/io/serial/include)
 add_subdirectory(tools)
 add_subdirectory(io)
 add_subdirectory(tasks/auto_aim)
-if(OPENVINO_MAKE)
+if(OPENVINO_MAKE OR TENSOR_RT_MAKE)
     add_subdirectory(tasks/auto_buff)
-    add_subdirectory(tasks/omniperception)
 endif()
-if(TENSOR_RT_MAKE)
-    add_subdirectory(tasks/auto_buff)
+if(OPENVINO_MAKE)
+    add_subdirectory(tasks/omniperception)
 endif()
 
 
@@ -122,18 +120,6 @@ target_link_libraries(auto_aim_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io au
 add_executable(auto_buff_test tests/auto_buff_test.cpp)
 target_link_libraries(auto_buff_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
 
-add_executable(auto_buff_partial_pnp_test tests/auto_buff_partial_pnp_test.cpp)
-target_link_libraries(auto_buff_partial_pnp_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
-
-add_executable(auto_buff_small_target_test tests/auto_buff_small_target_test.cpp)
-target_link_libraries(auto_buff_small_target_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
-
-add_executable(auto_buff_big_target_test tests/auto_buff_big_target_test.cpp)
-target_link_libraries(auto_buff_big_target_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
-
-add_executable(auto_buff_track_bank_test tests/auto_buff_track_bank_test.cpp)
-target_link_libraries(auto_buff_track_bank_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
-
 add_executable(camera_detect_test tests/camera_detect_test.cpp)
 target_link_libraries(camera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools auto_aim io)
 
@@ -173,11 +159,7 @@ target_link_libraries(4cmaera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io aut
 add_executable(camera_thread_test tests/camera_thread_test.cpp)
 target_link_libraries(camera_thread_test ${OpenCV_LIBS} fmt::fmt auto_aim tools io)
 
-add_executable(time_calibrator tests/time_calibrator.cpp)
-add_executable(auto_label tests/auto_label.cpp)
 add_executable(cameras_test tests/cameras_test.cpp)
-target_link_libraries(time_calibrator ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim ${CERES_LIBRARIES})
-target_link_libraries(auto_label ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io auto_aim)
 target_link_libraries(cameras_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
 add_executable(planner_test_offline tests/planner_test_offline.cpp)
@@ -239,26 +221,7 @@ find_package(std_msgs QUIET)
 find_package(rosidl_typesupport_cpp QUIET)
 find_package(sp_msgs QUIET)
 
-# 只有在找到 ROS 环境时才会添加 sentry 和 publish_test
-if(ament_cmake_FOUND)
-    message(STATUS "找到ament_cmake_FOUND")
-endif()
-if(rclcpp_FOUND)
-    message(STATUS "找到rclcpp_FOUND")
-endif()
-if(rosidl_typesupport_cpp_FOUND)
-    message(STATUS "找到rosidl_typesupport_cpp_FOUND")
-endif()
-if(sp_msgs_FOUND)
-    message(STATUS "找到sp_msgs_FOUND")
-endif()
-
 if(ament_cmake_FOUND AND rclcpp_FOUND AND std_msgs_FOUND AND rosidl_typesupport_cpp_FOUND AND sp_msgs_FOUND)
-    # 编译 sentry 和 publish_test
-    # add_executable(sentry src/sentry.cpp)
-    # add_executable(sentry_bp src/sentry_bp.cpp)
-    # add_executable(sentry_debug src/sentry_debug.cpp)
-    # add_executable(sentry_multithread src/sentry_multithread.cpp)
     add_executable(publish_test tests/publish_test.cpp)
     add_executable(subscribe_test tests/subscribe_test.cpp)
     add_executable(topic_loop_test tests/topic_loop_test.cpp)
@@ -267,14 +230,10 @@ if(ament_cmake_FOUND AND rclcpp_FOUND AND std_msgs_FOUND AND rosidl_typesupport_
     add_executable(sentry_omn_aim_mpc src/sentry_omn_aim_mpc.cpp)
 
     target_link_libraries(sentry_omn_aim_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
-    # target_link_libraries(sentry ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
-    # target_link_libraries(sentry_bp ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
-    # target_link_libraries(sentry_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
-    # target_link_libraries(sentry_multithread ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
     target_link_libraries(publish_test ${OpenCV_LIBS} fmt::fmt tools io auto_aim)
     target_link_libraries(subscribe_test ${OpenCV_LIBS} fmt::fmt tools io)
     target_link_libraries(topic_loop_test ${OpenCV_LIBS} fmt::fmt tools io)
     target_link_libraries(sentry_binocular_aim_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
 else()
-    message(STATUS "ROS2 environment not found, skipping ROS2-related code.hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
+    message(STATUS "ROS2 environment not found, skipping ROS2-related targets")
 endif()
