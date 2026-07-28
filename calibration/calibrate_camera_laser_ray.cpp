@@ -295,7 +295,6 @@ bool annotate_dataset_images(
       continue;
     }
     const auto board = laser_calibration::observe_board(raw_image, config.camera, config.board);
-    mouse.clicked_pixel.reset();
 
     bool advance = false;
     while (!advance) {
@@ -777,7 +776,6 @@ int capture_dataset(
       tools::logger()->info("[LaserCalibration] Deleted sample {}", samples.back().id);
       samples.pop_back();
       save_raw_samples(dataset, samples);
-      mouse.clicked_pixel.reset();
     }
     if (key == 's') {
       if (!sample_ready) {
@@ -808,7 +806,6 @@ int capture_dataset(
       tools::logger()->info(
         "[LaserCalibration] Saved sample {} at ({:.2f}, {:.2f})", sample.id, sample.laser_pixel.x,
         sample.laser_pixel.y);
-      mouse.clicked_pixel.reset();
     }
     if (key == 't') {
       if (!allow_fit) {

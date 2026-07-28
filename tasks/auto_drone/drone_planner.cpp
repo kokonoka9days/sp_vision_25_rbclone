@@ -129,6 +129,16 @@ Planner::Planner(const std::string & config_path)
   setup_pitch_solver(config_path);
 }
 
+void Planner::adjust_aim_offset(double yaw_delta_deg, double pitch_delta_deg)
+{
+  yaw_offset_.store(yaw_offset_.load() + yaw_delta_deg / 57.3);
+  pitch_offset_.store(pitch_offset_.load() + pitch_delta_deg / 57.3);
+}
+
+double Planner::yaw_offset_deg() const { return yaw_offset_.load() * 57.3; }
+
+double Planner::pitch_offset_deg() const { return pitch_offset_.load() * 57.3; }
+
 Plan Planner::plan(Target target, double bullet_speed)
 {
   // 1. Get trajectory
@@ -289,7 +299,8 @@ Eigen::Matrix<double, 2, 1> Planner::aim(const Target & target, double /*bullet_
     pitch = solution->pitch;
   }
 
-  return {tools::limit_rad(azim + yaw_offset_), pitch + pitch_offset_};
+  return {
+    tools::limit_rad(azim + yaw_offset_.load()), pitch + pitch_offset_.load()};
 }
 
 Trajectory Planner::get_trajectory(Target target, double yaw0, double bullet_speed)

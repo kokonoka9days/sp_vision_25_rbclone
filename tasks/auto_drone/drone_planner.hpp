@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <optional>
 #include <string>
@@ -64,6 +65,10 @@ public:
   Plan plan(Target target, double bullet_speed);
   PlanDiagnostics plan_diagnostics(std::optional<Target> target, double bullet_speed);
 
+  void adjust_aim_offset(double yaw_delta_deg, double pitch_delta_deg);
+  double yaw_offset_deg() const;
+  double pitch_offset_deg() const;
+
   inline Plan plan(std::optional<Target> target, double bullet_speed)
   {
     if (!target.has_value()) return {false};
@@ -89,8 +94,8 @@ public:
   }
 
 private:
-  double yaw_offset_;
-  double pitch_offset_;
+  std::atomic<double> yaw_offset_;
+  std::atomic<double> pitch_offset_;
   double fire_thresh_;
   double gimbal_control_delay = 0.04;
   double max_target_age_ = 0.2;

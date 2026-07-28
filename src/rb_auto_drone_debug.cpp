@@ -26,6 +26,8 @@
 
 using namespace std::chrono_literals;
 
+constexpr double AIM_OFFSET_STEP_DEG = 0.005;
+
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
   "{@config-path   | ../configs/auto_drone.yaml | 位置参数，yaml配置文件路径 }";
@@ -241,6 +243,14 @@ int main(int argc, char * argv[])
     tools::draw_text(img, fmt::format("Gimbal Yaw: {:.2f}", yaw_deg), {40, 200}, {0, 128, 255});
     tools::draw_text(img, fmt::format("Gimbal Pitch: {:.2f}", pitch_deg), {40, 240}, {0, 255, 255});
     tools::draw_text(img, fmt::format("Tracker State: {}", tracker.state()), {40, 280}, {255, 255, 0});
+    tools::draw_text(
+      img, fmt::format("Aim Offset Yaw: {:+.3f} deg", planner.yaw_offset_deg()), {40, 320},
+      {255, 128, 0});
+    tools::draw_text(
+      img, fmt::format("Aim Offset Pitch: {:+.3f} deg", planner.pitch_offset_deg()), {40, 360},
+      {255, 128, 0});
+    tools::draw_text(
+      img, "W/S: Pitch +/-  A/D: Yaw -/+  (0.005 deg)", {40, 400}, {255, 255, 255});
 
     // 2. 绘制 YOLO 检测到的无人机 2D Bbox 和 关键点
     for (const auto& drone : drones) {
@@ -262,6 +272,10 @@ int main(int argc, char * argv[])
     // 键盘事件处理
     auto key = cv::waitKey(1);
     if (key == 'q') break;
+    if (key == 'w' || key == 'W') planner.adjust_aim_offset(0.0, AIM_OFFSET_STEP_DEG);
+    if (key == 's' || key == 'S') planner.adjust_aim_offset(0.0, -AIM_OFFSET_STEP_DEG);
+    if (key == 'a' || key == 'A') planner.adjust_aim_offset(-AIM_OFFSET_STEP_DEG, 0.0);
+    if (key == 'd' || key == 'D') planner.adjust_aim_offset(AIM_OFFSET_STEP_DEG, 0.0);
     if (key == 'r') {
       io::GimbalState* g_demo = gimbal.set_state_();
       g_demo->mode = !g_demo->mode;

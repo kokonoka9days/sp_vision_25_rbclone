@@ -76,7 +76,7 @@ pattern_rows: 8      # 棋盘格每列的内角点数（格子数-1）
 square_size_mm: 30   # 棋盘格方块大小（毫米）
 
 laser_ray_enabled: true
-laser_line_origin_in_camera_m: [0.0021629600260757455, -0.018669016304689534, -0.00014189876847028134]
+laser_line_origin_in_camera_m: [0.0, 0.0, 0.0]
 laser_line_direction_in_camera: [0.014838799668094262, -0.005880596981455357, 0.9998726061871842]
 
 
