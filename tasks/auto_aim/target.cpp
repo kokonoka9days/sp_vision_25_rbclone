@@ -132,7 +132,7 @@ void Target::predict(double dt, Eigen::VectorXd u_xyz)
     std::chrono::duration_cast<std::chrono::steady_clock::duration>(
       std::chrono::duration<double>(dt));
   const auto prediction_time = t_ + duration;
-  if (wave_ && wave_->valid()) {
+  if (wave_ && wave_->valid() && this->name != ArmorName::outpost) {
     const auto midpoint = t_ + duration / 2;
     u_xyz[2] += wave_->get_acceleration(midpoint);
   }

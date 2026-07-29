@@ -158,10 +158,10 @@ int main(int argc, char * argv[])
         img, solver, targets.front(), planner.debug_xyza, cv::Scalar(235, 206, 135));
     }
 
-    // cv::resize(img, img, {}, 0.5, 0.5);
-    // cv::imshow("reprojection", img);
-    // auto key = cv::waitKey(1);
-    // if (key == 'q') break;
+    cv::resize(img, img, {}, 0.5, 0.5);
+    cv::imshow("reprojection", img);
+    auto key = cv::waitKey(1);
+    if (key == 'q') break;
   }
 
   quit = true;

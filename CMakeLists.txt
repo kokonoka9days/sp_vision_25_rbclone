@@ -15,10 +15,10 @@ message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}-------
 
 
 # openvino依赖
-set(OPENVINO_MAKE ON)
+set(OPENVINO_MAKE OFF)
 
 # tensorRT依赖
-set(TENSOR_RT_MAKE OFF)
+set(TENSOR_RT_MAKE ON)
 
 find_package(OpenCV REQUIRED)
 find_package(fmt REQUIRED)
@@ -80,6 +80,9 @@ endif()
 if(OPENVINO_MAKE OR TENSOR_RT_MAKE)
     add_executable(rb_auto_aim_debug_fft src/rb_auto_aim_debug_fft.cpp)
     target_link_libraries(rb_auto_aim_debug_fft ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+        target_compile_options(rb_auto_aim_debug_fft PRIVATE -march=armv8-a+fp+simd)
+    endif()
 endif()
 # rv
 add_executable(rb_rv_aim_debug src/rb_rv_aim_debug.cpp)

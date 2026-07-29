@@ -92,11 +92,10 @@ int main(int argc, char * argv[])
         // tools::logger()->info("{},{},{}", name,tx,ty);
       }
 
-      gimbal.sb_send(
+      gimbal.send(
       plan.control, plan.fire,
       plan.yaw, plan.yaw_vel, plan.yaw_acc,
-      plan.pitch, plan.pitch_vel, plan.pitch_acc,
-      tx,ty,name
+      plan.pitch, plan.pitch_vel, plan.pitch_acc
       );
 
       
@@ -116,7 +115,7 @@ int main(int argc, char * argv[])
 
       if (target.has_value()) {
         data["plan_mode"] = plan.control ? (plan.fire ? 2 : 1) : 0;
-        data["plan_yaw"] = plan.yaw / CV_PI * 180. ;
+        data["plan_yaw"] = (plan.yaw ) / CV_PI * 180. ;
         data["plan_yaw_vel"] = plan.yaw_vel;
         data["plan_yaw_acc"] = plan.yaw_acc;
 
@@ -215,7 +214,7 @@ int main(int argc, char * argv[])
     const double mean_fps = fps_solver.get_mean_fps();
 
     tools::draw_text(img, "mean_fps: "+std::to_string(mean_fps), cv::Point(40, 130), {0, 0, 244});
-    tools::logger()->info("fps:: {:.2f}, mean_fps:: {:.2f}", fps, mean_fps);
+    // tools::logger()->info("fps:: {:.2f}, mean_fps:: {:.2f}", fps, mean_fps);
 
     // 欧拉角解算
     auto ypr = tools::eulers(q, 2, 1, 0);
