@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include <chrono>
 #include <list>
+#include <optional>
 #include <string>
 
 #include "io/gimbal/gimbal.hpp"
@@ -21,6 +22,8 @@ public:
   Tracker(const std::string & config_path, Solver * solver);
 
   std::string state() const;
+
+  void reset();
 
   std::list<Target> sb_track(
     std::list<Armor> & armors, std::chrono::steady_clock::time_point t,
@@ -60,6 +63,7 @@ private:
   Target target_;
   std::chrono::steady_clock::time_point last_timestamp_;
   ArmorPriority omni_target_priority_;
+  std::optional<uint8_t> last_mode_;
   bool cam_is_switch = false, last_cam_is_short = true;
 
   void state_machine(bool found);
