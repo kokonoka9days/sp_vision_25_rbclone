@@ -150,12 +150,20 @@ int main(int argc, char * argv[])
   cv::Mat img;
   std::chrono::steady_clock::time_point t;
   auto last_mode{io::GimbalMode::IDLE}; // 记录上次模式
+  int auto_aim_frame_count = 0;
+  auto auto_aim_started_at = std::chrono::steady_clock::time_point{};
 
   while (!exiter.exit()) {
     mode = gimbal.mode(); // 每帧获取最新云台模式
     
     if (last_mode != mode.load()) {
       tools::logger()->info("Switch to {}", gimbal.str(mode.load()));
+      const auto was_buff =
+        last_mode == io::GimbalMode::SMALL_BUFF || last_mode == io::GimbalMode::BIG_BUFF;
+      const auto is_buff = mode.load() == io::GimbalMode::SMALL_BUFF ||
+                           mode.load() == io::GimbalMode::BIG_BUFF;
+      if (is_buff) target_queue.push(std::nullopt);
+      if (was_buff && !is_buff) auto_aim_started_at = std::chrono::steady_clock::now();
       last_mode = mode.load();
     }
 
@@ -257,9 +265,16 @@ int main(int argc, char * argv[])
 
     // 除打符模式外，全认为是自瞄
     else {
+      auto yolo_frame =
+        yolo.detect(auto_aim::YOLOFrameData(img, q, t), auto_aim_frame_count++);
+      if (yolo_frame.is_empty || yolo_frame.timestamp < auto_aim_started_at) continue;
+
+      img = yolo_frame.frame;
+      q = yolo_frame.gimbal_q;
+      t = yolo_frame.timestamp;
+
       solver.set_R_gimbal2world(q);
-      auto armors = yolo.detect(img);
-      auto targets = tracker.track(armors, t);
+      auto targets = tracker.track(yolo_frame.armors, t);
 
       if (!targets.empty()){
         target_queue.push(targets.front());

@@ -189,7 +189,7 @@ const std::string keys =
   "{headless      | false                  | 不显示窗口且不等待按键 }"
   "{print-step    | 1                      | 每隔多少帧输出一次 }"
   "{debug-predict-time | -1                | 蓝色调试框预测时间, 负数使用配置 }"
-  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/assets/buff/buff guanfang   | avi和txt文件的路径}";
+  "{@input-path    |    /home/rm/Desktop/sp_vision_25_rbclone/assets/buff/buff guanfang   | avi和txt文件的路径}";
 
 int main(int argc, char * argv[])
 {
