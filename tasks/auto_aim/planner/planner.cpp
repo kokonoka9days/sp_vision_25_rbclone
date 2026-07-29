@@ -385,6 +385,7 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, target_h);
   
   target.predict(bullet_traj.fly_time);
+  is_far = min_dist > 6.0;
 
   tools::logger()->info("h:{}, xy_d:{}, xyz_d:{}, fly_time:{}, ", target_h, min_dist, xyz.norm(), bullet_traj.fly_time);
 
@@ -561,7 +562,7 @@ Plan Planner::rbHeroplan(Target target, double bullet_speed, double gimbal_yaw){
     // tools::logger()->info("h:{}, xy_d:{}, xyz_d:{}, fly_time:{}, ", xyz.z(), min_dist, xyz.norm(), bullet_traj.fly_time);
 
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, target_h);
-  is_far = target_h > 1.0;
+  is_far = min_dist > 5.0;
 //  tools::logger()->info("h:{}, xy_d:{}, xyz_d:{}, fly_time:{}, is_far{} ", target_h, min_dist, xyz.norm(), bullet_traj.fly_time, is_far);
   
   target.predict(bullet_traj.fly_time );

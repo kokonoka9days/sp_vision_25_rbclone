@@ -59,7 +59,7 @@ public:
 
 
     auto future = std::chrono::steady_clock::now() + std::chrono::microseconds(int(delay_time * 1e6));
-    
+    is_far = false;
     
     target->predict(future);
 
