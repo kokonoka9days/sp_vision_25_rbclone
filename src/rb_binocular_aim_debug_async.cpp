@@ -30,7 +30,8 @@ using namespace std::chrono_literals;
 const std::string keys =
   "{help h usage ? |                           | 输出命令行参数说明}"
   "{short_camera   | ../configs/sb_short.yaml | 短焦相机配置文件路径}"
-  "{long_camera    | ../configs/sb_long.yaml  | 长焦相机配置文件路径}";
+  "{long_camera    | ../configs/sb_long.yaml  | 长焦相机配置文件路径}"
+  "{long_no_target_timeout | 1000 | 长焦连续无目标后切回短焦的超时时间(ms)}";
 
 int main(int argc, char * argv[])
 {
@@ -45,10 +46,14 @@ int main(int argc, char * argv[])
 
   const auto short_camera_config_path = cli.get<std::string>("short_camera");
   const auto long_camera_config_path = cli.get<std::string>("long_camera");
-  if (short_camera_config_path.empty() || long_camera_config_path.empty()) {
+  const auto long_no_target_timeout_ms = cli.get<int>("long_no_target_timeout");
+  if (
+    short_camera_config_path.empty() || long_camera_config_path.empty() ||
+    long_no_target_timeout_ms <= 0) {
     cli.printMessage();
     return 1;
   }
+  const auto long_no_target_timeout = std::chrono::milliseconds(long_no_target_timeout_ms);
 
   io::Camera::initSDK();
   io::Camera short_camera(short_camera_config_path);
@@ -58,8 +63,10 @@ int main(int argc, char * argv[])
   auto_aim::YOLO yolo(short_camera_config_path, false);
   auto_aim::Solver short_camera_solver(short_camera_config_path);
   auto_aim::Solver long_camera_solver(long_camera_config_path);
-  auto_aim::Tracker tracker(short_camera_config_path, &short_camera_solver);
-  tracker.set_gimbal(&gimbal);
+  auto_aim::Tracker short_camera_tracker(short_camera_config_path, &short_camera_solver);
+  auto_aim::Tracker long_camera_tracker(long_camera_config_path, &long_camera_solver);
+  short_camera_tracker.set_gimbal(&gimbal);
+  long_camera_tracker.set_gimbal(&gimbal);
   auto_aim::Planner short_camera_planner(short_camera_config_path);
   auto_aim::Planner long_camera_planner(long_camera_config_path);
 
@@ -172,21 +179,15 @@ int main(int argc, char * argv[])
     std::uint64_t generation;
   };
 
-  struct LongCameraHandover
+  struct LongCameraWatchdog
   {
     bool active = false;
     std::uint64_t generation = 0;
-    std::chrono::steady_clock::time_point started_at;
-    int consecutive_misses = 0;
-    auto_aim::ArmorName target_name = auto_aim::ArmorName::not_armor;
-    auto_aim::ArmorType target_type = auto_aim::ArmorType::small;
+    std::chrono::steady_clock::time_point last_target_at;
   };
 
-  constexpr auto long_handover_timeout = 150ms;
-  constexpr int long_handover_max_misses = 3;
-
   std::deque<PendingFrame> pending_frames;
-  LongCameraHandover long_handover;
+  LongCameraWatchdog long_camera_watchdog;
   std::optional<std::chrono::steady_clock::time_point> last_tracker_timestamp;
   cv::Mat img;
   std::chrono::steady_clock::time_point t;
@@ -201,7 +202,7 @@ int main(int argc, char * argv[])
     const auto input_generation = binocular_aim.generation();
     const auto timestamp_offset =
       input_is_short ? short_camera.timestamp_offset : long_camera.timestamp_offset;
-    auto q = gimbal.q(t);
+    auto q = gimbal.q(t - 3ms);
     if (last_t != std::chrono::steady_clock::time_point{}) {
       const auto elapsed_us =
         std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count();
@@ -250,41 +251,36 @@ int main(int argc, char * argv[])
     last_tracker_timestamp = t;
 
     auto & frame_solver = frame_is_short ? short_camera_solver : long_camera_solver;
+    auto & frame_tracker =
+      frame_is_short ? short_camera_tracker : long_camera_tracker;
     auto & frame_planner = frame_is_short ? short_camera_planner : long_camera_planner;
     auto & frame_planner_mutex = frame_is_short ? short_planner_mutex : long_planner_mutex;
 
     frame_solver.set_R_gimbal2world(q);
-    tracker.setSolver(&frame_solver);
 
     auto armors = std::move(yolo_frame.armors);
-    auto targets = tracker.track(armors, t, frame_is_short);
+    auto targets = frame_tracker.track(armors, t, frame_is_short);
 
-    if (long_handover.active) {
+    if (long_camera_watchdog.active) {
       if (
-        frame_generation != long_handover.generation || frame_is_short ||
+        frame_generation != long_camera_watchdog.generation || frame_is_short ||
         binocular_aim.is_short) {
-        long_handover.active = false;
+        long_camera_watchdog.active = false;
       } else {
-        const bool target_detected = std::any_of(
-          armors.begin(), armors.end(), [&](const auto_aim::Armor & armor) {
-            return armor.name == long_handover.target_name &&
-                   armor.type == long_handover.target_type;
-          });
-
-        if (target_detected) {
-          tools::logger()->info("[BinocularAim] 长焦已接管目标");
-          long_handover.active = false;
+        const auto now = std::chrono::steady_clock::now();
+        if (!armors.empty()) {
+          long_camera_watchdog.last_target_at = now;
         } else {
-          long_handover.consecutive_misses++;
-          const auto handover_elapsed = std::chrono::steady_clock::now() - long_handover.started_at;
+          const auto no_target_elapsed = now - long_camera_watchdog.last_target_at;
           if (
-            handover_elapsed >= long_handover_timeout &&
-            long_handover.consecutive_misses >= long_handover_max_misses &&
-            binocular_aim.Switch(tracker, true)) {
+            no_target_elapsed >= long_no_target_timeout &&
+            binocular_aim.Switch(frame_tracker, true, false)) {
+            const auto no_target_ms =
+              std::chrono::duration_cast<std::chrono::milliseconds>(no_target_elapsed).count();
             tools::logger()->warn(
-              "[BinocularAim] 长焦接管失败，连续 {} 帧未检测到原目标，回退短焦",
-              long_handover.consecutive_misses);
-            long_handover.active = false;
+              "[BinocularAim] 长焦连续 {}ms 未检测到目标，回退短焦", no_target_ms);
+            long_camera_watchdog.active = false;
+            short_camera_tracker.reset();
             target_queue.push(std::nullopt);
             continue;
           }
@@ -345,15 +341,22 @@ int main(int argc, char * argv[])
         aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
       tools::draw_points(img, aim_points, {0, 0, 255});
 
-      if (binocular_aim.ChangeTheScope(target, tracker) && !binocular_aim.is_short) {
-        long_handover.active = true;
-        long_handover.generation = binocular_aim.generation();
-        long_handover.started_at = std::chrono::steady_clock::now();
-        long_handover.consecutive_misses = 0;
-        long_handover.target_name = target.name;
-        long_handover.target_type = target.armor_type;
-        tools::logger()->info(
-          "[BinocularAim] 开始长焦接管，generation={}", long_handover.generation);
+      if (binocular_aim.ChangeTheScope(target, frame_tracker, false)) {
+        auto & activated_tracker =
+          binocular_aim.is_short ? short_camera_tracker : long_camera_tracker;
+        activated_tracker.reset();
+        target_queue.push(std::nullopt);
+
+        if (binocular_aim.is_short) {
+          long_camera_watchdog.active = false;
+        } else {
+          long_camera_watchdog.active = true;
+          long_camera_watchdog.generation = binocular_aim.generation();
+          long_camera_watchdog.last_target_at = std::chrono::steady_clock::now();
+          tools::logger()->info(
+            "[BinocularAim] 已切换长焦，{}ms 内无目标将回退短焦",
+            long_no_target_timeout_ms);
+        }
       }
     }
 
@@ -361,7 +364,7 @@ int main(int argc, char * argv[])
   //   cv::imshow("reprojection", img);
   //   const auto key = cv::waitKey(1);
   //   if (key == 'q') break;
-  //   if (key == 'c') binocular_aim.Switch(tracker, true);
+  //   if (key == 'c') binocular_aim.Switch(frame_tracker, true, false);
   }
 
   quit = true;
