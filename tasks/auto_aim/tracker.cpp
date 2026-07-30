@@ -5,6 +5,7 @@
 #include <tuple>
 
 #include "tools/logger.hpp"
+#include "tools/fft.hpp"
 #include "tools/math_tools.hpp"
 
 
@@ -40,6 +41,24 @@ void Tracker::reset()
   pre_state_ = "lost";
   last_timestamp_ = std::chrono::steady_clock::now();
   last_mode_.reset();
+}
+
+void Tracker::set_fft(tools::FFTExample * fft)
+{
+  fft_ = fft;
+  reset_fft_sample_state();
+}
+
+void Tracker::reset_fft_sample_state()
+{
+  if (fft_) fft_->reset();
+}
+
+void Tracker::update_fft_sample(
+  const Armor & armor, std::chrono::steady_clock::time_point t)
+{
+  if (!fft_) return;
+  fft_->add_sample(t, target_.last_id, armor.xyz_in_world.z());
 }
 
 std::list<Target> Tracker::sb_track(
@@ -468,10 +487,19 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
   target_.cam_is_short = cam_is_short;
   target_.last_cam_is_short = cam_is_short;
 
+  reset_fft_sample_state();
+  update_fft_sample(armor, t);
   return true;
 }
 bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t)
 {
+  if(fft_ != nullptr ){
+    auto wave = fft_->get_wave();
+    target_.wave_ = wave.valid()
+              ? std::make_optional(std::move(wave))
+              : std::nullopt;
+
+  }
   target_.predict(t);
   
   bool found = false;
@@ -482,6 +510,8 @@ bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock
     if (armor.name == target_.name && armor.type == target_.armor_type) {
       solver_->solve(armor);
       target_.update(armor);
+
+      update_fft_sample(armor, t);
       found = true;
       break; // 找到最优匹配后立即退出
     }

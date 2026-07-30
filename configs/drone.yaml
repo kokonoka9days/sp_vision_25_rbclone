@@ -3,8 +3,13 @@ enemy_color: "auto"
 # enemy_color: "red"
 
 
+pattern_cols: 11      # 棋盘格每行的内角点数（格子数-1）
+pattern_rows: 8      # 棋盘格每列的内角点数（格子数-1）
+square_size_mm: 30   # 棋盘格方块大小（毫米）
+
 #####-----神经网络参数-----#####
 yolo_name: trt_0526                                        # 模型名称(枚举)
+<<<<<<< HEAD
 # classify_model: ../assets/tiny_resnet.onnx                 # [未使用] classifier.cpp在TRT模式下不编译
 # yolo11_model_path: ../assets/yolo11.xml                     # [未使用] 仅yolo_name=="yolo11"时读取
 # yolov8_model_path: ../assets/yolov8.xml                     # [未使用] 仅yolo_name=="yolov8"时读取
@@ -12,6 +17,15 @@ yolo_name: trt_0526                                        # 模型名称(枚举
 # trt_engine_path_0708: ../assets/0708_fp16_super.engine      # [未使用] 仅yolo_name=="trt_0708"时读取
 trt_engine_path_0526: ../assets/0526.engine                 # 模型文件路径
 # device: CPU                                                  # [未使用] TensorRT强制使用GPU
+=======
+classify_model: ../assets/tiny_resnet.onnx                 # [未使用] classifier.cpp在TRT模式下不编译
+yolo11_model_path: ../assets/yolo11.xml                     # [未使用] 仅yolo_name=="yolo11"时读取
+yolov8_model_path: ../assets/yolov8.xml                     # [未使用] 仅yolo_name=="yolov8"时读取
+yolov5_model_path: ../assets/yolov5.xml                     # [未使用] 仅yolo_name=="yolov5"时读取
+trt_engine_path_0708: ../assets/0708_fp16_super.engine      # [未使用] 仅yolo_name=="trt_0708"时读取
+trt_engine_path_0526: ../assets/0526.engine                 # 模型文件路径
+device: CPU                                                  # [未使用] TensorRT强制使用GPU
+>>>>>>> origin/fft_test
 min_confidence: 0.8                                         # (0~1) 检测置信度下限
 # use_traditional: true                                       # [未使用] detector.cpp在TRT模式下不编译
 
@@ -48,14 +62,23 @@ min_confidence: 0.8                                         # (0~1) 检测置信
 
 camera_name: "hikrobot"                                     # 相机品牌(枚举)
 camera_sn: "DA7188471"                                      # 相机序列号
+<<<<<<< HEAD
 exposure_us: 8000                                           # us 曝光时间
 gain: 1                                                  # (0~1) 增益
+=======
+exposure_us: 1700                                           # us 曝光时间
+gain: 0.6                                                  # (0~1) 增益
+>>>>>>> origin/fft_test
 # gamma: 0.7                                                   # [未使用] hikrobot不读取gamma(仅daheng/mindvision读取)
 # vid_pid: "2bdf:0001"                                        # [未使用] hikrobot的vid_pid在camera.cpp中硬编码
 flip: false                                                 # 垂直翻转
 mirror: false                                               # 水平镜像
 timestamp_offset_us: 1000                                   # us 时间戳偏移补偿
+<<<<<<< HEAD
 img_gamma: 1.0                                              # Gamma校正(1.0=不校正)
+=======
+img_gamma: 0.5                                              # Gamma校正(1.0=不校正)
+>>>>>>> origin/fft_test
 
 #####-----传统方法参数-----#####
 # threshold: 150                                               # [未使用] detector.cpp在TRT模式下不编译
@@ -87,15 +110,13 @@ max_temp_lost_count: 25                                      # 帧 临时丢失N
 outpost_max_temp_lost_count: 75                              # 帧 前哨站专用丢失容忍度
 
 #####-----aimer参数-----#####
-yaw_offset: 3.0                                              # ° yaw静靶偏移补偿
-pitch_offset: -1.0                                           # ° pitch静靶偏移补偿
+yaw_offset: 0.0                                              # ° yaw静靶偏移补偿
+pitch_offset: -0.5                                          # ° pitch静靶偏移补偿
 comming_angle: 60                                            # ° 小陀螺出现侧角度阈值
-leaving_angle: 20                                            # ° 小陀螺消失侧角度阈值
-left_yaw_offset: -1                                          
-right_yaw_offset: -0.6                                      
+leaving_angle: 20                                            # ° 小陀螺消失侧角度阈值                                    
 decision_speed: 10                                           # rad/s 高低速分界角速度
-high_speed_delay_time: 0.005                                 # s 高速小陀螺预测延迟
-low_speed_delay_time: 0.005                                  # s 低速平移预测延迟
+high_speed_delay_time: 0.015                                 # s 高速小陀螺预测延迟
+low_speed_delay_time: 0.015                                  # s 低速平移预测延迟
 shoot_offset: 2                                              # 步 MPC开火查询偏移步数
 
 
@@ -107,15 +128,14 @@ auto_fire: true                                              # 是否自动控�
 
 #####-----planner-----#####
 fire_thresh: 3                                               # rad 轨迹残差开火阈值
-target_dist_error: 0                                         # m 距离补偿
-target_h_error: -0.20                                        # m 高度补偿
+target_dist_error: 0.25                                         # m 距离补偿
+target_h_error: -0.19                                      # m 高度补偿
 small_armor_tolerance: 0.12                                  # rad 小装甲板开火窗口
 big_armor_tolerance: 0.22                                    # rad 大装甲板开火窗口
 gimbal_control_delay: 0.0                                  # s 云台控制延迟
 tower_pitch_prediction_time: 0.05                            # s 前哨站pitch预测时间
-far_pitch_offset: 1.7                                        # ° 远距离(target_h>1m)pitch补偿
-tower_and_base_armor_tolerance_: 0.10                        # rad 前哨站/基地开火窗口
-gimbal_delay: 0.001                                          # s 云台总延迟(系统+电控)
+far_pitch_offset: -0.6                                      # ° 远距离(target_h>1m)pitch补偿
+tower_and_base_armor_tolerance_: 0.10                        # rad 前哨站/基地开火窗口                                          # s 云台总延迟(系统+电控)
 
 max_yaw_acc: 50                                              # rad/s² yaw MPC角加速度上限
 Q_yaw: [9e6, 0]                                              # yaw跟踪代价权重
@@ -131,19 +151,20 @@ R_pitch: [1]                                                 # pitch平滑代价
 #####-----工业相机标定参数-----#####
 R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]            # 旋转矩阵 IMU→云台(3x3行优先)
 
-# 重投影误差: 0.0600px
-camera_matrix: [3717.3035533979992, 0, 944.35415499102885, 0, 3756.5528836716653, 643.24707211153441, 0, 0, 1]
-distort_coeffs: [-0.017252060154940699, 0.24600031727428676, 0.0035735539887591637, 0.004154228172049238, -0.68642553380825]
+# 重投影误差: 0.0628px
+camera_matrix: [3572.6742823952882, 0, 806.6667404863332, 0, 3584.2243806545716, 606.70039558448252, 0, 0, 1]
+distort_coeffs: [-0.012580520383308109, 0.1847401225339407, 0.0024338569257424331, 0.0039472500463303218, -0.086362985205807694]
+# 相机同理想情况的偏角: yaw0.85 pitch-0.95 roll-0.18 degree
+# 标定板到世界坐标系原点的水平距离: 3.09 m
+# 标定板同竖直摆放时的偏角: yaw80.51 pitch8.05 roll-179.82 degree
+R_camera2gimbal: [-0.014711109912712935, -0.016611484801163874, 0.99975379059938418, -0.99988706477348488, -0.0028281216524759564, -0.014760061876016252, 0.0030726118858567242, -0.99985802007115987, -0.016568003970888961]
+t_camera2gimbal: [-0.013755870886838904, -0.055320643670305883, -0.09012758653010694]
 
-# 相机同理想情况的偏角: yaw0.37 pitch1.64 roll-2.29 degree
-R_camera2gimbal: [-0.082950854730392987, -0.011064794607539733, 0.99649221071706817, -0.99655184354817383, 0.0028192089209296309, -0.082924514962682508, -0.0018917770040984896, -0.99993480906574761, -0.011260497254280029]
-t_camera2gimbal: [-0.38767758301625854, -0.15437518127770755, -0.12639141143935484]
-
-
-com_port:                                                     # 按顺序尝试串口设备路径
-  - "/dev/ttyUSB0"
-  - "/dev/ttyUSB1"
-  - "/dev/ttyACM0"
+com_port: "/dev/ttyACM0"                                     # 串口设备路径
+# com_port:                                                     # 按顺序尝试串口设备路径
+#   - "/dev/ttyUSB0"
+#   - "/dev/ttyUSB1"
+#   - "/dev/ttyACM0"
 # 陀螺仪是否装错, 编号012分别代表电控坐标系ypr，想换旋转轴只需要对编号进行互换即可，负号就是对当前值取负，交换完再取负
 # 上车前记得对齐电控坐标系和济瞄惯性系
 gimbal_y1: 1                                                 # yaw轴映射(±1/±2/±3 负号取反)

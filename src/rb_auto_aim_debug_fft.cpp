@@ -14,9 +14,8 @@
 #include "tasks/auto_aim/aimer.hpp"
 #include "tasks/auto_aim/shooter.hpp"
 #include "tasks/auto_aim/yolo.hpp"
-#include "tasks/auto_aim/detector.hpp"
+// #include "tasks/auto_aim/detector.hpp"
 #include "tools/exiter.hpp"
-#include "tools/systemd_watchdog.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/reprojection.hpp"
 #include "tools/logger.hpp"
@@ -24,6 +23,8 @@
 #include "tools/plotter.hpp"
 #include "tools/thread_safe_queue.hpp"
 #include "tools/recorder.hpp"
+#include "tools/fft.hpp"
+#include "tools/fps_solve.hpp"
 
 using namespace std::chrono_literals;
 using namespace tools;
@@ -31,11 +32,10 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/sb_long.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/drone.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
-  tools::SystemdWatchdog systemd_watchdog;
   tools::Exiter exiter;
   tools::Plotter plotter;
 
@@ -50,10 +50,12 @@ int main(int argc, char * argv[])
   io::Camera camera(config_path);
 
   auto_aim::YOLO yolo(config_path, true);
-  auto_aim::Detector detector(config_path, true);
+  // auto_aim::Detector detector(config_path, true);
   auto_aim::Solver solver(config_path);
+  tools::FFTExample fft;
   auto_aim::Tracker tracker(config_path, &solver);
   tracker.set_gimbal(&gimbal);
+  tracker.set_fft(&fft);
 
   auto_aim::Planner planner(config_path);
   bool stopkey = false;
@@ -61,20 +63,22 @@ int main(int argc, char * argv[])
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
   target_queue.push(std::nullopt);
 
+  auto t0 = std::chrono::steady_clock::now();
+
   std::atomic<bool> quit = false;
   auto plan_thread = std::thread([&]() {
-    auto t0 = std::chrono::steady_clock::now();
+    
     uint16_t last_bullet_count = 0;
 
     while (!quit) {
+      auto plan_t_start = std::chrono::steady_clock::now();
       auto target = target_queue.front(); 
       auto gs = gimbal.state();
-
-
 
       //MPC预测以及+自家火控
       auto plan = planner.plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
 
+      auto plan_t_end = std::chrono::steady_clock::now();
      // 1. 设置默认值
       uint8_t name = 0;
       float tx = 0.0f;
@@ -85,19 +89,16 @@ int main(int argc, char * argv[])
         name = static_cast<uint8_t>(target->name) + 1;
         tx = target->ekf_x()[0]; 
         ty = target->ekf_x()[2]; 
-
         // tools::logger()->info("{},{},{}", name,tx,ty);
-
       }
 
-      gimbal.sb_send(
+      gimbal.send(
       plan.control, plan.fire,
       plan.yaw, plan.yaw_vel, plan.yaw_acc,
-      plan.pitch, plan.pitch_vel, plan.pitch_acc,
-      tx,ty,name
-    );    
-     
+      plan.pitch, plan.pitch_vel, plan.pitch_acc
+      );
 
+      
       auto fired = gs.bullet_count > last_bullet_count;
       last_bullet_count = gs.bullet_count;
 
@@ -114,7 +115,7 @@ int main(int argc, char * argv[])
 
       if (target.has_value()) {
         data["plan_mode"] = plan.control ? (plan.fire ? 2 : 1) : 0;
-        data["plan_yaw"] = plan.yaw / CV_PI * 180. ;
+        data["plan_yaw"] = (plan.yaw ) / CV_PI * 180. ;
         data["plan_yaw_vel"] = plan.yaw_vel;
         data["plan_yaw_acc"] = plan.yaw_acc;
 
@@ -144,40 +145,78 @@ int main(int argc, char * argv[])
         data["ekf_yaw"] = ekf_satic(6) * 57.3;
         data["ekf_vyaw"] = ekf_satic(7) * 57.3;
         data["ekf_r"] = ekf_satic(8);   
-        
-               
+
+        if(fft.get_is_periodic()){
+          data["fft_value"] = fft.get_value(target->getTimePoint());
+          data["target_xyz_in_world_z"] = target->xyz_in_world[2];
+          data["fft_original_value"] = fft.get_latest_value();
+          data["fft_frequency"] = fft.get_frequency();
+          data["fft_amplitude"] = fft.get_amplitude();
+          data["fft_fit_quality"] = fft.get_fit_quality();
+          data["fft_snr"] = fft.get_signal_to_noise_ratio();
+        }
+        data["plan_thread_dt_s"] = tools::delta_time(plan_t_end, plan_t_start)*1000;
+        plotter.plot(data);  
       }
-
-      plotter.plot(data);  
-
+      
       std::this_thread::sleep_for(5ms);
     }
   });
 
+  auto fft_thread = std::thread([&] {
+    bool was_periodic = false;
+    while (!quit) {
+      const auto analysis_start = std::chrono::steady_clock::now();
+      const bool is_periodic = fft.analyze();
+      if (is_periodic != was_periodic) {
+        const double elapsed_ms = std::chrono::duration<double, std::milli>(
+                                    std::chrono::steady_clock::now() - analysis_start)
+                                    .count();
+        if (is_periodic) {
+          tools::logger()->info("[FFT] 检测到周期运动，分析耗时 {:.2f} ms", elapsed_ms);
+        } else {
+          tools::logger()->info("[FFT] 周期运动已消失");
+        }
+        was_periodic = is_periodic;
+      }
+      for (int i = 0; i < 5 && !quit; ++i) std::this_thread::sleep_for(50ms);
+    }
+    
+  });
+
   cv::Mat img;
   std::chrono::steady_clock::time_point t;
-  std::chrono::steady_clock::time_point last_t;
-
-  if (!systemd_watchdog.ready("Vision pipeline is ready")) {
-    tools::logger()->warn("无法向 systemd 发送 READY 通知");
-  }
+  tools::fpsSolve fps_solver;
+  int frame_count = 0;
 
   while (!exiter.exit()) {
     camera.read(img, t);
-    if (!img.empty()) systemd_watchdog.ping();
     auto q = gimbal.q(t - 3ms);
 
     solver.set_R_gimbal2world(q);
-    auto armors = yolo.detect(img);
+
+    auto yolo_frame = yolo.detect(auto_aim::YOLOFrameData(img, q, t), frame_count++);
+    if (yolo_frame.is_empty) {
+      tools::logger()->info("img_is_empty");
+      continue;
+    }
+
+    img = yolo_frame.frame;
+    q = yolo_frame.gimbal_q;
+    t = yolo_frame.timestamp;
+    auto armors = yolo_frame.armors;
+
     auto targets = tracker.track(armors, t);
     // recor.record(img, q, t);
 
     auto now = std::chrono::steady_clock::now();
-    double fps = 1./tools::delta_time(now, last_t);
-    // tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));
-    last_t = now;
-    tools::logger()->info("fps:: {:.2f}", fps);
+    const double fps = fps_solver.update(now);
+    const double mean_fps = fps_solver.get_mean_fps();
 
+    tools::draw_text(img, "mean_fps: "+std::to_string(mean_fps), cv::Point(40, 130), {0, 0, 244});
+    // tools::logger()->info("fps:: {:.2f}, mean_fps:: {:.2f}", fps, mean_fps);
+
+    // 欧拉角解算
     auto ypr = tools::eulers(q, 2, 1, 0);
 
     float yaw_deg = ypr[0] * 180.0 / M_PI;
@@ -208,12 +247,13 @@ int main(int argc, char * argv[])
       io::GimbalState* g_demo = gimbal.set_state_();
       g_demo->mode = !g_demo->mode;
     }
-    // if(key == 's') {
-    //   stopkey = !stopkey;
-    // }
+    if(key == 's') {
+      stopkey = !stopkey;
+    }
   }
   quit = true;
   if (plan_thread.joinable()) plan_thread.join();
+  if (fft_thread.joinable()) fft_thread.join();
   
   // 获取当前下位机发来的云台状态数据
   auto current_state = gimbal.state();

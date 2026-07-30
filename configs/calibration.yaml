@@ -30,7 +30,6 @@ camera_sn: "DA7188471"
 exposure_us: 18000
 gain: 0.3
 gamma: 0.9  
-img_gamma: 1              # 不对标定图像做额外gamma变换
 vid_pid: "2ba2:4d55"
 flip: false
 mirror: false

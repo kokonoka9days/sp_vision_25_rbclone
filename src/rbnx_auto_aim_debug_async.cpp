@@ -14,8 +14,13 @@
 #include "tasks/auto_aim/tracker.hpp"
 #include "tasks/auto_aim/yolo.hpp"
 #include "tools/exiter.hpp"
+<<<<<<< HEAD
 #include "tools/systemd_watchdog.hpp"
 #include "tools/img_tools.hpp"
+=======
+#include "tools/img_tools.hpp"
+#include "tools/reprojection.hpp"
+>>>>>>> origin/fft_test
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
@@ -25,11 +30,18 @@ using namespace std::chrono_literals;
 
 const std::string keys =
   "{help h usage ? |                         | 输出命令行参数说明}"
+<<<<<<< HEAD
   "{@config-path   | ../configs/mouse.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
   tools::SystemdWatchdog systemd_watchdog;
+=======
+  "{@config-path   | ../configs/drone.yaml | 位置参数，yaml配置文件路径 }";
+
+int main(int argc, char * argv[])
+{
+>>>>>>> origin/fft_test
   tools::Exiter exiter;
   tools::Plotter plotter;
 
@@ -64,7 +76,11 @@ int main(int argc, char * argv[])
       auto plan = planner.plan(
         target, gs.bullet_speed, gs.yaw, auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
       gimbal.send(
+<<<<<<< HEAD
         plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, -plan.pitch,
+=======
+        plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch,
+>>>>>>> origin/fft_test
         plan.pitch_vel, plan.pitch_acc);
 
       auto fired = gs.bullet_count > last_bullet_count;
@@ -160,6 +176,7 @@ int main(int argc, char * argv[])
       target_queue.push(std::nullopt);
     } else {
       target_queue.push(targets.front());
+<<<<<<< HEAD
       auto & target = targets.front();
       auto ekf_x = target.getEKFXest();
 
@@ -194,6 +211,10 @@ int main(int argc, char * argv[])
       auto image_points =
         solver.reproject_armor(aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
       tools::draw_points(img, image_points, {0, 0, 255});
+=======
+      tools::draw_reprojection(
+        img, solver, targets.front(), planner.debug_xyza, cv::Scalar(235, 206, 135));
+>>>>>>> origin/fft_test
     }
 
     cv::resize(img, img, {}, 0.5, 0.5);

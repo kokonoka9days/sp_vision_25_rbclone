@@ -14,6 +14,11 @@
 #include "tasks/omniperception/perceptron.hpp"
 #include "tools/thread_safe_queue.hpp"
 
+namespace tools
+{
+class FFTExample;
+}
+
 namespace auto_aim
 {
 class Tracker
@@ -47,10 +52,12 @@ public:
 
   inline void setSolver(Solver * solver__){this->solver_ = solver__; }
   void set_gimbal(io::Gimbal* gimbal) { gimbal_ = gimbal; }
+  void set_fft(tools::FFTExample * fft);
   inline size_t get_update_count(){return this->target_.update_count_;}
 private:
   Solver * solver_;
   io::Gimbal* gimbal_ = nullptr; // 新增一个云台指针，默认为空
+  tools::FFTExample * fft_ = nullptr;  // non-owning
   Color enemy_color_;
   std::string enemy_color_str_;
   int min_detect_count_;
@@ -71,6 +78,9 @@ private:
   bool set_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
 
   bool update_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
+
+  void reset_fft_sample_state();
+  void update_fft_sample(const Armor & armor, std::chrono::steady_clock::time_point t);
 
   
 };

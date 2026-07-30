@@ -32,7 +32,6 @@ void capture_loop(
 {
   // io::CBoard cboard(config_path);
   io::Gimbal gimbal(config_path);
-  io::Camera::initSDK();
   io::Camera camera(config_path);
   cv::Mat img;
   std::chrono::steady_clock::time_point timestamp;

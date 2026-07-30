@@ -11,6 +11,8 @@ if(OPENVINO_MAKE)
         solver.cpp
         aimer.cpp
         target.cpp
+        kf_example/ca_from_tju.cpp
+        kf_example/rv_from_fyt.cpp
         tracker.cpp
         voter.cpp
         shooter.cpp
@@ -47,6 +49,8 @@ if(TENSOR_RT_MAKE)
         solver.cpp
         aimer.cpp
         target.cpp
+        kf_example/ca_from_tju.cpp
+        kf_example/rv_from_fyt.cpp
         tracker.cpp
         voter.cpp
         shooter.cpp
@@ -78,6 +82,8 @@ if(NOT OPENVINO_MAKE AND NOT TENSOR_RT_MAKE)
         solver.cpp
         aimer.cpp
         target.cpp
+        kf_example/ca_from_tju.cpp
+        kf_example/rv_from_fyt.cpp
         tracker.cpp
         voter.cpp
         shooter.cpp

@@ -12,6 +12,7 @@
 // #include "tasks/auto_aim/detector.hpp"
 #include "tools/exiter.hpp"
 #include "tools/img_tools.hpp"
+#include "tools/reprojection.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
@@ -155,22 +156,10 @@ int main(int argc, char * argv[])
         continue;
       }
 
-      std::vector<Eigen::Vector4d> armor_xyza_list;
-
-      // 当前帧target更新后
-      armor_xyza_list = target.armor_xyza_list();
-      for (const Eigen::Vector4d & xyza : armor_xyza_list) {
-        auto image_points =
-          solver.reproject_armor(xyza.head(3), xyza[3], target.armor_type, target.name);
-        tools::draw_points(img, image_points, {0, 255, 0});
-      }
-
-      // aimer瞄准位置
       auto aim_point = aimer.debug_aim_point;
-      Eigen::Vector4d aim_xyza = aim_point.xyza;
-      auto image_points =
-        solver.reproject_armor(aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
-      if (aim_point.valid) tools::draw_points(img, image_points, {0, 0, 255});
+      std::optional<Eigen::Vector4d> aim_xyza;
+      if (aim_point.valid) aim_xyza = aim_point.xyza;
+      tools::draw_reprojection(img, solver, target, aim_xyza);
 
       // 观测器内部数据
       Eigen::VectorXd x = target.ekf_x();

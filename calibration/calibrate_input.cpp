@@ -681,7 +681,10 @@ void capture_loop(
   const std::string & config_path, const fs::path & input_folder, const CalibrationConfig & config)
 {
   io::Gimbal gimbal(config_path);
+<<<<<<< HEAD
   io::Camera::initSDK();
+=======
+>>>>>>> origin/fft_test
   io::Camera camera(config_path);
 
   int next_id = 1;          // 每次启动从 1 开始编号
@@ -699,7 +702,13 @@ void capture_loop(
     }
 
     const Eigen::Quaterniond q = gimbal.q(timestamp).normalized();
+<<<<<<< HEAD
     const Eigen::Vector3d ypr = tools::eulers(q, 2, 1, 0) * 57.3;
+=======
+    const Eigen::Matrix3d R_gimbal2world =
+      config.R_gimbal2imubody.transpose() * q.toRotationMatrix() * config.R_gimbal2imubody;
+    const Eigen::Vector3d ypr = tools::eulers(R_gimbal2world, 2, 1, 0) * 57.3;
+>>>>>>> origin/fft_test
 
     std::vector<cv::Point2f> corners;
     const bool found = find_corners(image, config.pattern_size(), corners, true);
