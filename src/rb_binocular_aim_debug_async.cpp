@@ -23,6 +23,7 @@
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
 #include "tools/recorder.hpp"
+#include "tools/systemd_watchdog.hpp"
 #include "tools/thread_safe_queue.hpp"
 #include "method_set/binocular_aim.hpp"
 
@@ -36,6 +37,7 @@ const std::string keys =
 
 int main(int argc, char * argv[])
 {
+  tools::SystemdWatchdog systemd_watchdog;
   tools::Exiter exiter;
   tools::Plotter plotter;
   tools::Recorder recorder;
@@ -196,9 +198,16 @@ int main(int argc, char * argv[])
   std::chrono::steady_clock::time_point last_t;
   int frame_count = 0;
 
+  if (!systemd_watchdog.ready("Vision pipeline is ready")) {
+    tools::logger()->warn("无法向 systemd 发送 READY 通知");
+  }
+
   while (!exiter.exit()) {
     binocular_aim.cameras.aim_ptr->read(img, t);
     if (img.empty()) continue;
+    if (!systemd_watchdog.ping()) {
+      tools::logger()->warn("无法向 systemd 发送 Watchdog 心跳");
+    }
 
     const bool input_is_short = binocular_aim.is_short;
     const auto input_generation = binocular_aim.generation();

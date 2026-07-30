@@ -7,6 +7,7 @@
 #include "tasks/auto_aim/yolo.hpp"
 #include "tasks/omniperception/decider.hpp"
 #include "tools/exiter.hpp"
+#include "tools/systemd_watchdog.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
@@ -30,6 +31,7 @@ using namespace std::chrono_literals;
 
 int main(int argc, char * argv[])
 {
+  tools::SystemdWatchdog systemd_watchdog;
   tools::Exiter exiter;
   tools::Plotter plotter;
   tools::Recorder recorder;
@@ -205,6 +207,10 @@ int main(int argc, char * argv[])
 
 
 
+  if (!systemd_watchdog.ready("Vision pipeline is ready")) {
+    tools::logger()->warn("无法向 systemd 发送 READY 通知");
+  }
+
   while (!exiter.exit()) {
     // 读取云台模式
     auto mode = gimbal.mode();
@@ -216,6 +222,7 @@ int main(int argc, char * argv[])
     // 读取主相机图像
     // bincameras.cameras.aim_ptr->read(img, timestamp);
     short_camera.read(img, timestamp);
+    if (!img.empty()) systemd_watchdog.ping();
     
     // 获取云台姿态（四元数）
     Eigen::Quaterniond q = gimbal.q(timestamp - 3ms);
