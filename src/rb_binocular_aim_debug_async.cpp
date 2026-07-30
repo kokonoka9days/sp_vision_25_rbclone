@@ -22,6 +22,7 @@
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
+#include "tools/recorder.hpp"
 #include "tools/thread_safe_queue.hpp"
 #include "method_set/binocular_aim.hpp"
 
@@ -37,6 +38,7 @@ int main(int argc, char * argv[])
 {
   tools::Exiter exiter;
   tools::Plotter plotter;
+  tools::Recorder recorder;
 
   cv::CommandLineParser cli(argc, argv, keys);
   if (cli.has("help")) {
@@ -203,6 +205,7 @@ int main(int argc, char * argv[])
     const auto timestamp_offset =
       input_is_short ? short_camera.timestamp_offset : long_camera.timestamp_offset;
     auto q = gimbal.q(t - 3ms);
+    recorder.record(img, q, t, input_is_short ? "short" : "long");
     if (last_t != std::chrono::steady_clock::time_point{}) {
       const auto elapsed_us =
         std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count();
