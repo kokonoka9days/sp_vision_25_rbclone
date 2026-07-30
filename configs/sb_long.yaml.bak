@@ -60,8 +60,8 @@ outpost_max_temp_lost_count: 75
 # low_speed_delay_time: 0.093 # s
 
 #####-----aimer参数-----##### 12mm
-yaw_offset: -0.1 # degree 
-pitch_offset: 2.2 # degree 2
+yaw_offset: 0.4 # degree 
+pitch_offset: 1.2 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/
@@ -99,9 +99,9 @@ auto_fire: true # 是否由自瞄控制射击
 
 camera_name: "daheng"
 camera_sn: "FDN24040487"
-exposure_us: 3000
+exposure_us: 4000
 gain: 1
-gamma: 0.4
+gamma: 1
 # img_gamma: 0.6
 img_gamma: 1 
 vid_pid: "2ba2:4d55"
@@ -132,11 +132,11 @@ R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 # 相机同理想情况的偏角: yaw-0.62 pitch-1.90 roll-2.87 degree
 # 标定板到世界坐标系原点的水平距离: 4.10 m
 # 标定板同竖直摆放时的偏角: yaw58.53 pitch15.36 roll179.96 degree
-R_camera2gimbal: [0.01496542198979477, -0.04865962999976758, 0.9987032975578647, -0.9971363461391741, -0.07477598424002822, 0.011298645456502832, 0.07412923413123915, -0.9960124460011633, -0.04963933982130664]
-t_camera2gimbal: [0.29473441228362046, 0.03259977260952035, -0.038477035154897636]
+R_camera2gimbal: [0.004757361312456524, -0.039169508055177986, 0.9992212553544174, -0.9958694327450334, -0.09078917723298695, 0.0011824641402666195, 0.09067215910867278, -0.9950995301657376, -0.039439632687170045]
+t_camera2gimbal: [0.22233270471711025, 0.00650985324137331, 0.031509993864452863]
 # 重投影误差: 0.0978px
-camera_matrix: [3525.4187174991143, 0, 646.2983280990699, 0, 3511.6278306426943, 625.7954748155588, 0, 0, 1]
-distort_coeffs: [-0.003516067978774269, 0.14736219407920592, 0.004930641419283057, 0.0020850691936829618, 0.8749371154141395]
+camera_matrix: [3516.193907355724, 0, 639.9381501711143, 0, 3509.100013653691, 555.2722248122603, 0, 0, 1]
+distort_coeffs: [-0.020099452951724286, 0.48699718563088473, 0.0014667037329998945, -0.001016454890157202, -1.5327158487611023]
 gimbal_y1: 1
 gimbal_p2: 2
 gimbal_r3: 3
@@ -154,7 +154,7 @@ com_port: "/dev/ttyACM1"
 target_dist_error: 0.0
 target_h_error: 0.4
 fire_thresh: 0.003 # 
-small_armor_tolerance: 0.12
+small_armor_tolerance: 0.03
 big_armor_tolerance: 0.22
 tower_and_base_armor_tolerance_: 0.10  # 26赛季前哨站和基地装甲板检测宽度
 gimbal_control_delay: 0.0 
