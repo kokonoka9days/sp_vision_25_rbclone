@@ -363,9 +363,9 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   Trajectory traj;
   Eigen::Vector2d yaw_pitch;
   try {
-    yaw_pitch = rbaim(target, bullet_speed);
+    yaw_pitch = aim(target, bullet_speed);
     yaw0 = yaw_pitch(0);
-    traj = rbget_trajectory(target, yaw0, bullet_speed);
+    traj = get_trajectory(target, yaw0, bullet_speed);
   } catch (const std::exception & e) {
     tools::logger()->warn("Unsolvable target {:.2f}", bullet_speed);
     return {false};
@@ -703,9 +703,9 @@ Eigen::Matrix<double, 2, 1> Planner::rbaim(const Target & target, double bullet_
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
   if (bullet_traj.unsolvable) throw std::runtime_error("Unsolvable bullet trajectory!");
 
-  auto now_pitch_offset = is_far ? far_pitch_offset_ : pitch_offset_;
+  // auto now_pitch_offset = is_far ? far_pitch_offset_ : pitch_offset_;
 
-  return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + now_pitch_offset};
+  return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + pitch_offset_};
 
 
 }

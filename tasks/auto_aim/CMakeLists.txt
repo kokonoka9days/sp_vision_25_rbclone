@@ -40,10 +40,6 @@ if(TENSOR_RT_MAKE)
     find_package(OpenCV 4.5.4 REQUIRED)
     include_directories(${OpenCV_INCLUDE_DIRS})
 
-    # TensorRT
-    find_library(TRT_INFER nvinfer)
-
-
     enable_language(CUDA)
 
     add_library(auto_aim OBJECT 
@@ -68,9 +64,10 @@ if(TENSOR_RT_MAKE)
                                     io 
                                     tinympcstatic     
                                     ${OpenCV_LIBS}
-                                    nvinfer
+                                    ${TENSORRT_INFER_LIBRARY}
                                     CUDA::cudart  
                                     pthread)
+    target_include_directories(auto_aim PRIVATE ${TENSORRT_INCLUDE_DIR})
 
     message(STATUS "--------------------TENSOR_RT_MAKE is ON--------------------")
 endif()

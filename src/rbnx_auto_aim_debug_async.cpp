@@ -24,7 +24,7 @@ using namespace std::chrono_literals;
 
 const std::string keys =
   "{help h usage ? |                         | 输出命令行参数说明}"
-  "{@config-path   | ../configs/xiaohei.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/mouse.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
@@ -62,7 +62,7 @@ int main(int argc, char * argv[])
       auto plan = planner.plan(
         target, gs.bullet_speed, gs.yaw, auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
       gimbal.send(
-        plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch,
+        plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, -plan.pitch,
         plan.pitch_vel, plan.pitch_acc);
 
       auto fired = gs.bullet_count > last_bullet_count;
@@ -121,7 +121,7 @@ int main(int argc, char * argv[])
     camera.read(img, t);
     if (img.empty()) continue;
 
-    auto q = gimbal.q(t - 3ms);
+    auto q = gimbal.q(t);
     if (last_t != std::chrono::steady_clock::time_point{}) {
       double fps =
         1. / std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count() * 1000000;
