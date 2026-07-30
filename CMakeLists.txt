@@ -16,8 +16,8 @@ message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}-------
 
 # Backend selection. Keep OpenVINO as the default, while allowing the TensorRT
 # engine backend to be enabled from the command line without editing this file.
-option(OPENVINO_MAKE "Build the OpenVINO backend" OFF)
-option(TENSOR_RT_MAKE "Build the TensorRT backend" ON)
+option(OPENVINO_MAKE "Build the OpenVINO backend" ON)
+option(TENSOR_RT_MAKE "Build the TensorRT backend" OFF)
 
 if(OPENVINO_MAKE AND TENSOR_RT_MAKE)
     message(FATAL_ERROR "OPENVINO_MAKE and TENSOR_RT_MAKE cannot both be enabled")
@@ -112,7 +112,6 @@ add_executable(calibrate_robotworld_handeye calibration/calibrate_robotworld_han
 add_executable(split_video calibration/split_video.cpp)
 add_executable(test_simple calibration/test_simple.cpp)
 add_executable(calibrate calibration/calibrate.cpp)
-add_executable(calibrate_input calibration/calibrate_input.cpp)
 
 target_link_libraries(capture ${OpenCV_LIBS} fmt::fmt tools io)
 target_link_libraries(calibrate_input ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
@@ -122,7 +121,6 @@ target_link_libraries(calibrate_robotworld_handeye ${OpenCV_LIBS} fmt::fmt yaml-
 target_link_libraries(split_video ${OpenCV_LIBS} fmt::fmt tools)
 target_link_libraries(test_simple ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
 target_link_libraries(calibrate ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
-target_link_libraries(calibrate_input ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
 
 ##################tests##################
 add_executable(fft_fit_test tests/fft_fit_test.cpp tools/fft.cpp)
@@ -165,34 +163,22 @@ if(OPENVINO_MAKE)
     add_executable(cameras_test tests/cameras_test.cpp)
 target_link_libraries(cameras_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
-add_executable(handeye_test tests/handeye_test.cpp)
+add_executable(handeye_test tests/sp_example/handeye_test.cpp)
 target_link_libraries(handeye_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
-add_executable(gimbal_response_test tests/gimbal_response_test.cpp)
+add_executable(gimbal_response_test tests/sp_example/gimbal_response_test.cpp)
 target_link_libraries(gimbal_response_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
 
-add_executable(dm_test tests/dm_test.cpp)
+add_executable(dm_test tests/sp_example/dm_test.cpp)
 target_link_libraries(dm_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
 
-add_executable(minimum_vision_system tests/minimum_vision_system.cpp)
+add_executable(minimum_vision_system tests/sp_example/minimum_vision_system.cpp)
 target_link_libraries(minimum_vision_system ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
-add_executable(omniperception_test tests/omniperception_test.cpp)
-target_link_libraries(omniperception_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim omniperception)
-
-add_executable(binocular_camera_test tests/binocular_camera_test.cpp)
-target_link_libraries(binocular_camera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
-
-add_executable(4cmaera_test tests/4cmaera_test.cpp)
-target_link_libraries(4cmaera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
-
-add_executable(camera_thread_test tests/camera_thread_test.cpp)
+add_executable(camera_thread_test tests/sp_example/camera_thread_test.cpp)
 target_link_libraries(camera_thread_test ${OpenCV_LIBS} fmt::fmt auto_aim tools io)
 
-add_executable(cameras_test tests/cameras_test.cpp)
-target_link_libraries(cameras_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
-
-add_executable(planner_test_offline tests/planner_test_offline.cpp)
+add_executable(planner_test_offline tests/sp_example/planner_test_offline.cpp)
 target_link_libraries(planner_test_offline ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io omniperception)
 endif()
 

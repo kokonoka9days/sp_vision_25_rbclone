@@ -9,7 +9,6 @@ square_size_mm: 30   # 棋盘格方块大小（毫米）
 
 #####-----神经网络参数-----#####
 yolo_name: trt_0526                                        # 模型名称(枚举)
-<<<<<<< HEAD
 # classify_model: ../assets/tiny_resnet.onnx                 # [未使用] classifier.cpp在TRT模式下不编译
 # yolo11_model_path: ../assets/yolo11.xml                     # [未使用] 仅yolo_name=="yolo11"时读取
 # yolov8_model_path: ../assets/yolov8.xml                     # [未使用] 仅yolo_name=="yolov8"时读取
@@ -17,15 +16,6 @@ yolo_name: trt_0526                                        # 模型名称(枚举
 # trt_engine_path_0708: ../assets/0708_fp16_super.engine      # [未使用] 仅yolo_name=="trt_0708"时读取
 trt_engine_path_0526: ../assets/0526.engine                 # 模型文件路径
 # device: CPU                                                  # [未使用] TensorRT强制使用GPU
-=======
-classify_model: ../assets/tiny_resnet.onnx                 # [未使用] classifier.cpp在TRT模式下不编译
-yolo11_model_path: ../assets/yolo11.xml                     # [未使用] 仅yolo_name=="yolo11"时读取
-yolov8_model_path: ../assets/yolov8.xml                     # [未使用] 仅yolo_name=="yolov8"时读取
-yolov5_model_path: ../assets/yolov5.xml                     # [未使用] 仅yolo_name=="yolov5"时读取
-trt_engine_path_0708: ../assets/0708_fp16_super.engine      # [未使用] 仅yolo_name=="trt_0708"时读取
-trt_engine_path_0526: ../assets/0526.engine                 # 模型文件路径
-device: CPU                                                  # [未使用] TensorRT强制使用GPU
->>>>>>> origin/fft_test
 min_confidence: 0.8                                         # (0~1) 检测置信度下限
 # use_traditional: true                                       # [未使用] detector.cpp在TRT模式下不编译
 
@@ -62,23 +52,14 @@ min_confidence: 0.8                                         # (0~1) 检测置信
 
 camera_name: "hikrobot"                                     # 相机品牌(枚举)
 camera_sn: "DA7188471"                                      # 相机序列号
-<<<<<<< HEAD
 exposure_us: 8000                                           # us 曝光时间
 gain: 1                                                  # (0~1) 增益
-=======
-exposure_us: 1700                                           # us 曝光时间
-gain: 0.6                                                  # (0~1) 增益
->>>>>>> origin/fft_test
 # gamma: 0.7                                                   # [未使用] hikrobot不读取gamma(仅daheng/mindvision读取)
 # vid_pid: "2bdf:0001"                                        # [未使用] hikrobot的vid_pid在camera.cpp中硬编码
 flip: false                                                 # 垂直翻转
 mirror: false                                               # 水平镜像
 timestamp_offset_us: 1000                                   # us 时间戳偏移补偿
-<<<<<<< HEAD
 img_gamma: 1.0                                              # Gamma校正(1.0=不校正)
-=======
-img_gamma: 0.5                                              # Gamma校正(1.0=不校正)
->>>>>>> origin/fft_test
 
 #####-----传统方法参数-----#####
 # threshold: 150                                               # [未使用] detector.cpp在TRT模式下不编译

@@ -485,7 +485,7 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
   }
 
   target_.cam_is_short = cam_is_short;
-  target_.last_cam_is_short = cam_is_short;
+  last_cam_is_short = cam_is_short;
 
   reset_fft_sample_state();
   update_fft_sample(armor, t);

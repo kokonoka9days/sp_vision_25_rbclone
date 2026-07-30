@@ -66,21 +66,16 @@ public:
     {
     case Dynamics:
       return plan(*target, bullet_speed);
-      break;
     case rbSuppressiveFire:
       return rbplan(*target, bullet_speed, gimbal_yaw);
-      break;
     case rbHero:
       return rbHeroplan(*target, bullet_speed, gimbal_yaw);
-      break;
-      case SB:
+    case SB:
       return sbplan(*target, bullet_speed, gimbal_yaw);
     default:
-      // tools::logger()->warn("planner model error!");
-      break;
+      tools::logger()->error("Unknown shoot strategy: {}", static_cast<int>(strategy));
+      return {false};
     }
-    
-    
   }
   Plan rbplan(Target target, double bullet_speed, double gimbal_yaw);
   Plan sbplan(Target target, double bullet_speed, double gimbal_yaw);
