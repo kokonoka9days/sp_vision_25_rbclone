@@ -294,10 +294,12 @@ bool Planner::rbShoot(Target target, double gimbal_yaw, bool tower_fixed_pitch){
   double angle_c = atan2(target_armor_xyza(1), target_armor_xyza(0));
   // double allow_fire_ang_max = angle_c - angle_b;
   // double allow_fire_ang_min = angle_c - angle_a;
-  double allow_fire_ang_max = std::max(angle_a, angle_b) - angle_c;
-  double allow_fire_ang_min = std::min(angle_a, angle_b) - angle_c;
-  allow_fire_ang_max = tools::limit_rad(allow_fire_ang_max);
-  allow_fire_ang_min = tools::limit_rad(allow_fire_ang_min);
+  // Normalize each edge relative to the armor center before ordering them.
+  // This keeps the interval valid when the two edges straddle -pi / +pi.
+  double edge_angle_a = tools::limit_rad(angle_a - angle_c);
+  double edge_angle_b = tools::limit_rad(angle_b - angle_c);
+  double allow_fire_ang_max = std::max(edge_angle_a, edge_angle_b);
+  double allow_fire_ang_min = std::min(edge_angle_a, edge_angle_b);
   
 
   // pitch
@@ -308,13 +310,14 @@ bool Planner::rbShoot(Target target, double gimbal_yaw, bool tower_fixed_pitch){
 
   // yaw_ang_ref
   double control_delta_angle =
-      tools::limit_rad(atan2(target_armor_xyza(1), target_armor_xyza(0)) - gimbal_yaw );
+    tools::limit_rad(gimbal_yaw - angle_c);
   suggest_fire = (control_delta_angle < allow_fire_ang_max &&
                   control_delta_angle > allow_fire_ang_min && suggest_pitch) ;
 
 
 
-  if(!outpost_is_make) suggest_fire = 0;
+  if (target.name == ArmorName::outpost && !outpost_is_make)
+  suggest_fire = false;
   if(suggest_fire){
     // tools::logger()->info("fire! control_delta_angle: {},  allow_fire_ang_max: {}, allow_fire_ang_min: {}",
     //   control_delta_angle, allow_fire_ang_max, allow_fire_ang_min
