@@ -155,7 +155,7 @@ detect:
   fanblades_body_contours_max_area: 4000
   standard_fanblade_path: ./assets/standard_fanblade.jpg
 
-model: "../assets/yolo11_buff_12point_v3.onnx"
+model: "../assets/yolo11_buff_12point_v3_fp16.xml"
 buff_engine_path: "../assets/yolo11_buff_12point_v3_fp16.engine"
 buff_confidence_threshold: 0.6
 buff_keypoint_threshold: 0.3

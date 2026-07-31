@@ -8,7 +8,7 @@
 
 const std::string keys =
   "{help h usage ? |                          | 输出命令行参数说明}"
-  "{config-path c  | ../configs/sb_long.yaml | yaml配置文件路径 }"
+  "{config-path c  | ../configs/calibration.yaml | yaml配置文件路径 }"
   "{@input-folder  | ../assets/img_with_q        | 输入文件夹路径   }";
 
   
@@ -123,7 +123,7 @@ int main(int argc, char * argv[])
   // 可以添加其他标志，如：
   // flags |= cv::CALIB_FIX_K3; // 固定k3畸变系数
   // flags |= cv::CALIB_ZERO_TANGENT_DIST; // 设置切向畸变系数为0
-  
+
   cv::calibrateCamera(
     obj_points, img_points, img_size, camera_matrix, distort_coeffs, rvecs, tvecs,
     flags, criteria);
