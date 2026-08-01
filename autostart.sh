@@ -5,4 +5,4 @@ screen \
     -Logfile logs/$(date "+%Y-%m-%d_%H-%M-%S").screenlog \
     -d \
     -m \
-    bash -c "./rb_auto_aim_debug"
+    bash -c "./rb_auto_drone_debug"

@@ -829,7 +829,7 @@ const std::string keys =
   "{ransac-threshold-mm          | 5.0                          | RANSAC 点到直线内点阈值，单位 mm}"
   "{ransac-iterations            | 2000                         | RANSAC 迭代次数}"
   "{bootstrap-iterations         | 200                          | Bootstrap 重采样次数}"
-  "{min-samples                  | 15                           | 质量门禁要求的最少有效样本数}"
+  "{min-samples                  | 5                           | 质量门禁要求的最少有效样本数}"
   "{min-bin-samples              | 3                            | 每个距离区间要求的最少样本数}"
   "{min-span-m                   | 0.5                          | 沿激光线方向的最小采样跨度，单位 "
   "m}"

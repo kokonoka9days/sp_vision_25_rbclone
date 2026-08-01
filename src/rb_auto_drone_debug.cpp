@@ -124,7 +124,8 @@ int main(int argc, char * argv[])
       } 
       else {
         // 丢失目标，向云台发送当前姿态的空闲指令（防暴走）
-        gimbal.drone_send(false, false, gs.yaw, 0.0f, 0.0f, gs.pitch, 0.0f, 0.0f);
+        gimbal.drone_send(
+          false, false, gs.yaw * 57.3f, 0.0f, 0.0f, gs.pitch * 57.3f, 0.0f, 0.0f);
       }
 
       // --- 数据绘图与输出 (Plotter) ---
@@ -263,6 +264,8 @@ int main(int argc, char * argv[])
                   cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 0), 2);
     }
 
+    cv::circle(img,cv::Point2f(img.cols/2,img.rows/2),5,cv::Scalar(0,255,0),-1);
+
     // 缩小一半显示防止撑爆屏幕
     // record.record(img,q,t);
     
@@ -274,8 +277,8 @@ int main(int argc, char * argv[])
     if (key == 'q') break;
     if (key == 'w' || key == 'W') planner.adjust_aim_offset(0.0, AIM_OFFSET_STEP_DEG);
     if (key == 's' || key == 'S') planner.adjust_aim_offset(0.0, -AIM_OFFSET_STEP_DEG);
-    if (key == 'a' || key == 'A') planner.adjust_aim_offset(-AIM_OFFSET_STEP_DEG, 0.0);
-    if (key == 'd' || key == 'D') planner.adjust_aim_offset(AIM_OFFSET_STEP_DEG, 0.0);
+    if (key == 'a' || key == 'A') planner.adjust_aim_offset(AIM_OFFSET_STEP_DEG, 0.0);
+    if (key == 'd' || key == 'D') planner.adjust_aim_offset(-AIM_OFFSET_STEP_DEG, 0.0);
     if (key == 'r') {
       io::GimbalState* g_demo = gimbal.set_state_();
       g_demo->mode = !g_demo->mode;
@@ -293,10 +296,10 @@ int main(int argc, char * argv[])
   gimbal.drone_send(
       false, 
       false, 
-      current_state.yaw / 57.3f, 
+      current_state.yaw * 57.3f,
       0.0f, 
       0.0f, 
-      current_state.pitch / 57.3f, 
+      current_state.pitch * 57.3f,
       0.0f, 
       0.0f
   );
