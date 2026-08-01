@@ -8,6 +8,7 @@
 #include "tasks/auto_aim/yolo.hpp"
 #include "tasks/omniperception/decider.hpp"
 #include "tools/exiter.hpp"
+#include "tools/systemd_watchdog.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
@@ -29,6 +30,7 @@ using namespace std::chrono_literals;
 
 int main(int argc, char * argv[])
 {
+  tools::SystemdWatchdog systemd_watchdog;
   tools::Exiter exiter;
   tools::Plotter plotter;
   tools::Recorder recorder;
@@ -193,10 +195,15 @@ int main(int argc, char * argv[])
   std::chrono::steady_clock::time_point last_t;
 
   // 主循环
+  if (!systemd_watchdog.ready("Vision pipeline is ready")) {
+    tools::logger()->warn("无法向 systemd 发送 READY 通知");
+  }
+
   while (!exiter.exit()) {
 
     // 读取主相机图像
     bincameras.cameras.aim_ptr->read(img, timestamp);
+    if (!img.empty()) systemd_watchdog.ping();
     // short_camera.read(img, timestamp);
 
     // auto q = gimbal.q(timestamp - bincameras.cameras.aim_ptr->timestamp_offset);

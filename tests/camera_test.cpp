@@ -6,10 +6,11 @@
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"                                         
 #include "tools/img_tools.hpp"
+#include "tools/recorder.hpp"
 
 const std::string keys =
   "{help h usage ? |                     | 输出命令行参数说明}"
-  "{config-path c  | ../configs/sb_long.yaml | yaml配置文件路径 }"
+  "{config-path c  | ../configs/dog.yaml | yaml配置文件路径 }"
   "{d display      |        1             | 显示视频流       }";
 
 int main(int argc, char * argv[])
@@ -21,6 +22,7 @@ int main(int argc, char * argv[])
   }
 
   tools::Exiter exiter;
+  tools::Recorder recorder;
 
   auto config_path = cli.get<std::string>("config-path");
   auto display = cli.has("display");
@@ -33,6 +35,8 @@ int main(int argc, char * argv[])
   auto last_stamp = std::chrono::steady_clock::now();
   while (!exiter.exit()) {
     camera.read(img, timestamp);
+
+    recorder.record(img, Eigen::Quaterniond(),timestamp);
 
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(timestamp - last_t).count()*1000000;
     tools::draw_text(img, "fps: "+std::to_string(fps), cv::Point(40, 130));

@@ -16,6 +16,7 @@
 #include "tasks/auto_aim/shooter.hpp"
 #include "tasks/auto_aim/yolo.hpp"
 #include "tools/exiter.hpp"
+#include "tools/systemd_watchdog.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
@@ -57,6 +58,7 @@ const std::string keys =
 
 int main(int argc, char * argv[])
 {
+  tools::SystemdWatchdog systemd_watchdog;
   tools::Exiter exiter;
   tools::Plotter plotter;
 
@@ -175,6 +177,10 @@ int main(int argc, char * argv[])
   std::chrono::steady_clock::time_point last_t;
   auto last_mode{io::GimbalMode::IDLE}; // 记录上次模式
 
+  if (!systemd_watchdog.ready("Vision pipeline is ready")) {
+    tools::logger()->warn("无法向 systemd 发送 READY 通知");
+  }
+
   while (!exiter.exit()) {
     mode = gimbal.mode(); // 每帧获取最新云台模式
     
@@ -191,7 +197,7 @@ int main(int argc, char * argv[])
       continue; // 跳过这一帧，不往下执行
     }
 
-
+    systemd_watchdog.ping();
     auto q = gimbal.q(t);
 
     double fps = 1./std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count()*1000000;
