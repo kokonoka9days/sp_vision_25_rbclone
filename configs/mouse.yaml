@@ -82,14 +82,14 @@ timestamp_offset_us: 2000 #us
 # R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0,  1]
 
-# 相机同理想情况的偏角: yaw-0.12 pitch-1.67 roll1.03 degree
-# 标定板到世界坐标系原点的水平距离: 2.45 m
-# 标定板同竖直摆放时的偏角: yaw-136.94 pitch7.50 roll0.50 degree
-R_camera2gimbal: [0.0014967439535173213, -0.029216360840928685, 0.99957199041227163, -0.99983883532349282, 0.017838968828040622, 0.0020185564430833603, -0.017890308451765934, -0.99941391597794205, -0.029184951826854662]
-t_camera2gimbal: [0.23732014733983461, -0.034641210225537157, -0.026472991892530634]
-# 重投影误差: 0.0883px
-camera_matrix: [2410.0541340076702, 0, 695.43550272286302, 0, 2401.7361049475071, 582.12928764545734, 0, 0, 1]
-distort_coeffs: [-0.026954180737693584, 0.26792283610195378, 0.0028679732819784655, -1.8240431319652759e-05, -0.50177627152485649]
+# 相机同理想情况的偏角: yaw-0.93 pitch-0.98 roll-0.41 degree
+# 标定板到世界坐标系原点的水平距离: 2.39 m
+# 标定板同竖直摆放时的偏角: yaw-95.39 pitch13.74 roll-179.56 degree
+R_camera2gimbal: [0.016435627841621128, -0.017034178278426831, 0.9997198142018745, -0.99983926852952798, -0.0074428334973912821, 0.016310773613421668, 0.007162907495557409, -0.99982720557099714, -0.017153767991354124]
+t_camera2gimbal: [0.22889731859052068, -0.04064361517559191, -0.005006485919441815]
+# 重投影误差: 0.0853px
+camera_matrix: [2370.2492646690712, 0, 683.69714476070089, 0, 2373.3909771703247, 529.92367569383634, 0, 0, 1]
+distort_coeffs: [-0.042467897411999037, 0.31837853033997093, -0.0018795519912555127, -0.003871329283332497, -0.74188003925411894]
 # _camera2gimbal第一位调yaw
 # _camera2gimbal第二位调yaw
 # _camera2gimbal第三位调pitch
@@ -156,7 +156,49 @@ detect:
   fanblades_body_contours_max_area: 4000
   standard_fanblade_path: ./assets/standard_fanblade.jpg
 
-model: "../assets/yolo11_buff_int8.xml"
+# model: "../assets/yolo11_buff_12point_v3.onnx"
+buff_engine_path: "../assets/yolo11_buff_12point_v3_fp16.engine"
+buff_confidence_threshold: 0.6
+buff_keypoint_threshold: 0.3
+buff_keypoint_hard_threshold: 0.15
+buff_keypoint_temporal_gate_px: 10.0
+buff_center_innovation_gate_px: 45.0
+buff_center_recovery_hits: 2
+buff_rune_radius_m: 0.700
+buff_small_direction: 0 # 0:auto, 1/-1: force small buff prediction direction
+buff_pair_angle_gate_deg: 15
+buff_pair_ratio_min: 0.30
+buff_pair_ratio_max: 0.70
+buff_pair_ratio_center: 0.51
+buff_track_gate_min_deg: 12
+buff_track_gate_max_deg: 25
+buff_blind_timeout_s: 0.100
+buff_track_reset_timeout_s: 0.500
+buff_track_confirm_hits: 2
+buff_track_recovery_hits: 2
+buff_direction_confirm_intervals: 3
+buff_control_blind_timeout_s: 0.100
+buff_track_retention_s: 0.400
+buff_switch_confirm_frames: 5
+buff_same_slot_confirm_frames: 3
+buff_adjacent_switch_confirm_frames: 8
+buff_adjacent_switch_delay_s: 0.180
+buff_slot_tolerance_deg: 12
+buff_switch_pair_angle_gate_deg: 10
+buff_switch_pair_ratio_min: 0.38
+buff_switch_pair_ratio_max: 0.64
+buff_big_speed_phase_window: 7
+buff_big_speed_min_span_s: 0.030
+buff_big_fit_min_span_s: 1.0
+buff_big_fit_min_inlier_ratio: 0.75
+buff_big_fit_max_rms: 0.18
+buff_big_fit_blend_s: 0.30
+buff_pnp_full_reprojection_gate_px: 6.8
+buff_pnp_target_center_gate_px: 6.0
+buff_pnp_fan_center_gate_px: 8.0
+buff_pnp_partial_center_gate_px: 8.0
+buff_pnp_partial_angle_gate_deg: 15
+buff_fire_full_observation_max_age_s: 0.030
 #####-----buff_aimer参数-----#####
 aim_time: 0.150         # s
 wait_time: 0.300        # s
