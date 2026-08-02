@@ -206,6 +206,15 @@ command_fire_gap: 0.080 # s
 fire_gap_time: 0.700   # s
 predict_time: 0.005    # s
 
+buff_max_yaw_vel: 4.0            # rad/s
+buff_max_pitch_vel: 3.0          # rad/s
+buff_max_yaw_acc: 25.0           # rad/s^2
+buff_max_pitch_acc: 30.0         # rad/s^2
+buff_command_position_gain: 18.0 # 1/s
+buff_fire_angle_error_deg: 1.0   # degree
+
 pattern_cols: 11      # 棋盘格每行的内角点数（格子数-1）
 pattern_rows: 8      # 棋盘格每列的内角点数（格子数-1）
 square_size_mm: 30   # 棋盘格方块大小（毫米）
+
+

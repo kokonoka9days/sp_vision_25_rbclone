@@ -204,3 +204,9 @@ wait_time: 0.300        # s
 command_fire_gap: 0.080 # s
 fire_gap_time: 0.700   # s
 predict_time: 0.120    # s
+buff_max_yaw_vel: 4.0            # rad/s
+buff_max_pitch_vel: 3.0          # rad/s
+buff_max_yaw_acc: 25.0           # rad/s^2
+buff_max_pitch_acc: 30.0         # rad/s^2
+buff_command_position_gain: 18.0 # 1/s
+buff_fire_angle_error_deg: 1.0   # degree

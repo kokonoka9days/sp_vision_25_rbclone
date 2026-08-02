@@ -13,6 +13,16 @@ Aimer::Aimer(const std::string & config_path)
   pitch_offset_ = yaml["pitch_offset"].as<double>() / 57.3;  // degree to rad
   fire_gap_time_ = yaml["fire_gap_time"].as<double>();
   predict_time_ = yaml["predict_time"].as<double>();
+  if (yaml["buff_max_yaw_vel"]) max_yaw_vel_ = yaml["buff_max_yaw_vel"].as<double>();
+  if (yaml["buff_max_pitch_vel"]) max_pitch_vel_ = yaml["buff_max_pitch_vel"].as<double>();
+  if (yaml["buff_max_yaw_acc"]) max_yaw_acc_ = yaml["buff_max_yaw_acc"].as<double>();
+  if (yaml["buff_max_pitch_acc"]) max_pitch_acc_ = yaml["buff_max_pitch_acc"].as<double>();
+  if (yaml["buff_command_position_gain"]) {
+    command_position_gain_ = yaml["buff_command_position_gain"].as<double>();
+  }
+  if (yaml["buff_fire_angle_error_deg"]) {
+    fire_angle_error_ = yaml["buff_fire_angle_error_deg"].as<double>() / 57.3;
+  }
   if (yaml["buff_rune_radius_m"]) RUNE_RADIUS_M = yaml["buff_rune_radius_m"].as<double>();
   if (yaml["buff_small_direction"]) SMALL_BUFF_DIRECTION = yaml["buff_small_direction"].as<int>();
   if (yaml["buff_fire_full_observation_max_age_s"]) {
@@ -20,6 +30,16 @@ Aimer::Aimer(const std::string & config_path)
       yaml["buff_fire_full_observation_max_age_s"].as<double>();
   }
 
+  last_fire_t_ = std::chrono::steady_clock::now();
+}
+
+void Aimer::reset()
+{
+  predicted_target_.reset();
+  solution_converged_ = false;
+  command_state_initialized_ = false;
+  command_yaw_vel_ = 0.0;
+  command_pitch_vel_ = 0.0;
   last_fire_t_ = std::chrono::steady_clock::now();
 }
 
@@ -80,40 +100,39 @@ auto_aim::Plan Aimer::mpc_aim(
 
   if (get_send_angle(target, future, bullet_speed, to_now, yaw, pitch, true)) {
     const bool future_solution_converged = solution_converged_;
-    plan.yaw = yaw;
-    plan.pitch = pitch;
-    plan.control = true;
+    plan.target_yaw = yaw;
+    plan.target_pitch = pitch;
 
-    if (plan.control) {
-    if (first_in_aimer_) {
-      plan.yaw_vel = 0; plan.yaw_acc = 0;
-      plan.pitch_vel = 0; plan.pitch_acc = 0;
-      first_in_aimer_ = false;
-    } else {
-      auto dt = predict_time_;
-      double last_yaw_mpc, last_pitch_mpc;
-
-      // 使用另一个全新的副本，推算“当前瞬间”的位姿，而不是传入负时间！
-      auto target_for_now = target.clone();
-      double now_time = to_now ? detect_now_gap : 0.1; 
-      if (get_send_angle(*target_for_now, now_time, bullet_speed, to_now, last_yaw_mpc, last_pitch_mpc)) {
-        plan.yaw_vel = tools::limit_rad(yaw - last_yaw_mpc) / (2 * dt);
-        plan.yaw_acc =
-          (tools::limit_rad(yaw - gs.yaw) - tools::limit_rad(gs.yaw - last_yaw_mpc)) /
-          std::pow(dt, 2);
-        plan.pitch_vel = tools::limit_rad(-pitch + last_pitch_mpc) / (2 * dt);
-        plan.pitch_acc =
-          (-pitch - gs.pitch - (gs.pitch + last_pitch_mpc)) / std::pow(dt, 2);
-      } else {
-        plan.yaw_vel = plan.yaw_acc = 0.0;
-        plan.pitch_vel = plan.pitch_acc = 0.0;
-      }
+    double target_yaw_vel = 0.0;
+    double target_pitch_vel = 0.0;
+    auto target_for_now = target.clone();
+    const double now_time = to_now ? detect_now_gap : 0.1;
+    double now_yaw = 0.0;
+    double now_pitch = 0.0;
+    if (
+      predict_time_ > 1e-4 &&
+      get_send_angle(*target_for_now, now_time, bullet_speed, to_now, now_yaw, now_pitch)) {
+      target_yaw_vel = tools::limit_rad(yaw - now_yaw) / predict_time_;
+      target_pitch_vel = (pitch - now_pitch) / predict_time_;
     }
     solution_converged_ = future_solution_converged;
+    update_command(yaw, pitch, target_yaw_vel, target_pitch_vel, gs, now, plan);
   }
-}
 
-  if (!plan.control || !solution_converged_ || !target.can_fire(now)) {
+  const double feedback_yaw = gs.yaw / 57.3;
+  const double feedback_pitch = gs.pitch / 57.3;
+  const bool command_settled =
+    plan.control &&
+    std::abs(tools::limit_rad(plan.target_yaw - plan.yaw)) <= fire_angle_error_ &&
+    std::abs(plan.target_pitch - plan.pitch) <= fire_angle_error_;
+  const bool gimbal_settled =
+    plan.control && std::isfinite(feedback_yaw) && std::isfinite(feedback_pitch) &&
+    std::abs(tools::limit_rad(plan.target_yaw - feedback_yaw)) <= fire_angle_error_ &&
+    std::abs(plan.target_pitch - feedback_pitch) <= fire_angle_error_;
+
+  if (
+    !plan.control || !solution_converged_ || !target.can_fire(now) || !command_settled ||
+    !gimbal_settled) {
     plan.fire = false;
     last_fire_t_ = now;
   } else if (tools::delta_time(now, last_fire_t_) > fire_gap_time_) {
@@ -122,6 +141,64 @@ auto_aim::Plan Aimer::mpc_aim(
   }
 
   return plan;
+}
+
+void Aimer::update_command(
+  double target_yaw, double target_pitch, double target_yaw_vel, double target_pitch_vel,
+  const io::GimbalState & gs, std::chrono::steady_clock::time_point now, auto_aim::Plan & plan)
+{
+  if (!command_state_initialized_) {
+    const double feedback_yaw = gs.yaw / 57.3;
+    const double feedback_pitch = gs.pitch / 57.3;
+    command_yaw_ = std::isfinite(feedback_yaw) ? feedback_yaw : target_yaw;
+    command_pitch_ = std::isfinite(feedback_pitch) ? feedback_pitch : target_pitch;
+    command_yaw_vel_ = 0.0;
+    command_pitch_vel_ = 0.0;
+    last_command_t_ = now;
+    command_state_initialized_ = true;
+  }
+
+  const double raw_dt = tools::delta_time(now, last_command_t_);
+  const double dt = std::clamp(raw_dt, 0.002, 0.05);
+
+  auto update_axis = [&](double target, double feedforward_vel, double max_vel, double max_acc,
+                         bool wrap, double & position, double & velocity) {
+    const double error = wrap ? tools::limit_rad(target - position) : target - position;
+    const double previous_velocity = velocity;
+    const double desired_velocity = std::clamp(
+      feedforward_vel + command_position_gain_ * error, -max_vel, max_vel);
+    const double velocity_delta =
+      std::clamp(desired_velocity - velocity, -max_acc * dt, max_acc * dt);
+    velocity += velocity_delta;
+    double step = velocity * dt;
+    if (
+      std::abs(step) > std::abs(error) &&
+      (step == 0.0 || error == 0.0 || std::signbit(step) == std::signbit(error))) {
+      step = error;
+      const double settled_velocity = std::clamp(feedforward_vel, -max_vel, max_vel);
+      velocity = std::clamp(
+        settled_velocity, previous_velocity - max_acc * dt, previous_velocity + max_acc * dt);
+    }
+    position += step;
+    if (wrap) position = tools::limit_rad(position);
+    return (velocity - previous_velocity) / dt;
+  };
+
+  const double yaw_acc = update_axis(
+    target_yaw, target_yaw_vel, max_yaw_vel_, max_yaw_acc_, true, command_yaw_,
+    command_yaw_vel_);
+  const double pitch_acc = update_axis(
+    target_pitch, target_pitch_vel, max_pitch_vel_, max_pitch_acc_, false, command_pitch_,
+    command_pitch_vel_);
+
+  last_command_t_ = now;
+  plan.control = true;
+  plan.yaw = command_yaw_;
+  plan.yaw_vel = command_yaw_vel_;
+  plan.yaw_acc = yaw_acc;
+  plan.pitch = command_pitch_;
+  plan.pitch_vel = command_pitch_vel_;
+  plan.pitch_acc = pitch_acc;
 }
 
 bool Aimer::get_send_angle(

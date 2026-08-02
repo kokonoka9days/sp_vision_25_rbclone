@@ -94,7 +94,7 @@ int main(int argc, char * argv[])
   target_queue.push(std::nullopt);
 
   std::atomic<bool> quit = false;
-  std::atomic<io::GimbalMode> mode{io::GimbalMode::IDLE}; // 全局云台模式
+  std::atomic<io::GimbalMode> mode{gimbal.mode()}; // 全局云台模式
 
   auto plan_thread = std::thread([&]() {
     auto t0 = std::chrono::steady_clock::now();
@@ -178,6 +178,9 @@ int main(int argc, char * argv[])
   auto last_mode{io::GimbalMode::IDLE}; // 记录上次模式
   int auto_aim_frame_count = 0;
   auto auto_aim_started_at = std::chrono::steady_clock::time_point{};
+  bool first_display_frame_shown = false;
+
+  cv::namedWindow("reprojection", cv::WINDOW_AUTOSIZE);
 
   if (!systemd_watchdog.ready("Vision pipeline is ready")) {
     tools::logger()->warn("无法向 systemd 发送 READY 通知");
@@ -193,6 +196,11 @@ int main(int argc, char * argv[])
       const auto is_buff = mode.load() == io::GimbalMode::SMALL_BUFF ||
                            mode.load() == io::GimbalMode::BIG_BUFF;
       if (is_buff) target_queue.push(std::nullopt);
+      if (is_buff) {
+        buff_small_target.reset();
+        buff_big_target.reset();
+        buff_aimer.reset();
+      }
       if (was_buff && !is_buff) auto_aim_started_at = std::chrono::steady_clock::now();
       last_mode = mode.load();
     }
@@ -203,6 +211,14 @@ int main(int argc, char * argv[])
       tools::logger()->warn("Camera frame empty! Waiting...");
       std::this_thread::sleep_for(1ms); // 稍微等一下相机曝光
       continue; // 跳过这一帧，不往下执行
+    }
+
+    if (!first_display_frame_shown) {
+      cv::Mat first_display_frame;
+      cv::resize(img, first_display_frame, {}, 0.5, 0.5);
+      cv::imshow("reprojection", first_display_frame);
+      cv::waitKey(1);
+      first_display_frame_shown = true;
     }
 
     systemd_watchdog.ping();
@@ -347,98 +363,101 @@ int main(int argc, char * argv[])
 
         plotter.plot(data);
       }
-    }
+   }
 
-    // 【修改】除打符模式外，全认为是自瞄
-    else {
-      // 原版自瞄逻辑
-      auto yolo_frame =
-        yolo.detect(auto_aim::YOLOFrameData(img, q, t), auto_aim_frame_count++);
-      if (yolo_frame.is_empty || yolo_frame.timestamp < auto_aim_started_at) continue;
+   // 【修改】除打符模式外，全认为是自瞄
+   else {
+     // 原版自瞄逻辑
+     auto yolo_frame = yolo.detect(auto_aim::YOLOFrameData(img, q, t), auto_aim_frame_count++);
+     const bool yolo_frame_ready =
+       !yolo_frame.is_empty && yolo_frame.timestamp >= auto_aim_started_at;
+     if (yolo_frame_ready) {
+       img = yolo_frame.frame;
+       q = yolo_frame.gimbal_q;
+       t = yolo_frame.timestamp;
 
-      img = yolo_frame.frame;
-      q = yolo_frame.gimbal_q;
-      t = yolo_frame.timestamp;
+       solver.set_R_gimbal2world(q);
+       auto targets = tracker.track(yolo_frame.armors, t);
+       // recor.record(img, q, t);
 
-      solver.set_R_gimbal2world(q);
-      auto targets = tracker.track(yolo_frame.armors, t);
-      // recor.record(img, q, t);
+       if (!targets.empty()) {
+         target_queue.push(targets.front());
 
-      if (!targets.empty()){
-        target_queue.push(targets.front());
+         auto & target = targets.front();
 
-        auto& target = targets.front();
-      
-        // 获取EKF状态向量
-        Eigen::VectorXd ekf_x = target.getEKFXest();
-        
-        // 1. 计算旋转中心的世界坐标
-        Eigen::Vector3d center_world(ekf_x[0], ekf_x[2], ekf_x[4]);
-        
-        // 2. 计算速度终点（预测0.5秒后的位置）
-        double dt = 0.5; // 预测时间
-        double scale_factor = 1.0; // 放大2倍
-        Eigen::Vector3d velocity(ekf_x[1], ekf_x[3], ekf_x[5]);
-        Eigen::Vector3d pred_center = center_world + velocity * dt * scale_factor ;
-        
-        // 3. 计算角速度方向终点
-        double w = ekf_x[7]; // 角速度
-        Eigen::Vector3d v_yaw_axis_tvec = center_world;
-        v_yaw_axis_tvec[2] += w * 0.1; // 在y方向加上角速度的影响
+         // 获取EKF状态向量
+         Eigen::VectorXd ekf_x = target.getEKFXest();
 
-        double speed_magnitude = std::sqrt(ekf_x[1]*ekf_x[1] + ekf_x[3]*ekf_x[3] + ekf_x[5]*ekf_x[5]);
+         // 1. 计算旋转中心的世界坐标
+         Eigen::Vector3d center_world(ekf_x[0], ekf_x[2], ekf_x[4]);
 
-        auto center_img = solver.reproject_armor(center_world, 0.0, target.armor_type, target.name);
-        auto pred_point_img = solver.reproject_armor(pred_center, 0.0, target.armor_type, target.name);
-        auto v_yaw_axis_point_img = solver.reproject_armor(v_yaw_axis_tvec, 0.0, target.armor_type, target.name);
-        
-        // 5. 绘制速度和角速度方向
-        if (!center_img.empty() && !pred_point_img.empty()) {
-          // 绘制旋转中心
-          cv::circle(img, center_img[0], 5, cv::Scalar(51, 153, 237), -1);
-          
-          // 绘制预测点（速度方向）
-          cv::circle(img, pred_point_img[0], 8, cv::Scalar(0, 0, 255), -1);
-          
-          // 绘制速度方向线
-          cv::line(img, center_img[0], pred_point_img[0], cv::Scalar(0, 255, 255), 2);
-          
-          // 绘制角速度方向线
-          if (!v_yaw_axis_point_img.empty()) {
-            cv::line(img, center_img[0], v_yaw_axis_point_img[0], cv::Scalar(0, 255, 0), 2);
-          }
-        }
-      }
-      else {
-        target_queue.push(std::nullopt);
-      }
+         // 2. 计算速度终点（预测0.5秒后的位置）
+         double dt = 0.5;            // 预测时间
+         double scale_factor = 1.0;  // 放大2倍
+         Eigen::Vector3d velocity(ekf_x[1], ekf_x[3], ekf_x[5]);
+         Eigen::Vector3d pred_center = center_world + velocity * dt * scale_factor;
 
-      if (!targets.empty()) {
-        auto target = targets.front();
+         // 3. 计算角速度方向终点
+         double w = ekf_x[7];  // 角速度
+         Eigen::Vector3d v_yaw_axis_tvec = center_world;
+         v_yaw_axis_tvec[2] += w * 0.1;  // 在y方向加上角速度的影响
 
-        // 当前帧target更新后
-        std::vector<Eigen::Vector4d> armor_xyza_list = target.armor_xyza_list();
-        for (const Eigen::Vector4d & xyza : armor_xyza_list) {
-          auto image_points =
-            solver.reproject_armor(xyza.head(3), xyza[3], target.armor_type, target.name);
-          tools::draw_points(img, image_points, {235, 206, 135});
-        }
+         double speed_magnitude =
+           std::sqrt(ekf_x[1] * ekf_x[1] + ekf_x[3] * ekf_x[3] + ekf_x[5] * ekf_x[5]);
 
-        Eigen::Vector4d aim_xyza = planner.debug_xyza;
-        auto image_points =
-          solver.reproject_armor(aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
-        tools::draw_points(img, image_points, {0, 0, 255});
-      }
+         auto center_img =
+           solver.reproject_armor(center_world, 0.0, target.armor_type, target.name);
+         auto pred_point_img =
+           solver.reproject_armor(pred_center, 0.0, target.armor_type, target.name);
+         auto v_yaw_axis_point_img =
+           solver.reproject_armor(v_yaw_axis_tvec, 0.0, target.armor_type, target.name);
 
-    } 
-    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    cv::imshow("reprojection", img);
-    auto key = cv::waitKey(1);
-    if (key == 'q') break;
-    if(key == 'r') {//TUDO :右键手动更改
-      io::GimbalState* g_demo = gimbal.set_state_();
-      g_demo->mode = !g_demo->mode;
-    }
+         // 5. 绘制速度和角速度方向
+         if (!center_img.empty() && !pred_point_img.empty()) {
+           // 绘制旋转中心
+           cv::circle(img, center_img[0], 5, cv::Scalar(51, 153, 237), -1);
+
+           // 绘制预测点（速度方向）
+           cv::circle(img, pred_point_img[0], 8, cv::Scalar(0, 0, 255), -1);
+
+           // 绘制速度方向线
+           cv::line(img, center_img[0], pred_point_img[0], cv::Scalar(0, 255, 255), 2);
+
+           // 绘制角速度方向线
+           if (!v_yaw_axis_point_img.empty()) {
+             cv::line(img, center_img[0], v_yaw_axis_point_img[0], cv::Scalar(0, 255, 0), 2);
+           }
+         }
+       } else {
+         target_queue.push(std::nullopt);
+       }
+
+       if (!targets.empty()) {
+         auto target = targets.front();
+
+         // 当前帧target更新后
+         std::vector<Eigen::Vector4d> armor_xyza_list = target.armor_xyza_list();
+         for (const Eigen::Vector4d & xyza : armor_xyza_list) {
+           auto image_points =
+             solver.reproject_armor(xyza.head(3), xyza[3], target.armor_type, target.name);
+           tools::draw_points(img, image_points, {235, 206, 135});
+         }
+
+         Eigen::Vector4d aim_xyza = planner.debug_xyza;
+         auto image_points =
+           solver.reproject_armor(aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
+         tools::draw_points(img, image_points, {0, 0, 255});
+       }
+     }
+   }
+   cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+   cv::imshow("reprojection", img);
+   auto key = cv::waitKey(1);
+   if (key == 'q') break;
+   if (key == 'r') {  //TUDO :右键手动更改
+     io::GimbalState * g_demo = gimbal.set_state_();
+     g_demo->mode = !g_demo->mode;
+   }
     // if(key == 's') {
     //   stopkey = !stopkey;
     // }
