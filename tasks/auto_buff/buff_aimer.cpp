@@ -12,7 +12,12 @@ Aimer::Aimer(const std::string & config_path)
   yaw_offset_ = yaml["yaw_offset"].as<double>() / 57.3;      // degree to rad
   pitch_offset_ = yaml["pitch_offset"].as<double>() / 57.3;  // degree to rad
   fire_gap_time_ = yaml["fire_gap_time"].as<double>();
-  predict_time_ = yaml["predict_time"].as<double>();
+  const auto legacy_predict_time = yaml["predict_time"];
+  const auto small_predict_time = yaml["buff_small_predict_time"];
+  const auto big_predict_time = yaml["buff_big_predict_time"];
+  small_predict_time_ =
+    (small_predict_time ? small_predict_time : legacy_predict_time).as<double>();
+  big_predict_time_ = (big_predict_time ? big_predict_time : legacy_predict_time).as<double>();
   if (yaml["buff_max_yaw_vel"]) max_yaw_vel_ = yaml["buff_max_yaw_vel"].as<double>();
   if (yaml["buff_max_pitch_vel"]) max_pitch_vel_ = yaml["buff_max_pitch_vel"].as<double>();
   if (yaml["buff_max_yaw_acc"]) max_yaw_acc_ = yaml["buff_max_yaw_acc"].as<double>();
@@ -57,7 +62,8 @@ io::Command Aimer::aim(
   auto now = std::chrono::steady_clock::now();
 
   auto detect_now_gap = tools::delta_time(now, timestamp);
-  auto future = to_now ? (detect_now_gap + predict_time_) : 0.1 + predict_time_;
+  const double target_predict_time = predict_time(target);
+  auto future = to_now ? (detect_now_gap + target_predict_time) : 0.1 + target_predict_time;
   double yaw, pitch;
 
   if (get_send_angle(target, future, bullet_speed, to_now, yaw, pitch, true)) {
@@ -95,7 +101,8 @@ auto_aim::Plan Aimer::mpc_aim(
   auto now = std::chrono::steady_clock::now();
 
   auto detect_now_gap = tools::delta_time(now, timestamp);
-  auto future = to_now ? (detect_now_gap + predict_time_) : 0.1 + predict_time_;
+  const double target_predict_time = predict_time(target);
+  auto future = to_now ? (detect_now_gap + target_predict_time) : 0.1 + target_predict_time;
   double yaw, pitch;
 
   if (get_send_angle(target, future, bullet_speed, to_now, yaw, pitch, true)) {
@@ -110,10 +117,10 @@ auto_aim::Plan Aimer::mpc_aim(
     double now_yaw = 0.0;
     double now_pitch = 0.0;
     if (
-      predict_time_ > 1e-4 &&
+      target_predict_time > 1e-4 &&
       get_send_angle(*target_for_now, now_time, bullet_speed, to_now, now_yaw, now_pitch)) {
-      target_yaw_vel = tools::limit_rad(yaw - now_yaw) / predict_time_;
-      target_pitch_vel = (pitch - now_pitch) / predict_time_;
+      target_yaw_vel = tools::limit_rad(yaw - now_yaw) / target_predict_time;
+      target_pitch_vel = (pitch - now_pitch) / target_predict_time;
     }
     solution_converged_ = future_solution_converged;
     update_command(yaw, pitch, target_yaw_vel, target_pitch_vel, gs, now, plan);
@@ -141,6 +148,11 @@ auto_aim::Plan Aimer::mpc_aim(
   }
 
   return plan;
+}
+
+double Aimer::predict_time(const Target & target) const
+{
+  return target.mode() == BuffMode::BIG ? big_predict_time_ : small_predict_time_;
 }
 
 void Aimer::update_command(

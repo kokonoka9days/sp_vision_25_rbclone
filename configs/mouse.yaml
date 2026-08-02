@@ -164,7 +164,7 @@ buff_keypoint_hard_threshold: 0.15
 buff_keypoint_temporal_gate_px: 10.0
 buff_center_innovation_gate_px: 45.0
 buff_center_recovery_hits: 2
-buff_rune_radius_m: 0.700
+buff_rune_radius_m: 0.650
 buff_small_direction: 0 # 0:auto, 1/-1: force small buff prediction direction
 buff_pair_angle_gate_deg: 15
 buff_pair_ratio_min: 0.30
@@ -204,17 +204,17 @@ aim_time: 0.150         # s
 wait_time: 0.300        # s
 command_fire_gap: 0.080 # s
 fire_gap_time: 0.700   # s
-predict_time: 0.005    # s
+buff_small_predict_time: 0.14 # s, 小符额外系统延迟补偿
+buff_big_predict_time: 0.12   # s, 大符额外系统延迟补偿
 
 buff_max_yaw_vel: 4.0            # rad/s
 buff_max_pitch_vel: 3.0          # rad/s
-buff_max_yaw_acc: 25.0           # rad/s^2
-buff_max_pitch_acc: 30.0         # rad/s^2
+buff_max_yaw_acc: 40           # rad/s^2
+buff_max_pitch_acc: 50         # rad/s^2
 buff_command_position_gain: 18.0 # 1/s
 buff_fire_angle_error_deg: 1.0   # degree
 
 pattern_cols: 11      # 棋盘格每行的内角点数（格子数-1）
 pattern_rows: 8      # 棋盘格每列的内角点数（格子数-1）
 square_size_mm: 30   # 棋盘格方块大小（毫米）
-
 

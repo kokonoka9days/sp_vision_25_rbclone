@@ -43,7 +43,8 @@ private:
   double pitch_offset_;
 
   double fire_gap_time_;
-  double predict_time_;
+  double small_predict_time_;
+  double big_predict_time_;
   double max_yaw_vel_ = 4.0;
   double max_pitch_vel_ = 3.0;
   double max_yaw_acc_ = 25.0;
@@ -67,6 +68,8 @@ private:
   bool get_send_angle(
     auto_buff::Target & target, const double predict_time, const double bullet_speed,
     const bool to_now, double & yaw, double & pitch, bool save_prediction = false);
+
+  double predict_time(const Target & target) const;
 
   void update_command(
     double target_yaw, double target_pitch, double target_yaw_vel, double target_pitch_vel,

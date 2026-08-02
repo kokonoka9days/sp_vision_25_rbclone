@@ -56,6 +56,8 @@ public:
 
   virtual void predict(double dt) = 0;  // 纯虚函数
 
+  virtual BuffMode mode() const = 0;
+
   Eigen::Vector3d point_buff2world(const Eigen::Vector3d & point_in_buff) const;
 
   virtual Eigen::Matrix3d rotation_buff2world() const;
@@ -145,6 +147,8 @@ public:
 
   void predict(double dt) override;
 
+  BuffMode mode() const override { return BuffMode::SMALL; }
+
   std::unique_ptr<Target> clone() const override { return std::make_unique<SmallTarget>(*this); }
 
   void reset() override;
@@ -176,6 +180,8 @@ public:
     const std::optional<PowerRune> & p, std::chrono::steady_clock::time_point & timestamp) override;
 
   void predict(double dt) override;
+
+  BuffMode mode() const override { return BuffMode::BIG; }
 
   std::unique_ptr<Target> clone() const override { return std::make_unique<BigTarget>(*this); }
 

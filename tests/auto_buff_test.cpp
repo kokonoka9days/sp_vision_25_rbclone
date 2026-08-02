@@ -231,10 +231,16 @@ int main(int argc, char * argv[])
   const double fps = video.get(cv::CAP_PROP_FPS);
   const double frame_dt = fps > 1e-3 ? 1.0 / fps : 1.0 / 60.0;
   auto yaml = YAML::LoadFile(config_path);
+  const char * predict_time_key =
+    detector_mode == auto_buff::BuffMode::BIG ? "buff_big_predict_time"
+                                               : "buff_small_predict_time";
+  const auto mode_predict_time = yaml[predict_time_key];
+  const auto configured_predict_time =
+    mode_predict_time ? mode_predict_time : yaml["predict_time"];
   const double debug_predict_time = debug_predict_time_cli >= 0.0
                                       ? debug_predict_time_cli
-                                      : 0.1 + (yaml["predict_time"]
-                                                 ? yaml["predict_time"].as<double>()
+                                      : 0.1 + (configured_predict_time
+                                                 ? configured_predict_time.as<double>()
                                                  : 0.0);
 
   auto_buff::Buff_Detector detector(config_path);
