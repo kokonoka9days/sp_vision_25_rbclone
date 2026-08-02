@@ -14,8 +14,8 @@ message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}-------
 
 # Backend selection. Keep OpenVINO as the default, while allowing the TensorRT
 # engine backend to be enabled from the command line without editing this file.
-option(OPENVINO_MAKE "Build the OpenVINO backend" OFF)
-option(TENSOR_RT_MAKE "Build the TensorRT backend" ON)
+option(OPENVINO_MAKE "Build the OpenVINO backend" ON)
+option(TENSOR_RT_MAKE "Build the TensorRT backend" OFF)
 
 if(OPENVINO_MAKE AND TENSOR_RT_MAKE)
     message(FATAL_ERROR "OPENVINO_MAKE and TENSOR_RT_MAKE cannot both be enabled")

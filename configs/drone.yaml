@@ -48,7 +48,7 @@ min_confidence: 0.8                                         # (0~1) 检测置信
 
 camera_name: "hikrobot"                                     # 相机品牌(枚举)
 camera_sn: "DA7188471"                                      # 相机序列号
-exposure_us: 8000                                           # us 曝光时间
+exposure_us: 4000                                           # us 曝光时间
 gain: 1                                                  # (0~1) 增益
 # gamma: 0.7                                                   # [未使用] hikrobot不读取gamma(仅daheng/mindvision读取)
 # vid_pid: "2bdf:0001"                                        # [未使用] hikrobot的vid_pid在camera.cpp中硬编码
@@ -87,7 +87,7 @@ max_temp_lost_count: 25                                      # 帧 临时丢失N
 outpost_max_temp_lost_count: 75                              # 帧 前哨站专用丢失容忍度
 
 #####-----aimer参数-----#####
-yaw_offset: 3.0                                              # ° yaw静靶偏移补偿
+yaw_offset: 3.05                                              # ° yaw静靶偏移补偿
 pitch_offset: -1.0                                           # ° pitch静靶偏移补偿
 comming_angle: 60                                            # ° 小陀螺出现侧角度阈值
 leaving_angle: 20                                            # ° 小陀螺消失侧角度阈值

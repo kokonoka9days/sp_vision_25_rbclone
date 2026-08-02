@@ -148,7 +148,7 @@ int main(int argc, char * argv[])
       data["plan_pitch"] = plan.pitch * 57.3;
       data["plan_pitch_vel"] = plan.pitch_vel;
       data["plan_pitch_acc"] = plan.pitch_acc;
-      data["fire"] = plan.fire ? 1 : 0;
+      data["fire"] = plan.fire;
       data["fired"] = fired ? 1 : 0;
       data["camera_is_short"] = use_short_planner ? 1 : 0;
 
@@ -372,11 +372,11 @@ int main(int argc, char * argv[])
       }
     }
 
-  //   cv::resize(img, img, {}, 0.5, 0.5);
-  //   cv::imshow("reprojection", img);
-  //   const auto key = cv::waitKey(1);
-  //   if (key == 'q') break;
-  //   if (key == 'c') binocular_aim.Switch(frame_tracker, true, false);
+    cv::resize(img, img, {}, 0.5, 0.5);
+    cv::imshow("reprojection", img);
+    const auto key = cv::waitKey(1);
+    if (key == 'q') break;
+    if (key == 'c') binocular_aim.Switch(frame_tracker, true, false);
   }
 
   quit = true;

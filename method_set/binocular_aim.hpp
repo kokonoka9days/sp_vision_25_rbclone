@@ -59,8 +59,8 @@ struct BinocularAim{
   // double long_min_near = 1.5, long_max_far = 5.5;
 
   // 缓冲区 far2near and near2far
-  double short2long_point =  5.0;//(short_max_far + long_min_near)/2.;
-  double long2short_point = 3.5;
+  double short2long_point =  4.0;//(short_max_far + long_min_near)/2.;
+  double long2short_point = 3.0;
 
   std::atomic<int> force_control_frames{0};
 
@@ -75,8 +75,8 @@ struct BinocularAim{
     bool update_tracker_solver = true){
 
     if(!forced_switch){
-      if(tools::delta_time(std::chrono::steady_clock::now(), switch_time_point) < 3.0) return false;
-      if(is_short && tracker.get_update_count() < 70 ) return false;
+      if(tools::delta_time(std::chrono::steady_clock::now(), switch_time_point) < 0.2) return false;
+      if(is_short && tracker.get_update_count() < 10 ) return false;
     }
     bool switched = false;
     auto is_switch = [&](){

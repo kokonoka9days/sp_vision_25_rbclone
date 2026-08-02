@@ -38,15 +38,14 @@ max_temp_lost_count: 11
 outpost_max_temp_lost_count: 75
 
 #####-----aimer参数-----#####
-yaw_offset: -0.3 # degree -2.5
-pitch_offset: 2.7 # degree 2
-far_pitch_offset: 1.7
+yaw_offset: 0.5 # degree -2.5
+pitch_offset: -0.6 # degree 2
 comming_angle: 50 # degree
 leaving_angle: 0 # degree
 decision_speed: 8 # rad/s
-high_speed_delay_time: 0.017 # s
-low_speed_delay_time: 0.017 # s
-gimbal_delay: 0.002
+high_speed_delay_time: 0.005 # s
+low_speed_delay_time: 0.005 # s
+gimbal_delay: 0.001
 shoot_offset: 2
 
 #####-----shooter参数-----#####
@@ -56,14 +55,15 @@ judge_distance: 2 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
 camera_name: "hikrobot"
-camera_sn: "DA9492714"
-exposure_us: 3000
+camera_sn: "DA7188447"
+exposure_us: 8000
 gain: 1
-vid_pid: "2bdf:0001"
-img_gamma: 0.2
+gamma: 1 
+img_gamma: 1 
+vid_pid: "2ba2:4d55"
 flip: true
 mirror: true
-timestamp_offset_us: 2000 #us
+timestamp_offset_us: 1000 #us
 
 # camera_name: "daheng"
 # camera_sn: "FDN24040486"
@@ -81,14 +81,16 @@ timestamp_offset_us: 2000 #us
 # R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 
-# 相机同理想情况的偏角: yaw-1.28 pitch-0.86 roll1.69 degree
+# 相机同理想情况的偏角: yaw-0.14 pitch-0.66 roll-0.04 degree
 # 标定板到世界坐标系原点的水平距离: 2.32 m
-# 标定板同竖直摆放时的偏角: yaw33.35 pitch3.18 roll178.77 degree
-R_camera2gimbal: [0.021855625413864842, -0.015647731914552505, 0.9996386747838935, -0.9993256618827006, 0.029166648211860085, 0.022305338705964458, -0.029505137526726087, -0.9994520774494474, -0.01499972471457684]
-t_camera2gimbal: [0.17084305749157316, -0.04075354126954691, 0.029940249686494804]
-# 重投影误差: 0.0855px
-camera_matrix: [2368.6535582332217, 0, 709.5986018632645, 0, 2367.2059390988875, 557.3218862700319, 0, 0, 1]
-distort_coeffs: [-0.03490547533857166, 0.23879749900556682, 0.0018315902205457042, 0.00031464218053409257, -0.30716218266668555]
+# 标定板同竖直摆放时的偏角: yaw136.27 pitch10.24 roll0.41 degree
+R_camera2gimbal: [0.0025066235549923766, -0.011438493505696068, 0.9999314365018592, -0.9999966426448832, -0.0006855461672148309, 0.0024989448603855093, 0.0006569149992154722, -0.999934343290985, -0.011440173508781978]
+t_camera2gimbal: [0.21881809936119978, -0.022452402166918423, 0.027276053595398652]
+
+# 重投影误差: 0.0906px
+camera_matrix: [2347.9531738154674, 0, 694.9109072111695, 0, 2343.143293281202, 566.4901546493553, 0, 0, 1]
+distort_coeffs: [-0.01598148812335574, -0.04457260898953596, 0.0029144771604053565, 0.0027991204737711248, 1.0890876729738923]
+
 # _camera2gimbal第一位调yaw
 # _camera2gimbal第二位调yaw
 # _camera2gimbal第三位调pitch
@@ -99,14 +101,12 @@ send_canid: 0xff
 can_interface: "can0"
 
 #####-----gimbal参数-----#####
-com_port:
-  - "/dev/ttyACM0"
-  - "/dev/ttyACM1"
+com_port: "/dev/ttyACM0"
 # 陀螺仪是否装错, 编号012分别代表电控坐标系ypr，想换旋转轴只需要对编号进行互换即可，负号就是对当前值取负，交换完再取负
 # 上车前记得对齐电控坐标系和济瞄惯性系
 gimbal_y1: 1
-gimbal_p2: 3
-gimbal_r3: -2
+gimbal_p2: 2
+gimbal_r3: 3
 # 济瞄的惯性系  z轴往上, x轴是枪管指向
 #     x  z
 #      \ |
@@ -117,10 +117,9 @@ gimbal_r3: -2
 target_dist_error: -0.23
 target_h_error: 0.28
 fire_thresh: 0.003
-small_armor_tolerance: 0.12
+small_armor_tolerance: 0.05
 big_armor_tolerance: 0.22
-tower_and_base_armor_tolerance_: 0.10  # 26赛季前哨站和基地装甲板检测宽度
-gimbal_control_delay: 0.022 #0.08
+gimbal_control_delay: 0.0 #0.08
 tower_pitch_prediction_time: 0.05
 
 max_yaw_acc: 80
@@ -155,7 +154,7 @@ detect:
   fanblades_body_contours_max_area: 4000
   standard_fanblade_path: ./assets/standard_fanblade.jpg
 
-model: "../assets/yolo11_buff_12point_v3_fp16.xml"
+model: "../assets/yolo11_buff_12point_v3.onnx"
 buff_engine_path: "../assets/yolo11_buff_12point_v3_fp16.engine"
 buff_confidence_threshold: 0.6
 buff_keypoint_threshold: 0.3
@@ -204,9 +203,11 @@ wait_time: 0.300        # s
 command_fire_gap: 0.080 # s
 fire_gap_time: 0.700   # s
 predict_time: 0.120    # s
-buff_max_yaw_vel: 4.0            # rad/s
-buff_max_pitch_vel: 3.0          # rad/s
-buff_max_yaw_acc: 25.0           # rad/s^2
-buff_max_pitch_acc: 30.0         # rad/s^2
-buff_command_position_gain: 18.0 # 1/s
-buff_fire_angle_error_deg: 1.0   # degree
+
+
+pattern_cols: 11      # 棋盘格每行的内角点数（格子数-1）
+pattern_rows: 8      # 棋盘格每列的内角点数（格子数-1）
+square_size_mm: 30   # 棋盘格方块大小（毫米）
+
+far_pitch_offset: 0.01
+tower_and_base_armor_tolerance_: 0.01
