@@ -8,6 +8,7 @@
 #include "tasks/auto_aim/yolo.hpp"
 #include "tasks/omniperception/decider.hpp"
 #include "tools/exiter.hpp"
+#include "tools/systemd_watchdog.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
@@ -29,6 +30,7 @@ using namespace std::chrono_literals;
 
 int main(int argc, char * argv[])
 {
+  tools::SystemdWatchdog systemd_watchdog;
   tools::Exiter exiter;
   tools::Plotter plotter;
   tools::Recorder recorder;
@@ -101,10 +103,39 @@ int main(int argc, char * argv[])
         auto_aim::Planner * plan_short_or_long = target->cam_is_short ? &bincameras.planners.short_aim : &bincameras.planners.long_aim;
         // auto_aim::Planner * plan_short_or_long = &short_camera_planner;
         auto plan =  plan_short_or_long->plan(target, gs.bullet_speed, gs.yaw,  auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
-        gimbal.send(
-          plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
-          plan.pitch_acc);
+        
+         uint8_t name = 0;
+      float tx = 0.0f;
+      float ty = 0.0f;
 
+      if (target.has_value()) {
+          name = static_cast<uint8_t>(target->name) + 1;
+          tx = target->ekf_x()[0]; 
+          ty = target->ekf_x()[2]; 
+
+          // tools::logger()->info("{},{},{}", name,tx,ty);
+
+        }
+
+      // auto_aim::Plan plan{false};
+      // {
+      //   std::lock_guard<std::mutex> lock(planner_mutex);
+      //   plan = planner.plan(
+      //     target, gs.bullet_speed, gs.yaw,
+      //     auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
+      // }
+
+    //    if (binocular_aim.force_control_frames > 0) {
+    //     plan.control = true;
+    //     binocular_aim.force_control_frames--;
+    // }
+
+     gimbal.sb_send(
+        plan.control, plan.fire,
+        plan.yaw, plan.yaw_vel, plan.yaw_acc,
+        plan.pitch, plan.pitch_vel, plan.pitch_acc,
+        tx,ty,name
+      );    
         auto fired = gs.bullet_count > last_bullet_count;
         last_bullet_count = gs.bullet_count;
         nlohmann::json data;
@@ -160,15 +191,32 @@ int main(int argc, char * argv[])
     }
   });
 
+  std::chrono::steady_clock::time_point t;
+  std::chrono::steady_clock::time_point last_t;
+
   // 主循环
+  if (!systemd_watchdog.ready("Vision pipeline is ready")) {
+    tools::logger()->warn("无法向 systemd 发送 READY 通知");
+  }
+
   while (!exiter.exit()) {
 
     // 读取主相机图像
     bincameras.cameras.aim_ptr->read(img, timestamp);
+    if (!img.empty()) systemd_watchdog.ping();
     // short_camera.read(img, timestamp);
 
     // auto q = gimbal.q(timestamp - bincameras.cameras.aim_ptr->timestamp_offset);
-    auto q = gimbal.q(timestamp - 3ms);
+    auto q = gimbal.q(timestamp);
+
+     if (last_t != std::chrono::steady_clock::time_point{}) {
+      const auto elapsed_us =
+        std::chrono::duration_cast<std::chrono::microseconds>(timestamp - last_t).count();
+      if (elapsed_us > 0) {
+        tools::logger()->info("capture fps: {:.2f}", 1000000. / elapsed_us);
+      }
+    } 
+     last_t = timestamp;
 
 
     // tools::logger()->info("当前使用 {} 焦镜头", bincameras.is_short ? "短" : "长");
@@ -288,7 +336,8 @@ int main(int argc, char * argv[])
       tools::draw_points(img, image_points, {0, 0, 255});
     }
 
-    
+    // recorder.record(img,q,timestamp);
+
     cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
     cv::imshow("reprojection", img);
     auto key = cv::waitKey(1);

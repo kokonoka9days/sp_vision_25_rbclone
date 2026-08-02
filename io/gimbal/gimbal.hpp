@@ -31,8 +31,8 @@ struct __attribute__((packed)) GimbalToVision
   float q[4];    // wxyz顺序
   float bullet_speed;
   uint16_t bullet_count;  // 子弹累计发送次数
-  float gimbal_yaw;
-  float gimbal_pitch;
+  // float gimbal_yaw;
+  // float gimbal_pitch;
   uint16_t crc16;
 };
 

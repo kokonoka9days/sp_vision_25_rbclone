@@ -10,6 +10,7 @@
 #include "tasks/auto_aim/yolo.hpp"
 #include "tasks/omniperception/decider.hpp"
 #include "tools/exiter.hpp"
+#include "tools/systemd_watchdog.hpp"
 #include "tools/logger.hpp"
 #include "tools/yaml.hpp"
 
@@ -23,6 +24,7 @@ using namespace std::chrono_literals;
 
 int main(int argc, char * argv[])
 {
+  tools::SystemdWatchdog systemd_watchdog;
   tools::Exiter exiter;
 
   cv::CommandLineParser cli(argc, argv, keys);
@@ -56,6 +58,10 @@ int main(int argc, char * argv[])
 
   tools::logger()->info("[OmniPerception] started.");
 
+  if (!systemd_watchdog.ready("Vision pipeline is ready")) {
+    tools::logger()->warn("无法向 systemd 发送 READY 通知");
+  }
+
   while (!exiter.exit()) {
     const auto state = gimbal.state();
     const Eigen::Vector3d gimbal_euler(state.yaw / 57.3, state.pitch / 57.3, 0.0);
@@ -64,6 +70,7 @@ int main(int argc, char * argv[])
     const auto vision_cmd = decider.decide_g(
       yolo, gimbal_euler, left_camera, right_camera, left_solver, right_solver, &target_distance);
 
+    systemd_watchdog.ping();
     gimbal.omni_send(vision_cmd.mode, vision_cmd.yaw, vision_cmd.pitch, target_distance);
     std::this_thread::sleep_for(1ms);
   }

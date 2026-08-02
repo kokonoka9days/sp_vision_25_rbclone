@@ -16,6 +16,7 @@
 #include "tasks/auto_aim/yolo.hpp"
 #include "tasks/auto_aim/detector.hpp"
 #include "tools/exiter.hpp"
+#include "tools/systemd_watchdog.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
@@ -29,10 +30,11 @@ using namespace tools;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
-  "{@config-path   | ../configs/sb_long.yaml | 位置参数，yaml配置文件路径 }";
+  "{@config-path   | ../configs/sb_short.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
 {
+  tools::SystemdWatchdog systemd_watchdog;
   tools::Exiter exiter;
   tools::Plotter plotter;
 
@@ -152,8 +154,13 @@ int main(int argc, char * argv[])
   std::chrono::steady_clock::time_point t;
   std::chrono::steady_clock::time_point last_t;
 
+  if (!systemd_watchdog.ready("Vision pipeline is ready")) {
+    tools::logger()->warn("无法向 systemd 发送 READY 通知");
+  }
+
   while (!exiter.exit()) {
     camera.read(img, t);
+    if (!img.empty()) systemd_watchdog.ping();
     auto q = gimbal.q(t - 3ms);
 
     solver.set_R_gimbal2world(q);

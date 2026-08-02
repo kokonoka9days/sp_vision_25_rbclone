@@ -14,7 +14,7 @@ yolo11_model_path: ../assets/yolo11.xml
 yolov8_model_path: ../assets/yolov8.xml
 yolov5_model_path: ../assets/yolov5.xml
 device: CPU
-min_confidence: 0.8
+min_confidence: 0.6
 use_traditional: true
 
 #####-----ROI-----#####
@@ -60,8 +60,8 @@ outpost_max_temp_lost_count: 75
 # low_speed_delay_time: 0.093 # s
 
 #####-----aimer参数-----##### 12mm
-yaw_offset: -0.2 # degree 
-pitch_offset: 1 # degree 2
+yaw_offset: -0.1 # degree 
+pitch_offset: 2.2 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/
@@ -99,10 +99,11 @@ auto_fire: true # 是否由自瞄控制射击
 
 camera_name: "daheng"
 camera_sn: "FDN24040487"
-exposure_us: 2000
-gain: 0.9
-gamma: 1
-img_gamma: 0.3
+exposure_us: 3000
+gain: 1
+gamma: 0.4
+# img_gamma: 0.6
+img_gamma: 1 
 vid_pid: "2ba2:4d55"
 flip: true
 mirror: true
@@ -131,11 +132,11 @@ R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
 # 相机同理想情况的偏角: yaw-0.62 pitch-1.90 roll-2.87 degree
 # 标定板到世界坐标系原点的水平距离: 4.10 m
 # 标定板同竖直摆放时的偏角: yaw58.53 pitch15.36 roll179.96 degree
-R_camera2gimbal: [0.012545059840903943, -0.032624516901306404, 0.9993889444908544, -0.9986644638027364, -0.05050501344638633, 0.010887256512678783, 0.050118960595573726, -0.998190805664797, -0.033214534094017076]
-t_camera2gimbal: [0.3492770993046874, 0.08835893651003417, -0.022134114406034914]
+R_camera2gimbal: [0.01496542198979477, -0.04865962999976758, 0.9987032975578647, -0.9971363461391741, -0.07477598424002822, 0.011298645456502832, 0.07412923413123915, -0.9960124460011633, -0.04963933982130664]
+t_camera2gimbal: [0.29473441228362046, 0.03259977260952035, -0.038477035154897636]
 # 重投影误差: 0.0978px
-camera_matrix: [4611.758710323274, 0, 583.3952101658823, 0, 4569.560460015565, 684.1953401838869, 0, 0, 1]
-distort_coeffs: [0.03085039971208192, -0.6853454794179297, 0.007390278697268004, 0.0015864217551744672, 9.76043406163511]
+camera_matrix: [3525.4187174991143, 0, 646.2983280990699, 0, 3511.6278306426943, 625.7954748155588, 0, 0, 1]
+distort_coeffs: [-0.003516067978774269, 0.14736219407920592, 0.004930641419283057, 0.0020850691936829618, 0.8749371154141395]
 gimbal_y1: 1
 gimbal_p2: 2
 gimbal_r3: 3
@@ -146,14 +147,14 @@ send_canid: 0xff
 can_interface: "can0"
 
 #####-----gimbal参数-----#####
-com_port: "/dev/ttyACM0"
+com_port: "/dev/ttyACM1"
 
 
 #####-----planner-----#####
 target_dist_error: 0.0
 target_h_error: 0.4
 fire_thresh: 0.003 # 
-small_armor_tolerance: 0.03
+small_armor_tolerance: 0.12
 big_armor_tolerance: 0.22
 tower_and_base_armor_tolerance_: 0.10  # 26赛季前哨站和基地装甲板检测宽度
 gimbal_control_delay: 0.0 
@@ -192,7 +193,14 @@ detect:
   fanblades_body_contours_max_area: 4000
   standard_fanblade_path: ./assets/standard_fanblade.jpg
 
-model: "../assets/yolo11_buff_int8.xml"
+model: "/home/cyn/Desktop/sp_vision_25_rbclone/yolo_buff/runs/pose/runs/rune_pose/yolo11n_rune/weights/best.onnx"
+buff_confidence_threshold: 0.7
+buff_keypoint_threshold: 0.3
+buff_rune_radius_m: 0.700
+buff_locked_gate_deg: 25
+buff_switch_gate_deg: 10
+buff_switch_confirm_frames: 3
+buff_locked_lost_max: 6
 #####-----buff_aimer参数-----#####
 aim_time: 0.150         # s
 wait_time: 0.300        # s

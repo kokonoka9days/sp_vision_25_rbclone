@@ -1,0 +1,213 @@
+# enemy_color: "red"
+enemy_color: "auto"
+
+#####-----神经网络参数-----#####
+yolo_name: yolov8
+classify_model: ../assets/tiny_resnet.onnx
+yolo11_model_path: ../assets/yolo11.xml
+yolov8_model_path: ../assets/yolov8.xml
+yolov5_model_path: ../assets/yolov5.xml
+device: CPU
+min_confidence: 0.8
+use_traditional: true
+
+#####-----ROI-----#####
+roi: 
+  x: 420
+  y: 50
+  width: 600
+  height: 600
+
+use_roi: false
+
+#####-----传统方法参数-----#####
+threshold: 150
+max_angle_error: 45 # degree
+min_lightbar_ratio: 1.5
+max_lightbar_ratio: 20
+min_lightbar_length: 8
+min_armor_ratio: 1
+max_armor_ratio: 5
+max_side_ratio: 1.5
+max_rectangular_error: 25 # degree
+min_confidence: 0.8
+
+#####-----tracker参数-----#####
+min_detect_count: 5
+max_temp_lost_count: 11
+outpost_max_temp_lost_count: 75
+
+#####-----aimer参数-----#####
+yaw_offset: 0.5 # degree -2.5
+pitch_offset: -0.6 # degree 2
+comming_angle: 50 # degree
+leaving_angle: 0 # degree
+decision_speed: 8 # rad/s
+high_speed_delay_time: 0.005 # s
+low_speed_delay_time: 0.005 # s
+gimbal_delay: 0.001
+shoot_offset: 2
+
+#####-----shooter参数-----#####
+first_tolerance: 3 # 近距离射击容差，degree
+second_tolerance: 2 # 远距离射击容差，degree
+judge_distance: 2 #距离判断阈值
+auto_fire: true # 是否由自瞄控制射击
+
+camera_name: "hikrobot"
+camera_sn: "DA7188447"
+exposure_us: 8000
+gain: 1
+gamma: 1 
+img_gamma: 1 
+vid_pid: "2ba2:4d55"
+flip: true
+mirror: true
+timestamp_offset_us: 1000 #us
+
+# camera_name: "daheng"
+# camera_sn: "FDN24040486"
+# exposure_us: 3000
+# gain: 0.5
+# gamma: 0.7
+# vid_pid: "2ba2:4d55"
+# flip: true
+# mirror: true
+# timestamp_offset_us: 2000 #us
+
+# -1  0  0
+#  0 -1  0
+#  0  0  1
+# R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
+R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
+
+# 相机同理想情况的偏角: yaw-0.14 pitch-0.66 roll-0.04 degree
+# 标定板到世界坐标系原点的水平距离: 2.32 m
+# 标定板同竖直摆放时的偏角: yaw136.27 pitch10.24 roll0.41 degree
+R_camera2gimbal: [0.0025066235549923766, -0.011438493505696068, 0.9999314365018592, -0.9999966426448832, -0.0006855461672148309, 0.0024989448603855093, 0.0006569149992154722, -0.999934343290985, -0.011440173508781978]
+t_camera2gimbal: [0.21881809936119978, -0.022452402166918423, 0.027276053595398652]
+
+# 重投影误差: 0.0906px
+camera_matrix: [2347.9531738154674, 0, 694.9109072111695, 0, 2343.143293281202, 566.4901546493553, 0, 0, 1]
+distort_coeffs: [-0.01598148812335574, -0.04457260898953596, 0.0029144771604053565, 0.0027991204737711248, 1.0890876729738923]
+
+# _camera2gimbal第一位调yaw
+# _camera2gimbal第二位调yaw
+# _camera2gimbal第三位调pitch
+#####-----cboard参数-----#####
+quaternion_canid: 0x100
+bullet_speed_canid: 0x101
+send_canid: 0xff
+can_interface: "can0"
+
+#####-----gimbal参数-----#####
+com_port: "/dev/ttyACM0"
+# 陀螺仪是否装错, 编号012分别代表电控坐标系ypr，想换旋转轴只需要对编号进行互换即可，负号就是对当前值取负，交换完再取负
+# 上车前记得对齐电控坐标系和济瞄惯性系
+gimbal_y1: 1
+gimbal_p2: 2
+gimbal_r3: 3
+# 济瞄的惯性系  z轴往上, x轴是枪管指向
+#     x  z
+#      \ |
+#       \|
+# y_ _ _ 0   z:yaw   x:roll   y:pitch
+
+#####-----planner-----#####
+target_dist_error: -0.23
+target_h_error: 0.28
+fire_thresh: 0.003
+small_armor_tolerance: 0.05
+big_armor_tolerance: 0.22
+gimbal_control_delay: 0.0 #0.08
+tower_pitch_prediction_time: 0.05
+
+max_yaw_acc: 80
+Q_yaw: [9e6, 0]
+R_yaw: [1]
+
+max_pitch_acc: 100
+Q_pitch: [9e6,0]
+R_pitch: [1]
+
+#####-----buff_detector参数-----#####
+detect:
+  contrast: 1
+  brightness: 
+    blue: -120
+    red: -100
+  brightness_threshold:
+    blue: 120
+    red: 40
+  morphology_size:
+    blue: 3
+    red: 3
+  dilate_size: 2
+  # canny_low_threshold: 100
+  # canny_high_threshold: 180
+  # approx_epsilon: 1.0
+  R_contours_min_area: 200
+  R_contours_max_area: 600
+  fanblades_head_contours_min_area: 3000
+  fanblades_head_contours_max_area: 8000
+  fanblades_body_contours_min_area: 1000
+  fanblades_body_contours_max_area: 4000
+  standard_fanblade_path: ./assets/standard_fanblade.jpg
+
+model: "../assets/yolo11_buff_12point_v3.onnx"
+buff_engine_path: "../assets/yolo11_buff_12point_v3_fp16.engine"
+buff_confidence_threshold: 0.6
+buff_keypoint_threshold: 0.3
+buff_keypoint_hard_threshold: 0.15
+buff_keypoint_temporal_gate_px: 10.0
+buff_center_innovation_gate_px: 45.0
+buff_center_recovery_hits: 2
+buff_rune_radius_m: 0.700
+buff_small_direction: 0 # 0:auto, 1/-1: force small buff prediction direction
+buff_pair_angle_gate_deg: 15
+buff_pair_ratio_min: 0.30
+buff_pair_ratio_max: 0.70
+buff_pair_ratio_center: 0.51
+buff_track_gate_min_deg: 12
+buff_track_gate_max_deg: 25
+buff_blind_timeout_s: 0.100
+buff_track_reset_timeout_s: 0.500
+buff_track_confirm_hits: 2
+buff_track_recovery_hits: 2
+buff_direction_confirm_intervals: 3
+buff_control_blind_timeout_s: 0.100
+buff_track_retention_s: 0.400
+buff_switch_confirm_frames: 5
+buff_same_slot_confirm_frames: 3
+buff_adjacent_switch_confirm_frames: 8
+buff_adjacent_switch_delay_s: 0.180
+buff_slot_tolerance_deg: 12
+buff_switch_pair_angle_gate_deg: 10
+buff_switch_pair_ratio_min: 0.38
+buff_switch_pair_ratio_max: 0.64
+buff_big_speed_phase_window: 7
+buff_big_speed_min_span_s: 0.030
+buff_big_fit_min_span_s: 1.0
+buff_big_fit_min_inlier_ratio: 0.75
+buff_big_fit_max_rms: 0.18
+buff_big_fit_blend_s: 0.30
+buff_pnp_full_reprojection_gate_px: 6.8
+buff_pnp_target_center_gate_px: 6.0
+buff_pnp_fan_center_gate_px: 8.0
+buff_pnp_partial_center_gate_px: 8.0
+buff_pnp_partial_angle_gate_deg: 15
+buff_fire_full_observation_max_age_s: 0.030
+#####-----buff_aimer参数-----#####
+aim_time: 0.150         # s
+wait_time: 0.300        # s
+command_fire_gap: 0.080 # s
+fire_gap_time: 0.700   # s
+predict_time: 0.120    # s
+
+
+pattern_cols: 11      # 棋盘格每行的内角点数（格子数-1）
+pattern_rows: 8      # 棋盘格每列的内角点数（格子数-1）
+square_size_mm: 30   # 棋盘格方块大小（毫米）
+
+far_pitch_offset: 0.01
+tower_and_base_armor_tolerance_: 0.01
