@@ -64,7 +64,7 @@ int main(int argc, char * argv[])
   io::Camera long_camera(long_camera_config_path);
   io::Gimbal gimbal(short_camera_config_path);
 
-  auto_aim::YOLO yolo(short_camera_config_path, false);
+  auto_aim::YOLO yolo(short_camera_config_path,true);
   auto_aim::Solver short_camera_solver(short_camera_config_path);
   auto_aim::Solver long_camera_solver(long_camera_config_path);
   auto_aim::Tracker short_camera_tracker(short_camera_config_path, &short_camera_solver);
@@ -73,6 +73,11 @@ int main(int argc, char * argv[])
   long_camera_tracker.set_gimbal(&gimbal);
   auto_aim::Planner short_camera_planner(short_camera_config_path);
   auto_aim::Planner long_camera_planner(long_camera_config_path);
+
+  tools::FFTExample long_fft;
+  long_camera_tracker.set_fft(&long_fft);
+  tools::FFTExample short_fft;
+  short_camera_tracker.set_fft(&short_fft);
 
   BinocularAim binocular_aim(
     short_camera, long_camera, short_camera_solver, long_camera_solver, short_camera_planner,
@@ -176,6 +181,39 @@ int main(int argc, char * argv[])
     }
   });
 
+  auto fft_thread = std::thread([&] {
+    bool was_periodic = false;
+    while (!quit) {
+      const auto analysis_start = std::chrono::steady_clock::now();
+      bool is_periodic = short_fft.analyze();
+      if (is_periodic != was_periodic) {
+        const double elapsed_ms = std::chrono::duration<double, std::milli>(
+                                    std::chrono::steady_clock::now() - analysis_start)
+                                    .count();
+        if (is_periodic) {
+          tools::logger()->info("[shortFFT] 检测到周期运动，分析耗时 {:.2f} ms", elapsed_ms);
+        } else { 
+          tools::logger()->info("[shortFFT] 周期运动已消失");
+        }
+        was_periodic = is_periodic;
+      }
+      is_periodic = long_fft.analyze();
+      if (is_periodic != was_periodic) {
+        const double elapsed_ms = std::chrono::duration<double, std::milli>(
+                                    std::chrono::steady_clock::now() - analysis_start)
+                                    .count();
+        if (is_periodic) {
+          tools::logger()->info("[long_FFT] 检测到周期运动，分析耗时 {:.2f} ms", elapsed_ms);
+        } else {
+          tools::logger()->info("[long_FFT] 周期运动已消失");
+        }
+        was_periodic = is_periodic;
+      }
+      for (int i = 0; i < 5 && !quit; ++i) std::this_thread::sleep_for(50ms);
+    }
+    
+  });
+
   struct PendingFrame
   {
     std::chrono::steady_clock::time_point timestamp;
@@ -214,7 +252,7 @@ int main(int argc, char * argv[])
     const auto timestamp_offset =
       input_is_short ? short_camera.timestamp_offset : long_camera.timestamp_offset;
     auto q = gimbal.q(t - 3ms);
-    recorder.record(img, q, t, input_is_short ? "short" : "long");
+    // recorder.record(img, q, t, input_is_short ? "short" : "long");
     if (last_t != std::chrono::steady_clock::time_point{}) {
       const auto elapsed_us =
         std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count();
@@ -371,13 +409,17 @@ int main(int argc, char * argv[])
         }
       }
     }
+    
 
-  //   cv::resize(img, img, {}, 0.5, 0.5);
-  //   cv::imshow("reprojection", img);
-  //   const auto key = cv::waitKey(1);
-  //   if (key == 'q') break;
-  //   if (key == 'c') binocular_aim.Switch(frame_tracker, true, false);
+    // cv::resize(img, img, {}, 0.5, 0.5);
+    // cv::imshow("reprojection", img);
+    // const auto key = cv::waitKey(1);
+    // if (key == 'q') break;
+    // if (key == 'c') binocular_aim.Switch(frame_tracker, true, false);
   }
+
+  if (fft_thread.joinable()) fft_thread.join();
+
 
   quit = true;
   if (plan_thread.joinable()) plan_thread.join();
