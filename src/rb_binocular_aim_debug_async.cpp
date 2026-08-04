@@ -240,7 +240,36 @@ int main(int argc, char * argv[])
     tools::logger()->warn("无法向 systemd 发送 READY 通知");
   }
 
+  auto force_long_camera_if_requested = [&]() {
+    const bool force_long_camera =
+      gimbal.state().mode == static_cast<uint8_t>(io::GimbalMode::LONG_FOCAL_LENGTH);
+    if (!force_long_camera) return false;
+
+    if (!binocular_aim.is_short) {
+      if (
+        !long_camera_watchdog.active ||
+        long_camera_watchdog.generation != binocular_aim.generation()) {
+        long_camera_watchdog.active = true;
+        long_camera_watchdog.generation = binocular_aim.generation();
+        long_camera_watchdog.last_target_at = std::chrono::steady_clock::now();
+      }
+      return false;
+    }
+
+    if (!binocular_aim.Switch(short_camera_tracker, true, false)) return false;
+
+    long_camera_tracker.reset();
+    long_camera_watchdog.active = true;
+    long_camera_watchdog.generation = binocular_aim.generation();
+    long_camera_watchdog.last_target_at = std::chrono::steady_clock::now();
+    target_queue.push(std::nullopt);
+    tools::logger()->info("[BinocularAim] 下位机 mode=4，强制切换并锁定长焦相机");
+    return true;
+  };
+
   while (!exiter.exit()) {
+    if (force_long_camera_if_requested()) continue;
+
     binocular_aim.cameras.aim_ptr->read(img, t);
     if (img.empty()) continue;
     if (!systemd_watchdog.ping()) {
@@ -281,6 +310,9 @@ int main(int argc, char * argv[])
     const auto frame_generation = pending_frame->generation;
     pending_frames.erase(pending_frame);
 
+    // YOLO 异步推理期间 mode 可能变为 4，在处理该帧前再检查一次。
+    if (force_long_camera_if_requested()) continue;
+
     img = yolo_frame.frame;
     q = yolo_frame.gimbal_q;
     t = yolo_frame.timestamp;
@@ -318,7 +350,10 @@ int main(int argc, char * argv[])
         long_camera_watchdog.active = false;
       } else {
         const auto now = std::chrono::steady_clock::now();
-        if (!armors.empty()) {
+        const bool force_long_camera =
+          gimbal.state().mode == static_cast<uint8_t>(io::GimbalMode::LONG_FOCAL_LENGTH);
+        if (force_long_camera || !armors.empty()) {
+          // mode=4 期间持续刷新，避免无目标超时将长焦切回短焦。
           long_camera_watchdog.last_target_at = now;
         } else {
           const auto no_target_elapsed = now - long_camera_watchdog.last_target_at;
@@ -391,7 +426,11 @@ int main(int argc, char * argv[])
         aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
       tools::draw_points(img, aim_points, {0, 0, 255});
 
-      if (binocular_aim.ChangeTheScope(target, frame_tracker, false)) {
+      const bool force_long_camera =
+        gimbal.state().mode == static_cast<uint8_t>(io::GimbalMode::LONG_FOCAL_LENGTH);
+      if (
+        !force_long_camera &&
+        binocular_aim.ChangeTheScope(target, frame_tracker, false)) {
         auto & activated_tracker =
           binocular_aim.is_short ? short_camera_tracker : long_camera_tracker;
         activated_tracker.reset();
