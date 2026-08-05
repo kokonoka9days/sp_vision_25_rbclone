@@ -7151,7 +7151,7 @@
 		<Runtime_version value="2024.6.0-17404-4c0f47d2335-releases/2024/6" />
 		<conversion_parameters>
 			<is_python_object value="False" />
-			<output_model value="/home/cyn/Desktop/sp_vision_25_rbclone/assets/yolov5_0526.xml" />
+			<output_model value="DIR/yolov5_0526.xml" />
 		</conversion_parameters>
 	</rt_info>
 </net>
