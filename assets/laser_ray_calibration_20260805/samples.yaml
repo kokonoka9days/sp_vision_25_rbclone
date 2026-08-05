@@ -1,0 +1,140 @@
+version: 1
+samples:
+  - id: 1
+    image: images/0001.jpg
+    laser_pixel: [855.1059, 569.2235]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28748740783064
+  - id: 2
+    image: images/0002.jpg
+    laser_pixel: [853.83527, 571.7647]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28790202568010
+  - id: 3
+    image: images/0003.jpg
+    laser_pixel: [850.02356, 567.95294]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28798238350604
+  - id: 4
+    image: images/0004.jpg
+    laser_pixel: [850.02356, 565.41174]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28808235045850
+  - id: 5
+    image: images/0005.jpg
+    laser_pixel: [855.1059, 567.95294]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28821634866019
+  - id: 6
+    image: images/0006.jpg
+    laser_pixel: [857.64703, 561.6]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28827499568157
+  - id: 7
+    image: images/0007.jpg
+    laser_pixel: [856.37646, 562.8706]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28833485769954
+  - id: 8
+    image: images/0008.jpg
+    laser_pixel: [856.37646, 559.05884]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28843922228662
+  - id: 9
+    image: images/0009.jpg
+    laser_pixel: [855.1059, 565.41174]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28902792591490
+  - id: 10
+    image: images/0010.jpg
+    laser_pixel: [856.37646, 565.41174]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28908413811994
+  - id: 11
+    image: images/0011.jpg
+    laser_pixel: [856.37646, 561.6]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28913168839178
+  - id: 12
+    image: images/0012.jpg
+    laser_pixel: [857.64703, 566.6824]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28918227723096
+  - id: 13
+    image: images/0013.jpg
+    laser_pixel: [857.64703, 564.1412]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28924137479157
+  - id: 14
+    image: images/0014.jpg
+    laser_pixel: [855.1059, 560.3294]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28931019523161
+  - id: 15
+    image: images/0015.jpg
+    laser_pixel: [856.37646, 562.8706]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28935987376755
+  - id: 16
+    image: images/0016.jpg
+    laser_pixel: [856.37646, 562.8706]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28936230428210
+  - id: 17
+    image: images/0017.jpg
+    laser_pixel: [855.1059, 566.6824]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 28941077201215
+  - id: 18
+    image: images/0018.jpg
+    laser_pixel: [852.5647, 564.1412]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 29033990737204
+  - id: 19
+    image: images/0019.jpg
+    laser_pixel: [858.91766, 566.6824]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 29040477611985
+  - id: 20
+    image: images/0020.jpg
+    laser_pixel: [856.37646, 565.41174]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 29044641688632
+  - id: 21
+    image: images/0021.jpg
+    laser_pixel: [855.1059, 566.6824]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 29050215721971
+  - id: 22
+    image: images/0022.jpg
+    laser_pixel: [855.1059, 566.6824]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 29058875604634
+  - id: 23
+    image: images/0023.jpg
+    laser_pixel: [857.64703, 564.1412]
+    image_width: 1440
+    image_height: 1080
+    timestamp_ns: 29064039961205

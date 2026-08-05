@@ -68,7 +68,8 @@ pitch_offset: -0.195        # 12m/16m 联合拟合的无穷远固定 pitch 残�
 yaw_distance_offset_m: -0.088
 pitch_distance_offset_m: 0.096
 
-# 图像中心误差闭环：距离补偿负责前馈，PI 项消除不同视角下剩余的 dx/dy。
+# 激光参考点误差闭环：参考点由标定激光射线按目标距离动态投影到图像，
+# PI 项消除不同视角下相对该点的剩余 dx/dy；画面中心不再是锁定参考点。
 # 误差超过门限时拒绝该帧，最终修正角被限制在 +/-0.6 度以内。
 visual_servo_enabled: true
 visual_servo_kp: 0.65
@@ -116,12 +117,10 @@ pattern_cols: 11      # 棋盘格每行的内角点数（格子数-1）
 pattern_rows: 8      # 棋盘格每列的内角点数（格子数-1）
 square_size_mm: 30   # 棋盘格方块大小（毫米）
 
-# 使用 1440x1080 图像几何中心 (720, 540) 经当前内参去畸变后的相机射线瞄准。
-# 激光器在机械上调到该中心射线即可，不再用软件补偿激光安装偏移。
+# 使用 23 张、8.9--17.2 m 棋盘格样本拟合并通过质量门限的实际激光射线。
+# 路径相对于本配置文件；运行时同时用它求解云台角度和视觉闭环参考像素。
 laser_ray_enabled: true
-laser_line_origin_in_camera_m: [0.0, 0.0, 0.0]
-laser_line_direction_in_camera: [0.01979677, -0.02351310, 1.0]
-
+laser_ray_config_path: ../assets/laser_ray_calibration_20260805/laser_ray.yaml
 
 
 

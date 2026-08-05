@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <optional>
@@ -69,6 +70,11 @@ public:
   double yaw_offset_deg() const;
   double pitch_offset_deg() const;
 
+  // Project the calibrated outgoing laser line into the camera image at the requested range.
+  // The returned pixel is the visual-servo reference that makes the laser, rather than the
+  // camera optical center, coincide with the detected target.
+  std::optional<Eigen::Vector2d> laser_reference_pixel(double target_distance_m) const;
+
   // Feed the latest target-center error back into the aim command. Positive dx/dy means the
   // detected target is right/below the image reference center.
   void update_visual_feedback(
@@ -126,6 +132,11 @@ private:
   double visual_servo_pitch_correction_per_yaw_ = 0.0;
   double camera_fx_px_ = 1.0;
   double camera_fy_px_ = 1.0;
+  double camera_skew_px_ = 0.0;
+  double camera_cx_px_ = 0.0;
+  double camera_cy_px_ = 0.0;
+  std::array<double, 5> camera_distortion_{};
+  bool camera_projection_valid_ = false;
   std::atomic<double> visual_yaw_p_rad_{0.0};
   std::atomic<double> visual_pitch_p_rad_{0.0};
   std::atomic<double> visual_yaw_i_rad_{0.0};
@@ -145,6 +156,8 @@ private:
   Eigen::Vector3d xyz_offset_;
   bool laser_ray_enabled_ = false;
   LaserRay laser_ray_;
+  Eigen::Vector3d laser_origin_in_camera_m_ = Eigen::Vector3d::Zero();
+  Eigen::Vector3d laser_direction_in_camera_ = Eigen::Vector3d::UnitZ();
 
   TinySolver * yaw_solver_ = nullptr;
   TinySolver * pitch_solver_ = nullptr;

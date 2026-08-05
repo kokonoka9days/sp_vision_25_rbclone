@@ -1,0 +1,295 @@
+generated_at: 2026-08-05T23:23:19+0800
+source_config: configs/auto_drone.yaml
+fit_succeeded: true
+quality_passed: true
+failure_reasons: []
+sample_counts:
+  total: 23
+  valid: 23
+  training: 19
+  validation: 4
+  inliers: 23
+  distance_bins: [8, 9, 6]
+rejection_counts:
+  {}
+dataset_image_sizes:
+  - width: 1440
+    height: 1080
+    samples: 23
+inlier_ratio: 1
+sample_span_m: 8.248395592384972
+point_line_error_m:
+  count: 23
+  rms: 0.002642826282998429
+  p95: 0.0041347614009533224
+  max: 0.0046218693172866854
+training_pixel_error_px:
+  count: 18
+  rms: 3.591884480997687
+  p95: 7.295879863868041
+  max: 7.295879863868041
+validation_pixel_error_px:
+  count: 4
+  rms: 2.6167560429924337
+  p95: 4.8345504776054575
+  max: 4.8345504776054575
+bootstrap_direction_p95_deg: 0.02045851399430007
+bootstrap_origin_p95_m: 0.004662525714655512
+ceres_summary: "Ceres Solver Report: Iterations: 31, Initial cost: 9.966302e+01, Final cost: 9.930527e+01, Termination: CONVERGENCE"
+candidate_line:
+  origin_in_camera_m: [-0.0019666593140683745, 0.0001422488863406174, 6.0260134027797516e-05]
+  direction_in_camera: [0.029041167184577103, -0.021836797894733594, 0.9993396644115864]
+camera:
+  camera_matrix: [14955.275481254272, 0, 424.5275247834595, 0, 14917.483385201438, 890.1436041583838, 0, 0, 1]
+  distort_coeffs: [0.259455463319462, 7.781591144598162, 0.014803400834467228, -0.017879580487416027, 0.15829957121310623]
+  calibrated_image_size_available: false
+board:
+  pattern_cols: 11
+  pattern_rows: 8
+  square_size_m: 0.03
+thresholds:
+  max_board_reprojection_rmse_px: 1.5
+  ransac_threshold_m: 0.005
+  ransac_iterations: 2000
+  bootstrap_iterations: 200
+  huber_loss_px: 2
+  random_seed: 23063
+  min_valid_samples: 5
+  min_samples_per_distance_bin: 3
+  min_sample_span_m: 0.5
+  min_inlier_ratio: 0.8
+  max_point_line_rms_m: 0.005
+  max_validation_rms_px: 5
+  max_validation_p95_px: 8
+  max_bootstrap_direction_p95_deg: 0.1
+samples:
+  - id: 1
+    image: images/0001.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 1.2344956516061552
+    point_camera_m: [0.2569125834407145, -0.19198474023855078, 8.90438704369282]
+    point_line_error_m: 0.0024457339764207627
+    pixel_error_px: 4.0890621041358575
+  - id: 2
+    image: images/0002.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 1.1673282206950886
+    point_camera_m: [0.25622095758357805, -0.1905147168925891, 8.906787761965006]
+    point_line_error_m: 0.004016695162076408
+    pixel_error_px: 6.711517682214712
+  - id: 3
+    image: images/0003.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 1.2226684024240804
+    point_camera_m: [0.25402983820046166, -0.19285579710072887, 8.909688268245068]
+    point_line_error_m: 0.003371136607656504
+    pixel_error_px: 5.636748763233839
+  - id: 4
+    image: images/0004.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 1.3073803811763698
+    point_camera_m: [0.2538088098100866, -0.19420650883690102, 8.901867429504904]
+    point_line_error_m: 0.002917649299189036
+    pixel_error_px: 4.888877942416829
+  - id: 5
+    image: images/0005.jpg
+    valid: true
+    rejection: ""
+    validation: true
+    ransac_inlier: true
+    board_rmse_px: 1.1593152995079423
+    point_camera_m: [0.25720061108147757, -0.19296028340412444, 8.914335900116422]
+    point_line_error_m: 0.0016889326345503294
+    pixel_error_px: 2.820746001480465
+  - id: 6
+    image: images/0006.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 1.0603924426334714
+    point_camera_m: [0.25847605187726524, -0.19657852210582394, 8.905770532430559]
+    point_line_error_m: 0.002678462323371987
+    pixel_error_px: 4.476410635191356
+  - id: 7
+    image: images/0007.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 1.170419817981301
+    point_camera_m: [0.2581245861676926, -0.19612746553600477, 8.919882056472957]
+    point_line_error_m: 0.0016184292759482976
+    pixel_error_px: 2.700251394175779
+  - id: 8
+    image: images/0008.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 1.3156731328743763
+    point_camera_m: [0.2583371575592335, -0.19857324086964054, 8.92712549940995]
+    point_line_error_m: 0.0037513473368473616
+    pixel_error_px: 6.253284381134492
+  - id: 9
+    image: images/0009.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 0.5271030906120727
+    point_camera_m: [0.3678443741856349, -0.27814367019747, 12.749049535486769]
+    point_line_error_m: 0.0007400395649719327
+    pixel_error_px: 0.8650135959848062
+  - id: 10
+    image: images/0010.jpg
+    valid: true
+    rejection: ""
+    validation: true
+    ransac_inlier: true
+    board_rmse_px: 0.6084586260380461
+    point_camera_m: [0.3696430420816762, -0.2786821379517285, 12.773666508657126]
+    point_line_error_m: 0.0005000856599121935
+    pixel_error_px: 0.5841286331156017
+  - id: 11
+    image: images/0011.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 0.570439676824791
+    point_camera_m: [0.36979482708588096, -0.2820663795632764, 12.778766118949296]
+    point_line_error_m: 0.0030050232901880102
+    pixel_error_px: 3.499792955013689
+  - id: 12
+    image: images/0012.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 0.65809583071619
+    point_camera_m: [0.37161216938286, -0.27825342424570654, 12.804059832029758]
+    point_line_error_m: 0.002035924336905785
+    pixel_error_px: 2.3718799916756415
+  - id: 13
+    image: images/0013.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 0.6007432277373053
+    point_camera_m: [0.37181401320664276, -0.2805899462201748, 12.810917431748893]
+    point_line_error_m: 0.0016920197727969357
+    pixel_error_px: 1.9677842293720262
+  - id: 14
+    image: images/0014.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 0.6069013869797167
+    point_camera_m: [0.3696591134106053, -0.28388686840185895, 12.81175105067376]
+    point_line_error_m: 0.0041347614009533224
+    pixel_error_px: 4.805934753809717
+  - id: 15
+    image: images/0015.jpg
+    valid: true
+    rejection: ""
+    validation: true
+    ransac_inlier: true
+    board_rmse_px: 0.6529806849016144
+    point_camera_m: [0.370336562441627, -0.2813880400366278, 12.797535125278198]
+    point_line_error_m: 0.0019317426791545056
+    pixel_error_px: 2.2463178439925455
+  - id: 16
+    image: images/0016.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 0.6189399467311623
+    point_camera_m: [0.3704579414056678, -0.2814802658448708, 12.801729557352473]
+    point_line_error_m: 0.0019321954865498935
+    pixel_error_px: 2.246105659287434
+  - id: 17
+    image: images/0017.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 0.6085403254108054
+    point_camera_m: [0.36899049303446074, -0.2779194800767867, 12.788821365756553]
+    point_line_error_m: 0.0015490515552883154
+    pixel_error_px: 1.8025107746175901
+  - id: 18
+    image: images/0018.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 0.7031501747149702
+    point_camera_m: [0.4916654481475984, -0.3754375059248319, 17.1417225676294]
+    point_line_error_m: 0.0046218693172866854
+    pixel_error_px: 4.023500392477819
+  - id: 19
+    image: images/0019.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 0.6405301248805448
+    point_camera_m: [0.4990511598908248, -0.37258436249739824, 17.14468872491145]
+    point_line_error_m: 0.0033768608216838015
+    pixel_error_px: 2.93885520861125
+  - id: 20
+    image: images/0020.jpg
+    valid: true
+    rejection: ""
+    validation: true
+    ransac_inlier: true
+    board_rmse_px: 0.6329787354215
+    point_camera_m: [0.4953646194214263, -0.37346644056539313, 17.11819709372213]
+    point_line_error_m: 0.0004614762531511607
+    pixel_error_px: 0.4011330815161203
+  - id: 21
+    image: images/0021.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 0.6594405518315506
+    point_camera_m: [0.49442556064461834, -0.3723957590912594, 17.13626853025053]
+    point_line_error_m: 0.0024843507947505377
+    pixel_error_px: 2.157982228051758
+  - id: 22
+    image: images/0022.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 0.5943651187219587
+    point_camera_m: [0.4944961094578512, -0.3724488956621571, 17.138713677719185]
+    point_line_error_m: 0.002484900725324269
+    pixel_error_px: 2.1581387341935336
+  - id: 23
+    image: images/0023.jpg
+    valid: true
+    rejection: ""
+    validation: false
+    ransac_inlier: true
+    board_rmse_px: 0.5918322769094171
+    point_camera_m: [0.49575087039042076, -0.37411906254362715, 17.081183714718208]
+    point_line_error_m: 0.0016768225201854894
+    pixel_error_px: 1.4619005988755427

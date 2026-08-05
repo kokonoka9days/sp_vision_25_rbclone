@@ -186,8 +186,8 @@ int main(int argc, char * argv[])
     tools::logger()->error("Unable to open center-distance CSV: {}", center_log_path.string());
     return 2;
   }
-  center_log << "time_s,frame_id,target_present,pnp_distance_m,track_distance_m,center_dx_px,"
-                "center_dy_px,gimbal_yaw_deg,gimbal_pitch_deg,tracker_state,"
+  center_log << "time_s,frame_id,target_present,pnp_distance_m,track_distance_m,reference_x_px,"
+                "reference_y_px,center_dx_px,center_dy_px,gimbal_yaw_deg,gimbal_pitch_deg,tracker_state,"
                 "visual_yaw_correction_deg,visual_pitch_correction_deg,target_speed_mps,"
                 "target_transverse_speed_mps,plan_yaw_deg,plan_pitch_deg,integrator_active,"
                 "visual_yaw_angle_ff_deg,visual_pitch_angle_ff_deg,smoothed_yaw_deg,"
@@ -401,12 +401,11 @@ int main(int argc, char * argv[])
     double tracked_distance_m = std::numeric_limits<double>::quiet_NaN();
     double target_speed_mps = std::numeric_limits<double>::quiet_NaN();
     double target_transverse_speed_mps = std::numeric_limits<double>::quiet_NaN();
+    cv::Point2f visual_reference_px(img.cols * 0.5F, img.rows * 0.5F);
     cv::Point2f center_error_px(
       std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN());
     if (!drones.empty()) {
       raw_pnp_distance_m = drones.front().xyz_in_gimbal.norm();
-      center_error_px =
-        drones.front().center - cv::Point2f(img.cols * 0.5F, img.rows * 0.5F);
     }
     if (!targets.empty()) {
       const Eigen::Vector3d xyz = targets.front().get_xyz();
@@ -419,6 +418,11 @@ int main(int argc, char * argv[])
           (velocity - line_of_sight * velocity.dot(line_of_sight)).norm();
       }
     }
+    if (const auto laser_pixel = planner.laser_reference_pixel(tracked_distance_m)) {
+      visual_reference_px = cv::Point2f(
+        static_cast<float>((*laser_pixel).x()), static_cast<float>((*laser_pixel).y()));
+    }
+    if (!drones.empty()) center_error_px = drones.front().center - visual_reference_px;
 
     if (!targets.empty() && !drones.empty()) {
       planner.update_visual_feedback(
@@ -432,7 +436,8 @@ int main(int argc, char * argv[])
     const auto center_log_now = std::chrono::steady_clock::now();
     center_log << std::chrono::duration<double>(center_log_now - center_log_start).count() << ','
                << result->frame_id << ',' << (!drones.empty()) << ',' << raw_pnp_distance_m << ','
-               << tracked_distance_m << ',' << center_error_px.x << ',' << center_error_px.y << ','
+               << tracked_distance_m << ',' << visual_reference_px.x << ',' << visual_reference_px.y
+               << ',' << center_error_px.x << ',' << center_error_px.y << ','
                << yaw_deg << ',' << pitch_deg << ',' << tracker.state() << ','
                << planner.visual_yaw_correction_deg() << ','
                << planner.visual_pitch_correction_deg() << ',' << target_speed_mps << ','
@@ -483,7 +488,7 @@ int main(int argc, char * argv[])
         "PnP Dist: {:.2f} m  Track Dist: {:.2f} m", raw_pnp_distance_m, tracked_distance_m),
       {40, 440}, {80, 230, 255});
     tools::draw_text(
-      img, fmt::format("Center Error: dx={:+.1f}px dy={:+.1f}px", center_error_px.x,
+      img, fmt::format("Laser Ref Error: dx={:+.1f}px dy={:+.1f}px", center_error_px.x,
                        center_error_px.y),
       {40, 480}, {80, 230, 255});
     tools::draw_text(
@@ -523,7 +528,9 @@ int main(int argc, char * argv[])
                   cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 0), 2);
     }
 
-    cv::circle(img,cv::Point2f(img.cols/2,img.rows/2),5,cv::Scalar(0,255,0),-1);
+    cv::circle(img, cv::Point2f(img.cols / 2, img.rows / 2), 5, cv::Scalar(0, 255, 0), -1);
+    cv::drawMarker(
+      img, visual_reference_px, cv::Scalar(255, 0, 255), cv::MARKER_CROSS, 24, 2);
 
     // 缩小一半显示防止撑爆屏幕
     // record.record(img,q,t);

@@ -117,7 +117,25 @@ Planner::Planner(const std::string & config_path)
     const auto camera_matrix = yaml["camera_matrix"].as<std::vector<double>>();
     if (camera_matrix.size() == 9) {
       camera_fx_px_ = camera_matrix[0];
+      camera_skew_px_ = camera_matrix[1];
+      camera_cx_px_ = camera_matrix[2];
       camera_fy_px_ = camera_matrix[4];
+      camera_cy_px_ = camera_matrix[5];
+      camera_projection_valid_ =
+        std::isfinite(camera_fx_px_) && std::isfinite(camera_fy_px_) &&
+        std::isfinite(camera_skew_px_) && std::isfinite(camera_cx_px_) &&
+        std::isfinite(camera_cy_px_) && camera_fx_px_ > 0.0 && camera_fy_px_ > 0.0;
+    }
+  }
+  if (yaml["distort_coeffs"]) {
+    const auto distortion = yaml["distort_coeffs"].as<std::vector<double>>();
+    if (distortion.size() >= camera_distortion_.size()) {
+      std::copy_n(distortion.begin(), camera_distortion_.size(), camera_distortion_.begin());
+      camera_projection_valid_ =
+        camera_projection_valid_ &&
+        std::all_of(
+          camera_distortion_.begin(), camera_distortion_.end(),
+          [](double value) { return std::isfinite(value); });
     }
   }
   if (
@@ -157,19 +175,29 @@ Planner::Planner(const std::string & config_path)
         "laser_ray_enabled is true but no inline ray or laser_ray_config_path was provided");
     }
 
-    const Eigen::Vector3d origin_camera = read_vector3(ray_yaml, "laser_line_origin_in_camera_m");
-    const Eigen::Vector3d direction_camera =
+    laser_origin_in_camera_m_ = read_vector3(ray_yaml, "laser_line_origin_in_camera_m");
+    laser_direction_in_camera_ =
       read_vector3(ray_yaml, "laser_line_direction_in_camera");
+    const double camera_direction_norm = laser_direction_in_camera_.norm();
+    if (!std::isfinite(camera_direction_norm) || camera_direction_norm < 1e-9) {
+      throw std::runtime_error("Invalid laser line direction in camera coordinates");
+    }
+    laser_direction_in_camera_ /= camera_direction_norm;
+    // Canonicalize the line origin to its closest point to the camera. This does not change the
+    // fitted 3-D line and makes its intersection with a range sphere unambiguous.
+    laser_origin_in_camera_m_ -= laser_direction_in_camera_ *
+                                 laser_direction_in_camera_.dot(laser_origin_in_camera_m_);
     const Eigen::Matrix3d R_camera2gimbal = read_rotation3(yaml, "R_camera2gimbal");
     const Eigen::Vector3d t_camera2gimbal = read_vector3(yaml, "t_camera2gimbal");
 
-    laser_ray_.direction_in_gimbal = R_camera2gimbal * direction_camera;
+    laser_ray_.direction_in_gimbal = R_camera2gimbal * laser_direction_in_camera_;
     const double direction_norm = laser_ray_.direction_in_gimbal.norm();
     if (!std::isfinite(direction_norm) || direction_norm < 1e-9) {
       throw std::runtime_error("Invalid laser line direction after camera-to-gimbal transform");
     }
     laser_ray_.direction_in_gimbal /= direction_norm;
-    const Eigen::Vector3d transformed_origin = R_camera2gimbal * origin_camera + t_camera2gimbal;
+    const Eigen::Vector3d transformed_origin =
+      R_camera2gimbal * laser_origin_in_camera_m_ + t_camera2gimbal;
     laser_ray_.origin_in_gimbal_m =
       transformed_origin -
       laser_ray_.direction_in_gimbal * laser_ray_.direction_in_gimbal.dot(transformed_origin);
@@ -201,6 +229,42 @@ void Planner::adjust_aim_offset(double yaw_delta_deg, double pitch_delta_deg)
 double Planner::yaw_offset_deg() const { return yaw_offset_.load() * 57.3; }
 
 double Planner::pitch_offset_deg() const { return pitch_offset_.load() * 57.3; }
+
+std::optional<Eigen::Vector2d> Planner::laser_reference_pixel(double target_distance_m) const
+{
+  if (
+    !laser_ray_enabled_ || !camera_projection_valid_ || !std::isfinite(target_distance_m) ||
+    target_distance_m <= 0.0) {
+    return std::nullopt;
+  }
+
+  const double origin_squared = laser_origin_in_camera_m_.squaredNorm();
+  const double lambda_squared = target_distance_m * target_distance_m - origin_squared;
+  if (!std::isfinite(lambda_squared) || lambda_squared <= 0.0) return std::nullopt;
+
+  const Eigen::Vector3d point =
+    laser_origin_in_camera_m_ + std::sqrt(lambda_squared) * laser_direction_in_camera_;
+  if (!point.array().isFinite().all() || point.z() <= 1e-9) return std::nullopt;
+
+  const double x = point.x() / point.z();
+  const double y = point.y() / point.z();
+  const double r2 = x * x + y * y;
+  const double r4 = r2 * r2;
+  const double r6 = r4 * r2;
+  const double k1 = camera_distortion_[0];
+  const double k2 = camera_distortion_[1];
+  const double p1 = camera_distortion_[2];
+  const double p2 = camera_distortion_[3];
+  const double k3 = camera_distortion_[4];
+  const double radial = 1.0 + k1 * r2 + k2 * r4 + k3 * r6;
+  const double distorted_x = x * radial + 2.0 * p1 * x * y + p2 * (r2 + 2.0 * x * x);
+  const double distorted_y = y * radial + p1 * (r2 + 2.0 * y * y) + 2.0 * p2 * x * y;
+  const Eigen::Vector2d pixel(
+    camera_fx_px_ * distorted_x + camera_skew_px_ * distorted_y + camera_cx_px_,
+    camera_fy_px_ * distorted_y + camera_cy_px_);
+  if (!pixel.array().isFinite().all()) return std::nullopt;
+  return pixel;
+}
 
 void Planner::update_visual_feedback(
   double dx_px, double dy_px, double target_transverse_speed_mps, double gimbal_yaw_rad,
