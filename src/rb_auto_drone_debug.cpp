@@ -1,6 +1,8 @@
 #include <fmt/core.h>
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -32,6 +34,131 @@ using namespace std::chrono_literals;
 
 constexpr double AIM_OFFSET_STEP_DEG = 0.005;
 
+namespace
+{
+
+struct SmoothedAimCommand
+{
+  double yaw = 0.0;
+  double pitch = 0.0;
+  double yaw_velocity = 0.0;
+  double pitch_velocity = 0.0;
+  double yaw_acceleration = 0.0;
+  double pitch_acceleration = 0.0;
+};
+
+class AimCommandSmoother
+{
+public:
+  explicit AimCommandSmoother(const YAML::Node & config)
+  {
+    enabled_ = config["command_smoothing_enabled"]
+                 ? config["command_smoothing_enabled"].as<bool>()
+                 : false;
+    time_constant_s_ = config["command_smoothing_time_constant_s"]
+                         ? config["command_smoothing_time_constant_s"].as<double>()
+                         : 0.06;
+    max_yaw_velocity_ =
+      (config["command_max_yaw_velocity_deg_s"]
+         ? config["command_max_yaw_velocity_deg_s"].as<double>()
+         : 12.0) /
+      57.3;
+    max_pitch_velocity_ =
+      (config["command_max_pitch_velocity_deg_s"]
+         ? config["command_max_pitch_velocity_deg_s"].as<double>()
+         : 8.0) /
+      57.3;
+    max_yaw_acceleration_ =
+      (config["command_max_yaw_acceleration_deg_s2"]
+         ? config["command_max_yaw_acceleration_deg_s2"].as<double>()
+         : 100.0) /
+      57.3;
+    max_pitch_acceleration_ =
+      (config["command_max_pitch_acceleration_deg_s2"]
+         ? config["command_max_pitch_acceleration_deg_s2"].as<double>()
+         : 80.0) /
+      57.3;
+    if (
+      enabled_ &&
+      (!std::isfinite(time_constant_s_) || time_constant_s_ <= 0.0 ||
+       max_yaw_velocity_ <= 0.0 || max_pitch_velocity_ <= 0.0 ||
+       max_yaw_acceleration_ <= 0.0 || max_pitch_acceleration_ <= 0.0)) {
+      throw std::runtime_error("Invalid command-smoothing configuration");
+    }
+  }
+
+  void reset(
+    double yaw, double pitch, std::chrono::steady_clock::time_point timestamp)
+  {
+    state_.yaw = yaw;
+    state_.pitch = pitch;
+    state_.yaw_velocity = 0.0;
+    state_.pitch_velocity = 0.0;
+    state_.yaw_acceleration = 0.0;
+    state_.pitch_acceleration = 0.0;
+    timestamp_ = timestamp;
+    initialized_ = true;
+  }
+
+  SmoothedAimCommand update(
+    double target_yaw, double target_pitch, std::chrono::steady_clock::time_point timestamp)
+  {
+    if (!enabled_) {
+      state_.yaw = target_yaw;
+      state_.pitch = target_pitch;
+      return state_;
+    }
+    if (!initialized_) reset(target_yaw, target_pitch, timestamp);
+
+    double dt = std::chrono::duration<double>(timestamp - timestamp_).count();
+    timestamp_ = timestamp;
+    if (!std::isfinite(dt) || dt <= 0.0) return state_;
+    dt = std::clamp(dt, 1e-4, 0.05);
+
+    advance_axis(
+      tools::limit_rad(target_yaw - state_.yaw), dt, max_yaw_velocity_,
+      max_yaw_acceleration_, state_.yaw, state_.yaw_velocity, state_.yaw_acceleration, true);
+    advance_axis(
+      target_pitch - state_.pitch, dt, max_pitch_velocity_, max_pitch_acceleration_,
+      state_.pitch, state_.pitch_velocity, state_.pitch_acceleration, false);
+    return state_;
+  }
+
+private:
+  void advance_axis(
+    double error, double dt, double max_velocity, double max_acceleration, double & position,
+    double & velocity, double & acceleration, bool wrap_angle)
+  {
+    // Critically damped second-order command filter. The clamps protect against detector jumps.
+    const double omega = 2.0 / time_constant_s_;
+    acceleration = std::clamp(
+      omega * omega * error - 2.0 * omega * velocity, -max_acceleration,
+      max_acceleration);
+    velocity = std::clamp(velocity + acceleration * dt, -max_velocity, max_velocity);
+    const double step = velocity * dt;
+    if (error != 0.0 && std::signbit(step) == std::signbit(error) && std::abs(step) > std::abs(error)) {
+      position += error;
+      velocity = 0.0;
+      acceleration = 0.0;
+    } else {
+      position += step;
+    }
+    if (wrap_angle) position = tools::limit_rad(position);
+  }
+
+  bool enabled_ = false;
+  bool initialized_ = false;
+  double time_constant_s_ = 0.06;
+  double max_yaw_velocity_ = 0.0;
+  double max_pitch_velocity_ = 0.0;
+  double max_yaw_acceleration_ = 0.0;
+  double max_pitch_acceleration_ = 0.0;
+  SmoothedAimCommand state_;
+  std::chrono::steady_clock::time_point timestamp_{};
+};
+
+}  // namespace
+
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
   "{center-log     | build/diagnostics/center_distance_latest.csv | 中心误差连续采集CSV }"
@@ -61,7 +188,10 @@ int main(int argc, char * argv[])
   }
   center_log << "time_s,frame_id,target_present,pnp_distance_m,track_distance_m,center_dx_px,"
                 "center_dy_px,gimbal_yaw_deg,gimbal_pitch_deg,tracker_state,"
-                "visual_yaw_correction_deg,visual_pitch_correction_deg\n";
+                "visual_yaw_correction_deg,visual_pitch_correction_deg,target_speed_mps,"
+                "target_transverse_speed_mps,plan_yaw_deg,plan_pitch_deg,integrator_active,"
+                "visual_yaw_angle_ff_deg,visual_pitch_angle_ff_deg,smoothed_yaw_deg,"
+                "smoothed_pitch_deg\n";
   center_log << std::setprecision(10);
   const auto center_log_start = std::chrono::steady_clock::now();
   auto center_log_last_flush = center_log_start;
@@ -87,6 +217,7 @@ int main(int argc, char * argv[])
   auto_drone::Tracker tracker(config_path, &solver);
   tracker.set_gimbal(&gimbal); // 传入云台以获取敌方颜色状态
   auto_drone::Planner planner(config_path);
+  AimCommandSmoother command_smoother(config);
   // tools::Recorder record;
 
   // 4. 多线程通信队列 (容量设为1，保证规划线程总是拿到最新的目标)
@@ -95,6 +226,10 @@ int main(int argc, char * argv[])
 
   std::atomic<bool> quit = false;
   std::atomic<double> current_fps(0.0);
+  std::atomic<double> latest_plan_yaw_deg(0.0);
+  std::atomic<double> latest_plan_pitch_deg(0.0);
+  std::atomic<double> latest_smoothed_yaw_deg(0.0);
+  std::atomic<double> latest_smoothed_pitch_deg(0.0);
   tools::PredictionCadence prediction_cadence(prediction_frames_between_detections);
   int return_code = 0;
 
@@ -121,11 +256,20 @@ int main(int argc, char * argv[])
         // MPC 弹道预测与控制解算
         auto plan = planner.plan(target, gs.bullet_speed);
 
+        SmoothedAimCommand smoothed;
+        if (plan.control) {
+          smoothed = command_smoother.update(plan.yaw, plan.pitch, std::chrono::steady_clock::now());
+        } else {
+          command_smoother.reset(gs.yaw, gs.pitch, std::chrono::steady_clock::now());
+          smoothed.yaw = gs.yaw;
+          smoothed.pitch = gs.pitch;
+        }
+
         // 发送控制指令给下位机
         gimbal.drone_send(
           plan.control, plan.fire, 
-          plan.yaw * 57.3, plan.yaw_vel, plan.yaw_acc, 
-          plan.pitch * 57.3, plan.pitch_vel, plan.pitch_acc
+          smoothed.yaw * 57.3, smoothed.yaw_velocity, smoothed.yaw_acceleration,
+          smoothed.pitch * 57.3, smoothed.pitch_velocity, smoothed.pitch_acceleration
         );
         
         
@@ -137,6 +281,10 @@ int main(int argc, char * argv[])
         target_pitch = plan.target_pitch * 57.3f;
         plan_yaw = plan.yaw * 57.3f;
         plan_pitch = plan.pitch * 57.3f;
+        latest_plan_yaw_deg.store(plan_yaw);
+        latest_plan_pitch_deg.store(plan_pitch);
+        latest_smoothed_yaw_deg.store(smoothed.yaw * 57.3);
+        latest_smoothed_pitch_deg.store(smoothed.pitch * 57.3);
         
         const auto xyz = target->get_xyz();
         target_x = xyz.x();
@@ -145,6 +293,11 @@ int main(int argc, char * argv[])
         target_distance = xyz.norm();
       } 
       else {
+        command_smoother.reset(gs.yaw, gs.pitch, std::chrono::steady_clock::now());
+        latest_plan_yaw_deg.store(gs.yaw * 57.3);
+        latest_plan_pitch_deg.store(gs.pitch * 57.3);
+        latest_smoothed_yaw_deg.store(gs.yaw * 57.3);
+        latest_smoothed_pitch_deg.store(gs.pitch * 57.3);
         // 丢失目标，向云台发送当前姿态的空闲指令（防暴走）
         gimbal.drone_send(
           false, false, gs.yaw * 57.3f, 0.0f, 0.0f, gs.pitch * 57.3f, 0.0f, 0.0f);
@@ -246,6 +399,8 @@ int main(int argc, char * argv[])
 
     double raw_pnp_distance_m = std::numeric_limits<double>::quiet_NaN();
     double tracked_distance_m = std::numeric_limits<double>::quiet_NaN();
+    double target_speed_mps = std::numeric_limits<double>::quiet_NaN();
+    double target_transverse_speed_mps = std::numeric_limits<double>::quiet_NaN();
     cv::Point2f center_error_px(
       std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN());
     if (!drones.empty()) {
@@ -253,10 +408,23 @@ int main(int argc, char * argv[])
       center_error_px =
         drones.front().center - cv::Point2f(img.cols * 0.5F, img.rows * 0.5F);
     }
-    if (!targets.empty()) tracked_distance_m = targets.front().get_xyz().norm();
+    if (!targets.empty()) {
+      const Eigen::Vector3d xyz = targets.front().get_xyz();
+      const Eigen::Vector3d velocity = targets.front().get_v();
+      tracked_distance_m = xyz.norm();
+      target_speed_mps = velocity.norm();
+      if (tracked_distance_m > 1e-6) {
+        const Eigen::Vector3d line_of_sight = xyz / tracked_distance_m;
+        target_transverse_speed_mps =
+          (velocity - line_of_sight * velocity.dot(line_of_sight)).norm();
+      }
+    }
 
     if (!targets.empty() && !drones.empty()) {
-      planner.update_visual_feedback(center_error_px.x, center_error_px.y, t);
+      planner.update_visual_feedback(
+        center_error_px.x, center_error_px.y, target_transverse_speed_mps, ypr[0], t);
+    } else if (!targets.empty()) {
+      planner.hold_visual_feedback(ypr[0], t);
     } else {
       planner.reset_visual_feedback();
     }
@@ -267,7 +435,13 @@ int main(int argc, char * argv[])
                << tracked_distance_m << ',' << center_error_px.x << ',' << center_error_px.y << ','
                << yaw_deg << ',' << pitch_deg << ',' << tracker.state() << ','
                << planner.visual_yaw_correction_deg() << ','
-               << planner.visual_pitch_correction_deg() << '\n';
+               << planner.visual_pitch_correction_deg() << ',' << target_speed_mps << ','
+               << target_transverse_speed_mps << ',' << latest_plan_yaw_deg.load() << ','
+               << latest_plan_pitch_deg.load() << ',' << planner.visual_integrator_active() << ','
+               << planner.visual_yaw_angle_feedforward_deg() << ','
+               << planner.visual_pitch_angle_feedforward_deg() << ','
+               << latest_smoothed_yaw_deg.load() << ',' << latest_smoothed_pitch_deg.load()
+               << '\n';
     if (center_log_now - center_log_last_flush >= 1s) {
       center_log.flush();
       center_log_last_flush = center_log_now;
@@ -318,6 +492,25 @@ int main(int argc, char * argv[])
         "Visual Correction: yaw={:+.3f} pitch={:+.3f} deg",
         planner.visual_yaw_correction_deg(), planner.visual_pitch_correction_deg()),
       {40, 520}, {80, 230, 255});
+    tools::draw_text(
+      img,
+      fmt::format(
+        "Target Speed: {:.2f} m/s  I: {}", target_transverse_speed_mps,
+        planner.visual_integrator_active() ? "ON" : "HOLD"),
+      {40, 560}, {80, 230, 255});
+    tools::draw_text(
+      img,
+      fmt::format(
+        "Angle FF: yaw={:+.3f} pitch={:+.3f} deg",
+        planner.visual_yaw_angle_feedforward_deg(),
+        planner.visual_pitch_angle_feedforward_deg()),
+      {40, 600}, {80, 230, 255});
+    tools::draw_text(
+      img,
+      fmt::format(
+        "Aim Smooth: yaw={:+.3f} pitch={:+.3f} deg", latest_smoothed_yaw_deg.load(),
+        latest_smoothed_pitch_deg.load()),
+      {40, 640}, {80, 230, 255});
 
     // 2. 绘制 YOLO 检测到的无人机 2D Bbox 和 关键点
     for (const auto& drone : drones) {

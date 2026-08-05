@@ -83,10 +83,36 @@ Planner::Planner(const std::string & config_path)
       ? yaml["visual_servo_max_correction_deg"].as<double>()
       : 0.0;
   visual_servo_max_correction_rad_ = visual_servo_max_correction_deg / 57.3;
+  const double visual_servo_max_correction_rate_deg_s =
+    yaml["visual_servo_max_correction_rate_deg_s"]
+      ? yaml["visual_servo_max_correction_rate_deg_s"].as<double>()
+      : 0.0;
+  visual_servo_max_correction_rate_rad_s_ =
+    visual_servo_max_correction_rate_deg_s / 57.3;
   visual_servo_error_limit_px_ =
     yaml["visual_servo_error_limit_px"] ? yaml["visual_servo_error_limit_px"].as<double>() : 0.0;
   visual_servo_deadband_px_ =
     yaml["visual_servo_deadband_px"] ? yaml["visual_servo_deadband_px"].as<double>() : 0.0;
+  visual_servo_integral_speed_threshold_mps_ =
+    yaml["visual_servo_integral_speed_threshold_mps"]
+      ? yaml["visual_servo_integral_speed_threshold_mps"].as<double>()
+      : 0.0;
+  visual_servo_integral_error_limit_px_ =
+    yaml["visual_servo_integral_error_limit_px"]
+      ? yaml["visual_servo_integral_error_limit_px"].as<double>()
+      : 0.0;
+  visual_servo_integral_settle_time_s_ =
+    yaml["visual_servo_integral_settle_time_s"]
+      ? yaml["visual_servo_integral_settle_time_s"].as<double>()
+      : 0.0;
+  visual_servo_yaw_correction_per_yaw_ =
+    yaml["visual_servo_yaw_correction_per_yaw"]
+      ? yaml["visual_servo_yaw_correction_per_yaw"].as<double>()
+      : 0.0;
+  visual_servo_pitch_correction_per_yaw_ =
+    yaml["visual_servo_pitch_correction_per_yaw"]
+      ? yaml["visual_servo_pitch_correction_per_yaw"].as<double>()
+      : 0.0;
   if (yaml["camera_matrix"]) {
     const auto camera_matrix = yaml["camera_matrix"].as<std::vector<double>>();
     if (camera_matrix.size() == 9) {
@@ -98,7 +124,12 @@ Planner::Planner(const std::string & config_path)
     visual_servo_enabled_ &&
     (!std::isfinite(camera_fx_px_) || !std::isfinite(camera_fy_px_) || camera_fx_px_ <= 0.0 ||
      camera_fy_px_ <= 0.0 || visual_servo_kp_ < 0.0 || visual_servo_ki_ < 0.0 ||
-     visual_servo_max_correction_rad_ <= 0.0 || visual_servo_error_limit_px_ <= 0.0)) {
+     visual_servo_max_correction_rad_ <= 0.0 ||
+     visual_servo_max_correction_rate_rad_s_ <= 0.0 || visual_servo_error_limit_px_ <= 0.0 ||
+     visual_servo_integral_speed_threshold_mps_ < 0.0 ||
+     visual_servo_integral_error_limit_px_ <= 0.0 || visual_servo_integral_settle_time_s_ < 0.0 ||
+     !std::isfinite(visual_servo_yaw_correction_per_yaw_) ||
+     !std::isfinite(visual_servo_pitch_correction_per_yaw_))) {
     throw std::runtime_error("Invalid visual-servo configuration");
   }
   auto xyz_offset_vec = tools::read<std::vector<double>>(yaml, "xyz_offset");
@@ -172,16 +203,15 @@ double Planner::yaw_offset_deg() const { return yaw_offset_.load() * 57.3; }
 double Planner::pitch_offset_deg() const { return pitch_offset_.load() * 57.3; }
 
 void Planner::update_visual_feedback(
-  double dx_px, double dy_px, std::chrono::steady_clock::time_point timestamp)
+  double dx_px, double dy_px, double target_transverse_speed_mps, double gimbal_yaw_rad,
+  std::chrono::steady_clock::time_point timestamp)
 {
   if (!visual_servo_enabled_) return;
   if (
     !std::isfinite(dx_px) || !std::isfinite(dy_px) ||
     std::abs(dx_px) > visual_servo_error_limit_px_ ||
     std::abs(dy_px) > visual_servo_error_limit_px_) {
-    visual_yaw_p_rad_.store(0.0);
-    visual_pitch_p_rad_.store(0.0);
-    visual_feedback_timestamp_ = {};
+    hold_visual_feedback(gimbal_yaw_rad, timestamp);
     return;
   }
 
@@ -195,22 +225,128 @@ void Planner::update_visual_feedback(
   visual_yaw_p_rad_.store(-visual_servo_kp_ * yaw_error_rad);
   visual_pitch_p_rad_.store(-visual_servo_kp_ * pitch_error_rad);
 
-  double dt = 0.0;
-  if (visual_feedback_timestamp_ != std::chrono::steady_clock::time_point{} &&
+  const bool had_previous_feedback =
+    visual_feedback_timestamp_ != std::chrono::steady_clock::time_point{};
+  // On first acquisition, use one nominal camera frame so the correction also enters through the
+  // slew-rate limiter instead of stepping directly to its requested value.
+  double dt = had_previous_feedback ? 0.0 : 1.0 / 30.0;
+  if (had_previous_feedback &&
       timestamp > visual_feedback_timestamp_) {
     dt = std::clamp(
       std::chrono::duration<double>(timestamp - visual_feedback_timestamp_).count(), 0.0, 0.1);
   }
   visual_feedback_timestamp_ = timestamp;
 
-  const double yaw_i = std::clamp(
-    visual_yaw_i_rad_.load() - visual_servo_ki_ * yaw_error_rad * dt,
+  const bool target_is_slow =
+    std::isfinite(target_transverse_speed_mps) &&
+    target_transverse_speed_mps <= visual_servo_integral_speed_threshold_mps_;
+  const bool error_is_small =
+    std::abs(dx_px) <= visual_servo_integral_error_limit_px_ &&
+    std::abs(dy_px) <= visual_servo_integral_error_limit_px_;
+  const bool settle_candidate = target_is_slow && error_is_small;
+  if (!settle_candidate) {
+    visual_settle_start_timestamp_ = {};
+  } else if (visual_settle_start_timestamp_ == std::chrono::steady_clock::time_point{}) {
+    visual_settle_start_timestamp_ = timestamp;
+  }
+  const bool integrate =
+    settle_candidate &&
+    std::chrono::duration<double>(timestamp - visual_settle_start_timestamp_).count() >=
+      visual_servo_integral_settle_time_s_;
+  const bool was_integrating = visual_integrator_active_.load();
+
+  // Establish the reference after a genuine static dwell. When settling at a new yaw, first fold
+  // the accumulated angle feedforward into the integral so rebasing is command-continuous.
+  if (integrate && !was_integrating && std::isfinite(gimbal_yaw_rad)) {
+    if (visual_reference_yaw_valid_) {
+      const double yaw_delta = tools::limit_rad(gimbal_yaw_rad - visual_reference_yaw_rad_);
+      visual_yaw_i_rad_.store(std::clamp(
+        visual_yaw_i_rad_.load() + visual_servo_yaw_correction_per_yaw_ * yaw_delta,
+        -visual_servo_max_correction_rad_, visual_servo_max_correction_rad_));
+      visual_pitch_i_rad_.store(std::clamp(
+        visual_pitch_i_rad_.load() + visual_servo_pitch_correction_per_yaw_ * yaw_delta,
+        -visual_servo_max_correction_rad_, visual_servo_max_correction_rad_));
+    }
+    visual_reference_yaw_rad_ = gimbal_yaw_rad;
+    visual_reference_yaw_valid_ = true;
+  }
+  visual_integrator_active_.store(integrate);
+  if (integrate) {
+    const double yaw_i = std::clamp(
+      visual_yaw_i_rad_.load() - visual_servo_ki_ * yaw_error_rad * dt,
+      -visual_servo_max_correction_rad_, visual_servo_max_correction_rad_);
+    const double pitch_i = std::clamp(
+      visual_pitch_i_rad_.load() - visual_servo_ki_ * pitch_error_rad * dt,
+      -visual_servo_max_correction_rad_, visual_servo_max_correction_rad_);
+    visual_yaw_i_rad_.store(yaw_i);
+    visual_pitch_i_rad_.store(pitch_i);
+  }
+
+  double yaw_angle_feedforward = 0.0;
+  double pitch_angle_feedforward = 0.0;
+  if (visual_reference_yaw_valid_ && std::isfinite(gimbal_yaw_rad)) {
+    const double yaw_delta = tools::limit_rad(gimbal_yaw_rad - visual_reference_yaw_rad_);
+    yaw_angle_feedforward = visual_servo_yaw_correction_per_yaw_ * yaw_delta;
+    pitch_angle_feedforward = visual_servo_pitch_correction_per_yaw_ * yaw_delta;
+  }
+  visual_yaw_angle_feedforward_rad_.store(yaw_angle_feedforward);
+  visual_pitch_angle_feedforward_rad_.store(pitch_angle_feedforward);
+
+  const double desired_yaw = std::clamp(
+    visual_yaw_p_rad_.load() + visual_yaw_i_rad_.load() + yaw_angle_feedforward,
     -visual_servo_max_correction_rad_, visual_servo_max_correction_rad_);
-  const double pitch_i = std::clamp(
-    visual_pitch_i_rad_.load() - visual_servo_ki_ * pitch_error_rad * dt,
+  const double desired_pitch = std::clamp(
+    visual_pitch_p_rad_.load() + visual_pitch_i_rad_.load() + pitch_angle_feedforward,
     -visual_servo_max_correction_rad_, visual_servo_max_correction_rad_);
-  visual_yaw_i_rad_.store(yaw_i);
-  visual_pitch_i_rad_.store(pitch_i);
+  const double max_delta = visual_servo_max_correction_rate_rad_s_ * dt;
+  const double yaw_command = visual_yaw_command_rad_.load();
+  const double pitch_command = visual_pitch_command_rad_.load();
+  visual_yaw_command_rad_.store(
+    yaw_command + std::clamp(desired_yaw - yaw_command, -max_delta, max_delta));
+  visual_pitch_command_rad_.store(
+    pitch_command + std::clamp(desired_pitch - pitch_command, -max_delta, max_delta));
+}
+
+void Planner::hold_visual_feedback(
+  double gimbal_yaw_rad, std::chrono::steady_clock::time_point timestamp)
+{
+  if (!visual_servo_enabled_) return;
+  visual_yaw_p_rad_.store(0.0);
+  visual_pitch_p_rad_.store(0.0);
+  visual_integrator_active_.store(false);
+  visual_settle_start_timestamp_ = {};
+
+  double dt = 0.0;
+  if (
+    visual_feedback_timestamp_ != std::chrono::steady_clock::time_point{} &&
+    timestamp > visual_feedback_timestamp_) {
+    dt = std::clamp(
+      std::chrono::duration<double>(timestamp - visual_feedback_timestamp_).count(), 0.0, 0.1);
+  }
+  visual_feedback_timestamp_ = timestamp;
+
+  const double max_delta = visual_servo_max_correction_rate_rad_s_ * dt;
+  const double yaw_command = visual_yaw_command_rad_.load();
+  const double pitch_command = visual_pitch_command_rad_.load();
+  double yaw_angle_feedforward = 0.0;
+  double pitch_angle_feedforward = 0.0;
+  if (visual_reference_yaw_valid_ && std::isfinite(gimbal_yaw_rad)) {
+    const double yaw_delta = tools::limit_rad(gimbal_yaw_rad - visual_reference_yaw_rad_);
+    yaw_angle_feedforward = visual_servo_yaw_correction_per_yaw_ * yaw_delta;
+    pitch_angle_feedforward = visual_servo_pitch_correction_per_yaw_ * yaw_delta;
+  }
+  visual_yaw_angle_feedforward_rad_.store(yaw_angle_feedforward);
+  visual_pitch_angle_feedforward_rad_.store(pitch_angle_feedforward);
+  const double desired_yaw = std::clamp(
+    visual_yaw_i_rad_.load() + yaw_angle_feedforward, -visual_servo_max_correction_rad_,
+    visual_servo_max_correction_rad_);
+  const double desired_pitch = std::clamp(
+    visual_pitch_i_rad_.load() + pitch_angle_feedforward, -visual_servo_max_correction_rad_,
+    visual_servo_max_correction_rad_);
+  visual_yaw_command_rad_.store(
+    yaw_command + std::clamp(desired_yaw - yaw_command, -max_delta, max_delta));
+  visual_pitch_command_rad_.store(
+    pitch_command + std::clamp(desired_pitch - pitch_command, -max_delta, max_delta));
 }
 
 void Planner::reset_visual_feedback()
@@ -219,24 +355,38 @@ void Planner::reset_visual_feedback()
   visual_pitch_p_rad_.store(0.0);
   visual_yaw_i_rad_.store(0.0);
   visual_pitch_i_rad_.store(0.0);
+  visual_yaw_command_rad_.store(0.0);
+  visual_pitch_command_rad_.store(0.0);
+  visual_yaw_angle_feedforward_rad_.store(0.0);
+  visual_pitch_angle_feedforward_rad_.store(0.0);
+  visual_integrator_active_.store(false);
   visual_feedback_timestamp_ = {};
+  visual_settle_start_timestamp_ = {};
+  visual_reference_yaw_rad_ = 0.0;
+  visual_reference_yaw_valid_ = false;
 }
 
 double Planner::visual_yaw_correction_deg() const
 {
-  const double correction = std::clamp(
-    visual_yaw_p_rad_.load() + visual_yaw_i_rad_.load(),
-    -visual_servo_max_correction_rad_, visual_servo_max_correction_rad_);
-  return correction * 57.3;
+  return visual_yaw_command_rad_.load() * 57.3;
 }
 
 double Planner::visual_pitch_correction_deg() const
 {
-  const double correction = std::clamp(
-    visual_pitch_p_rad_.load() + visual_pitch_i_rad_.load(),
-    -visual_servo_max_correction_rad_, visual_servo_max_correction_rad_);
-  return correction * 57.3;
+  return visual_pitch_command_rad_.load() * 57.3;
 }
+
+double Planner::visual_yaw_angle_feedforward_deg() const
+{
+  return visual_yaw_angle_feedforward_rad_.load() * 57.3;
+}
+
+double Planner::visual_pitch_angle_feedforward_deg() const
+{
+  return visual_pitch_angle_feedforward_rad_.load() * 57.3;
+}
+
+bool Planner::visual_integrator_active() const { return visual_integrator_active_.load(); }
 
 Plan Planner::plan(Target target, double bullet_speed)
 {
@@ -403,12 +553,8 @@ Eigen::Matrix<double, 2, 1> Planner::aim(const Target & target, double /*bullet_
     std::atan2(yaw_distance_offset_m_, target_distance);
   const double pitch_distance_correction =
     std::atan2(pitch_distance_offset_m_, target_distance);
-  const double visual_yaw_correction = std::clamp(
-    visual_yaw_p_rad_.load() + visual_yaw_i_rad_.load(),
-    -visual_servo_max_correction_rad_, visual_servo_max_correction_rad_);
-  const double visual_pitch_correction = std::clamp(
-    visual_pitch_p_rad_.load() + visual_pitch_i_rad_.load(),
-    -visual_servo_max_correction_rad_, visual_servo_max_correction_rad_);
+  const double visual_yaw_correction = visual_yaw_command_rad_.load();
+  const double visual_pitch_correction = visual_pitch_command_rad_.load();
 
   return {
     tools::limit_rad(

@@ -74,15 +74,34 @@ visual_servo_enabled: true
 visual_servo_kp: 0.65
 visual_servo_ki: 0.8
 visual_servo_max_correction_deg: 0.6
+visual_servo_max_correction_rate_deg_s: 1.5
 visual_servo_error_limit_px: 200.0
 visual_servo_deadband_px: 1.5
+# 横向速度超过该值时冻结积分，避免把移动滞后当成静态安装误差。
+visual_servo_integral_speed_threshold_mps: 0.08
+# 允许重启后约 40--50 px 的静态残差进入积分；移动状态仍由速度和稳定时间门限拦截。
+visual_servo_integral_error_limit_px: 80.0
+# 必须连续低速稳定 0.8 秒才开启积分，避免目标换向瞬间被误判为静止。
+visual_servo_integral_settle_time_s: 0.8
+# 左右移动日志拟合的安装倾斜耦合项，单位为“修正角度/相对 yaw 角度”。
+# 只使用相对 yaw，因此电控重新上电导致的绝对零点变化不会改变该项。
+visual_servo_yaw_correction_per_yaw: -0.1100
+visual_servo_pitch_correction_per_yaw: 0.0686
 xyz_offset: [0,0,0]   # PnP 后 xyz 固定偏移 (米), [x, y, z]
 fire_thresh: 0.1              # 允许开火的角度误差阈值 (度)
 
 # 高低速判断与预测延迟补偿 (秒)
-gimbal_control_delay: 0.025    # 云台控制通信延迟补偿
+gimbal_control_delay: 0.100    # 加入指令平滑后，动态日志拟合出约 25 ms 的额外滞后
 # 两次真实视觉结果之间插入的卡尔曼预测控制帧数；0=不额外插帧，1=插入1帧，2=插入2帧
 prediction_frames_between_detections: 3
+
+# 最终瞄准角的二阶临界阻尼平滑；抑制移动时 PnP/EKF 带来的高频指令变化。
+command_smoothing_enabled: true
+command_smoothing_time_constant_s: 0.06
+command_max_yaw_velocity_deg_s: 12.0
+command_max_pitch_velocity_deg_s: 8.0
+command_max_yaw_acceleration_deg_s2: 100.0
+command_max_pitch_acceleration_deg_s2: 80.0
 
 #####----- MPC 求解器参数 (TinyMPC) -----#####
 max_yaw_acc: 50.0             # Yaw 轴最大加速度限制
@@ -102,13 +121,6 @@ square_size_mm: 30   # 棋盘格方块大小（毫米）
 laser_ray_enabled: true
 laser_line_origin_in_camera_m: [0.0, 0.0, 0.0]
 laser_line_direction_in_camera: [0.01979677, -0.02351310, 1.0]
-
-
-
-
-
-
-
 
 
 

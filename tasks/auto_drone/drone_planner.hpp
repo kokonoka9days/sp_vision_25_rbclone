@@ -72,10 +72,16 @@ public:
   // Feed the latest target-center error back into the aim command. Positive dx/dy means the
   // detected target is right/below the image reference center.
   void update_visual_feedback(
-    double dx_px, double dy_px, std::chrono::steady_clock::time_point timestamp);
+    double dx_px, double dy_px, double target_transverse_speed_mps, double gimbal_yaw_rad,
+    std::chrono::steady_clock::time_point timestamp);
+  void hold_visual_feedback(
+    double gimbal_yaw_rad, std::chrono::steady_clock::time_point timestamp);
   void reset_visual_feedback();
   double visual_yaw_correction_deg() const;
   double visual_pitch_correction_deg() const;
+  double visual_yaw_angle_feedforward_deg() const;
+  double visual_pitch_angle_feedforward_deg() const;
+  bool visual_integrator_active() const;
 
   inline Plan plan(std::optional<Target> target, double bullet_speed)
   {
@@ -110,15 +116,29 @@ private:
   double visual_servo_kp_ = 0.0;
   double visual_servo_ki_ = 0.0;
   double visual_servo_max_correction_rad_ = 0.0;
+  double visual_servo_max_correction_rate_rad_s_ = 0.0;
   double visual_servo_error_limit_px_ = 0.0;
   double visual_servo_deadband_px_ = 0.0;
+  double visual_servo_integral_speed_threshold_mps_ = 0.0;
+  double visual_servo_integral_error_limit_px_ = 0.0;
+  double visual_servo_integral_settle_time_s_ = 0.0;
+  double visual_servo_yaw_correction_per_yaw_ = 0.0;
+  double visual_servo_pitch_correction_per_yaw_ = 0.0;
   double camera_fx_px_ = 1.0;
   double camera_fy_px_ = 1.0;
   std::atomic<double> visual_yaw_p_rad_{0.0};
   std::atomic<double> visual_pitch_p_rad_{0.0};
   std::atomic<double> visual_yaw_i_rad_{0.0};
   std::atomic<double> visual_pitch_i_rad_{0.0};
+  std::atomic<double> visual_yaw_command_rad_{0.0};
+  std::atomic<double> visual_pitch_command_rad_{0.0};
+  std::atomic<double> visual_yaw_angle_feedforward_rad_{0.0};
+  std::atomic<double> visual_pitch_angle_feedforward_rad_{0.0};
+  std::atomic<bool> visual_integrator_active_{false};
   std::chrono::steady_clock::time_point visual_feedback_timestamp_{};
+  std::chrono::steady_clock::time_point visual_settle_start_timestamp_{};
+  double visual_reference_yaw_rad_ = 0.0;
+  bool visual_reference_yaw_valid_ = false;
   double fire_thresh_;
   double gimbal_control_delay = 0.04;
   double max_target_age_ = 0.2;
