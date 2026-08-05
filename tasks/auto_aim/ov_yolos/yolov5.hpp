@@ -30,9 +30,8 @@ private:
   std::string save_path_, debug_path_;
   bool debug_, use_roi_, use_traditional_;
 
-  const int class_num_ = 13;
-  const float nms_threshold_ = 0.3;
-  const float score_threshold_ = 0.7;
+  float nms_threshold_;
+  float score_threshold_;
   double min_confidence_, binary_threshold_;
 
   ov::Core core_;

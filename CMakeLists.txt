@@ -183,6 +183,9 @@ target_link_libraries(camera_thread_test ${OpenCV_LIBS} fmt::fmt auto_aim tools 
 
 add_executable(planner_test_offline tests/sp_example/planner_test_offline.cpp)
 target_link_libraries(planner_test_offline ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io omniperception)
+
+    add_executable(auto_aim_test_async tests/auto_aim_test_async.cpp)
+    target_link_libraries(auto_aim_test_async ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 endif()
 
 if(TENSOR_RT_MAKE)

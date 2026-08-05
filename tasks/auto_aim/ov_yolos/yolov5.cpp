@@ -4,6 +4,8 @@
 #include <yaml-cpp/yaml.h>
 
 #include <filesystem>
+#include <stdexcept>
+#include <utility>
 
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
@@ -15,10 +17,15 @@ YOLOV5::YOLOV5(const std::string & config_path, bool debug)
 {
   auto yaml = YAML::LoadFile(config_path);
 
-  model_path_ = yaml["yolov5_model_path"].as<std::string>();
+  const auto yolo_name = yaml["yolo_name"].as<std::string>();
+  const bool is_0526 = yolo_name == "ov_0526";
+  const auto model_path_key = is_0526 ? "ov_0526_model_path" : "yolov5_model_path";
+  model_path_ = yaml[model_path_key].as<std::string>();
   device_ = yaml["device"].as<std::string>();
   binary_threshold_ = yaml["threshold"].as<double>();
   min_confidence_ = yaml["min_confidence"].as<double>();
+  score_threshold_ = yaml["yolo_score_threshold"].as<float>(is_0526 ? 0.65F : 0.7F);
+  nms_threshold_ = yaml["yolo_nms_threshold"].as<float>(is_0526 ? 0.45F : 0.3F);
   int x = 0, y = 0, width = 0, height = 0;
   x = yaml["roi"]["x"].as<int>();
   y = yaml["roi"]["y"].as<int>();
@@ -95,6 +102,9 @@ std::list<Armor> YOLOV5::detect(const cv::Mat & raw_img, int frame_count)
   // postprocess
   auto output_tensor = infer_request.get_output_tensor();
   auto output_shape = output_tensor.get_shape();
+  if (output_shape.size() != 3 || output_shape[0] != 1 || output_shape[2] != 22) {
+    throw std::runtime_error("YOLOV5 expects an OpenVINO output shaped [1, candidates, 22]");
+  }
   cv::Mat output(output_shape[1], output_shape[2], CV_32F, output_tensor.data());
 
   return parse(scale, output, raw_img, frame_count);
@@ -130,7 +140,11 @@ YOLOFrameData YOLOV5::detect(YOLOFrameData frame_data, int frame_count)
 std::list<Armor> YOLOV5::parse(
   double scale, cv::Mat & output, const cv::Mat & bgr_img, int frame_count)
 {
-  // for each row: xywh + classess
+  if (output.cols != 22) {
+    throw std::runtime_error("YOLOV5 decoder expects 22 values per candidate");
+  }
+
+  // Each row contains 4 keypoints, objectness, 4 colors and 9 armor labels.
   std::vector<int> color_ids, num_ids;
   std::vector<float> confidences;
   std::vector<cv::Rect> boxes;
@@ -153,6 +167,8 @@ std::list<Armor> YOLOV5::parse(
     cv::minMaxLoc(color_scores, NULL, &score_color, NULL, &color_id);
     _class_id = class_id.x;
     _color_id = color_id.x;
+
+    if (_color_id == Color::extinguish || _color_id == Color::purple) continue;
 
     armor_key_points.push_back(
       cv::Point2f(output.at<float>(r, 0) / scale, output.at<float>(r, 1) / scale));
@@ -189,12 +205,24 @@ std::list<Armor> YOLOV5::parse(
 
   std::list<Armor> armors;
   for (const auto & i : indices) {
-    if (use_roi_) {
-      armors.emplace_back(
-        color_ids[i], num_ids[i], confidences[i], boxes[i], armors_key_points[i], offset_);
-    } else {
-      armors.emplace_back(color_ids[i], num_ids[i], confidences[i], boxes[i], armors_key_points[i]);
+    // The 0526 model and Armor both use 0=blue/1=red.
+    const int armor_color_id = color_ids[i];
+    Armor armor = use_roi_
+                    ? Armor(
+                        armor_color_id, num_ids[i], confidences[i], boxes[i], armors_key_points[i],
+                        offset_)
+                    : Armor(
+                        armor_color_id, num_ids[i], confidences[i], boxes[i], armors_key_points[i]);
+
+    armor.class_id = num_ids[i];
+    // Label 8 is the big-base class. The shared Armor constructor historically
+    // treated it as not_armor, so restore the model's actual class semantics.
+    if (num_ids[i] == 8) {
+      armor.name = ArmorName::base;
+      armor.type = ArmorType::big;
     }
+
+    armors.emplace_back(std::move(armor));
   }
 
   tmp_img_ = bgr_img;

@@ -111,7 +111,7 @@ int main(int argc, char * argv[])
       }
 
       plotter.plot(data);
-      std::this_thread::sleep_for(10ms);
+      std::this_thread::sleep_for(1ms);
     }
   });
 
@@ -132,10 +132,10 @@ int main(int argc, char * argv[])
     auto q = gimbal.q(t - 3ms);
     if (last_t != std::chrono::steady_clock::time_point{}) {
       double fps =
-        1. / std::chrono::duration_cast<std::chrono::microseconds>(t - last_t).count() * 1000000;
+        1. / std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - last_t).count() * 1000000;
       tools::logger()->info("capture fps: {:.2f}", fps);
     }
-    last_t = t;
+    last_t = std::chrono::steady_clock::now();
 
     auto yolo_frame = yolo.detect(auto_aim::YOLOFrameData(img, q, t), frame_count++);
     if (yolo_frame.is_empty) {
