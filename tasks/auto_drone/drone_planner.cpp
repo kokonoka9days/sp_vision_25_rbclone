@@ -69,6 +69,38 @@ Planner::Planner(const std::string & config_path)
   auto yaml = tools::load(config_path);
   yaw_offset_ = tools::read<double>(yaml, "yaw_offset") / 57.3;
   pitch_offset_ = tools::read<double>(yaml, "pitch_offset") / 57.3;
+  yaw_distance_offset_m_ =
+    yaml["yaw_distance_offset_m"] ? yaml["yaw_distance_offset_m"].as<double>() : 0.0;
+  pitch_distance_offset_m_ =
+    yaml["pitch_distance_offset_m"] ? yaml["pitch_distance_offset_m"].as<double>() : 0.0;
+
+  visual_servo_enabled_ =
+    yaml["visual_servo_enabled"] ? yaml["visual_servo_enabled"].as<bool>() : false;
+  visual_servo_kp_ = yaml["visual_servo_kp"] ? yaml["visual_servo_kp"].as<double>() : 0.0;
+  visual_servo_ki_ = yaml["visual_servo_ki"] ? yaml["visual_servo_ki"].as<double>() : 0.0;
+  const double visual_servo_max_correction_deg =
+    yaml["visual_servo_max_correction_deg"]
+      ? yaml["visual_servo_max_correction_deg"].as<double>()
+      : 0.0;
+  visual_servo_max_correction_rad_ = visual_servo_max_correction_deg / 57.3;
+  visual_servo_error_limit_px_ =
+    yaml["visual_servo_error_limit_px"] ? yaml["visual_servo_error_limit_px"].as<double>() : 0.0;
+  visual_servo_deadband_px_ =
+    yaml["visual_servo_deadband_px"] ? yaml["visual_servo_deadband_px"].as<double>() : 0.0;
+  if (yaml["camera_matrix"]) {
+    const auto camera_matrix = yaml["camera_matrix"].as<std::vector<double>>();
+    if (camera_matrix.size() == 9) {
+      camera_fx_px_ = camera_matrix[0];
+      camera_fy_px_ = camera_matrix[4];
+    }
+  }
+  if (
+    visual_servo_enabled_ &&
+    (!std::isfinite(camera_fx_px_) || !std::isfinite(camera_fy_px_) || camera_fx_px_ <= 0.0 ||
+     camera_fy_px_ <= 0.0 || visual_servo_kp_ < 0.0 || visual_servo_ki_ < 0.0 ||
+     visual_servo_max_correction_rad_ <= 0.0 || visual_servo_error_limit_px_ <= 0.0)) {
+    throw std::runtime_error("Invalid visual-servo configuration");
+  }
   auto xyz_offset_vec = tools::read<std::vector<double>>(yaml, "xyz_offset");
   if (xyz_offset_vec.size() == 3) {
     xyz_offset_ = Eigen::Vector3d(xyz_offset_vec[0], xyz_offset_vec[1], xyz_offset_vec[2]);
@@ -138,6 +170,73 @@ void Planner::adjust_aim_offset(double yaw_delta_deg, double pitch_delta_deg)
 double Planner::yaw_offset_deg() const { return yaw_offset_.load() * 57.3; }
 
 double Planner::pitch_offset_deg() const { return pitch_offset_.load() * 57.3; }
+
+void Planner::update_visual_feedback(
+  double dx_px, double dy_px, std::chrono::steady_clock::time_point timestamp)
+{
+  if (!visual_servo_enabled_) return;
+  if (
+    !std::isfinite(dx_px) || !std::isfinite(dy_px) ||
+    std::abs(dx_px) > visual_servo_error_limit_px_ ||
+    std::abs(dy_px) > visual_servo_error_limit_px_) {
+    visual_yaw_p_rad_.store(0.0);
+    visual_pitch_p_rad_.store(0.0);
+    visual_feedback_timestamp_ = {};
+    return;
+  }
+
+  if (std::abs(dx_px) <= visual_servo_deadband_px_) dx_px = 0.0;
+  if (std::abs(dy_px) <= visual_servo_deadband_px_) dy_px = 0.0;
+
+  // The current camera/gimbal convention was verified experimentally: increasing either aim
+  // command moves the detected target toward +x/+y in the image, hence both feedback signs are -.
+  const double yaw_error_rad = std::atan2(dx_px, camera_fx_px_);
+  const double pitch_error_rad = std::atan2(dy_px, camera_fy_px_);
+  visual_yaw_p_rad_.store(-visual_servo_kp_ * yaw_error_rad);
+  visual_pitch_p_rad_.store(-visual_servo_kp_ * pitch_error_rad);
+
+  double dt = 0.0;
+  if (visual_feedback_timestamp_ != std::chrono::steady_clock::time_point{} &&
+      timestamp > visual_feedback_timestamp_) {
+    dt = std::clamp(
+      std::chrono::duration<double>(timestamp - visual_feedback_timestamp_).count(), 0.0, 0.1);
+  }
+  visual_feedback_timestamp_ = timestamp;
+
+  const double yaw_i = std::clamp(
+    visual_yaw_i_rad_.load() - visual_servo_ki_ * yaw_error_rad * dt,
+    -visual_servo_max_correction_rad_, visual_servo_max_correction_rad_);
+  const double pitch_i = std::clamp(
+    visual_pitch_i_rad_.load() - visual_servo_ki_ * pitch_error_rad * dt,
+    -visual_servo_max_correction_rad_, visual_servo_max_correction_rad_);
+  visual_yaw_i_rad_.store(yaw_i);
+  visual_pitch_i_rad_.store(pitch_i);
+}
+
+void Planner::reset_visual_feedback()
+{
+  visual_yaw_p_rad_.store(0.0);
+  visual_pitch_p_rad_.store(0.0);
+  visual_yaw_i_rad_.store(0.0);
+  visual_pitch_i_rad_.store(0.0);
+  visual_feedback_timestamp_ = {};
+}
+
+double Planner::visual_yaw_correction_deg() const
+{
+  const double correction = std::clamp(
+    visual_yaw_p_rad_.load() + visual_yaw_i_rad_.load(),
+    -visual_servo_max_correction_rad_, visual_servo_max_correction_rad_);
+  return correction * 57.3;
+}
+
+double Planner::visual_pitch_correction_deg() const
+{
+  const double correction = std::clamp(
+    visual_pitch_p_rad_.load() + visual_pitch_i_rad_.load(),
+    -visual_servo_max_correction_rad_, visual_servo_max_correction_rad_);
+  return correction * 57.3;
+}
 
 Plan Planner::plan(Target target, double bullet_speed)
 {
@@ -299,8 +398,22 @@ Eigen::Matrix<double, 2, 1> Planner::aim(const Target & target, double /*bullet_
     pitch = solution->pitch;
   }
 
+  const double target_distance = xyz.norm();
+  const double yaw_distance_correction =
+    std::atan2(yaw_distance_offset_m_, target_distance);
+  const double pitch_distance_correction =
+    std::atan2(pitch_distance_offset_m_, target_distance);
+  const double visual_yaw_correction = std::clamp(
+    visual_yaw_p_rad_.load() + visual_yaw_i_rad_.load(),
+    -visual_servo_max_correction_rad_, visual_servo_max_correction_rad_);
+  const double visual_pitch_correction = std::clamp(
+    visual_pitch_p_rad_.load() + visual_pitch_i_rad_.load(),
+    -visual_servo_max_correction_rad_, visual_servo_max_correction_rad_);
+
   return {
-    tools::limit_rad(azim + yaw_offset_.load()), pitch + pitch_offset_.load()};
+    tools::limit_rad(
+      azim + yaw_offset_.load() + yaw_distance_correction + visual_yaw_correction),
+    pitch + pitch_offset_.load() + pitch_distance_correction + visual_pitch_correction};
 }
 
 Trajectory Planner::get_trajectory(Target target, double yaw0, double bullet_speed)

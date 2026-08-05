@@ -41,6 +41,12 @@ int main()
   output << R"(
 yaw_offset: 0.0
 pitch_offset: 0.0
+visual_servo_enabled: true
+visual_servo_kp: 0.65
+visual_servo_ki: 0.8
+visual_servo_max_correction_deg: 0.6
+visual_servo_error_limit_px: 200.0
+visual_servo_deadband_px: 1.5
 xyz_offset: [0.0, 0.0, 0.0]
 fire_thresh: 0.1
 gimbal_control_delay: 0.02
@@ -59,7 +65,15 @@ laser_line_direction_in_camera: [1.0, 0.0, 0.0]
   output.close();
 
   try {
-    const auto_drone::Planner planner(config.path().string());
+    auto_drone::Planner planner(config.path().string());
+    const auto timestamp = std::chrono::steady_clock::now();
+    planner.update_visual_feedback(100.0, -50.0, timestamp);
+    if (
+      planner.visual_yaw_correction_deg() >= 0.0 ||
+      planner.visual_pitch_correction_deg() <= 0.0) {
+      fmt::print(stderr, "[FAIL] visual feedback correction signs are wrong\n");
+      return 1;
+    }
   } catch (const std::exception & error) {
     fmt::print(stderr, "[FAIL] inline laser configuration was rejected: {}\n", error.what());
     return 1;

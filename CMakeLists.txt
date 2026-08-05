@@ -143,6 +143,7 @@ add_executable(
   tasks/auto_drone/drone_planner_inline_config_test.cpp)
 add_executable(prediction_cadence_test tools/prediction_cadence_test.cpp)
 add_executable(capture calibration/capture.cpp)
+add_executable(collect_gimbal_axes calibration/collect_gimbal_axes.cpp)
 add_executable(calibrate_input calibration/calibrate_input.cpp)
 add_executable(calibrate_camera calibration/calibrate_camera.cpp)
 add_executable(calibrate_handeye calibration/calibrate_handeye.cpp)
@@ -152,6 +153,7 @@ add_executable(test_simple calibration/test_simple.cpp)
 add_executable(run_calibration calibration/run_calibration.cpp)
 
 target_link_libraries(capture ${OpenCV_LIBS} fmt::fmt tools io)
+target_link_libraries(collect_gimbal_axes ${OpenCV_LIBS} fmt::fmt tools io)
 target_link_libraries(laser_ray_calibration PUBLIC ${OpenCV_LIBS} Ceres::ceres)
 target_link_libraries(
   calibrate_camera_laser_ray

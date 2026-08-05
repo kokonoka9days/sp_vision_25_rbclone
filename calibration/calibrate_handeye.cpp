@@ -162,8 +162,17 @@ int main(int argc, char * argv[])
   // 手眼标定
   cv::Mat R_camera2gimbal, t_camera2gimbal;
   cv::calibrateHandEye(
-    R_gimbal2world_list, t_gimbal2world_list, rvecs, tvecs, R_camera2gimbal, t_camera2gimbal);
+    R_gimbal2world_list, t_gimbal2world_list, rvecs, tvecs, R_camera2gimbal, t_camera2gimbal,
+    cv::CALIB_HAND_EYE_PARK);
   t_camera2gimbal /= 1e3;  // mm to m
+  const double translation_norm_m = cv::norm(t_camera2gimbal);
+  if (translation_norm_m > 0.3) {
+    fmt::print(
+      stderr,
+      "[warning] t_camera2gimbal norm is {:.3f} m. The motion set is translation-degenerate; "
+      "do not copy this translation. Use a measured camera-to-gimbal translation instead.\n",
+      translation_norm_m);
+  }
 
   // 计算相机同理想情况的偏角
   Eigen::Matrix3d R_camera2gimbal_eigen;

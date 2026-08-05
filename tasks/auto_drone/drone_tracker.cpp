@@ -84,8 +84,8 @@ std::vector<Target> Tracker::track(
 
   // 6. 发散检测：如果 EKF 持续不收敛或预测位置飞到天际，重置
   if (state_ != "lost") {
-    if (std::isnan(target_.get_xyz().x()) || target_.get_xyz().norm() > 20.0) {
-      tools::logger()->debug("[Tracker] Target diverged (distance > 20m or NaN)!");
+    if (std::isnan(target_.get_xyz().x()) || target_.get_xyz().norm() > 30.0) {
+      tools::logger()->debug("[Tracker] Target diverged (distance > 30m or NaN)!");
       state_ = "lost";
       return {};
     }

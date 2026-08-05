@@ -1,6 +1,10 @@
 #include <fmt/core.h>
 #include <atomic>
 #include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <limits>
 #include <nlohmann/json.hpp>  
 #include <opencv2/opencv.hpp>
 #include <thread>
@@ -30,6 +34,7 @@ constexpr double AIM_OFFSET_STEP_DEG = 0.005;
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
+  "{center-log     | build/diagnostics/center_distance_latest.csv | 中心误差连续采集CSV }"
   "{@config-path   | ../configs/auto_drone.yaml | 位置参数，yaml配置文件路径 }";
 
 int main(int argc, char * argv[])
@@ -44,6 +49,23 @@ int main(int argc, char * argv[])
     cli.printMessage();
     return 0;
   }
+
+  const std::filesystem::path center_log_path = cli.get<std::string>("center-log");
+  if (!center_log_path.parent_path().empty()) {
+    std::filesystem::create_directories(center_log_path.parent_path());
+  }
+  std::ofstream center_log(center_log_path);
+  if (!center_log) {
+    tools::logger()->error("Unable to open center-distance CSV: {}", center_log_path.string());
+    return 2;
+  }
+  center_log << "time_s,frame_id,target_present,pnp_distance_m,track_distance_m,center_dx_px,"
+                "center_dy_px,gimbal_yaw_deg,gimbal_pitch_deg,tracker_state,"
+                "visual_yaw_correction_deg,visual_pitch_correction_deg\n";
+  center_log << std::setprecision(10);
+  const auto center_log_start = std::chrono::steady_clock::now();
+  auto center_log_last_flush = center_log_start;
+  tools::logger()->info("Center-distance CSV: {}", center_log_path.string());
 
   const auto config = tools::load(config_path);
   const int prediction_frames_between_detections =
@@ -222,6 +244,35 @@ int main(int argc, char * argv[])
 
     auto targets = tracker.track(drones, t);
 
+    double raw_pnp_distance_m = std::numeric_limits<double>::quiet_NaN();
+    double tracked_distance_m = std::numeric_limits<double>::quiet_NaN();
+    cv::Point2f center_error_px(
+      std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN());
+    if (!drones.empty()) {
+      raw_pnp_distance_m = drones.front().xyz_in_gimbal.norm();
+      center_error_px =
+        drones.front().center - cv::Point2f(img.cols * 0.5F, img.rows * 0.5F);
+    }
+    if (!targets.empty()) tracked_distance_m = targets.front().get_xyz().norm();
+
+    if (!targets.empty() && !drones.empty()) {
+      planner.update_visual_feedback(center_error_px.x, center_error_px.y, t);
+    } else {
+      planner.reset_visual_feedback();
+    }
+
+    const auto center_log_now = std::chrono::steady_clock::now();
+    center_log << std::chrono::duration<double>(center_log_now - center_log_start).count() << ','
+               << result->frame_id << ',' << (!drones.empty()) << ',' << raw_pnp_distance_m << ','
+               << tracked_distance_m << ',' << center_error_px.x << ',' << center_error_px.y << ','
+               << yaw_deg << ',' << pitch_deg << ',' << tracker.state() << ','
+               << planner.visual_yaw_correction_deg() << ','
+               << planner.visual_pitch_correction_deg() << '\n';
+    if (center_log_now - center_log_last_flush >= 1s) {
+      center_log.flush();
+      center_log_last_flush = center_log_now;
+    }
+
     // 把目标塞给控制线程
     if (!targets.empty()) {
       target_queue.push(targets.front());
@@ -252,6 +303,21 @@ int main(int argc, char * argv[])
       {255, 128, 0});
     tools::draw_text(
       img, "W/S: Pitch +/-  A/D: Yaw -/+  (0.005 deg)", {40, 400}, {255, 255, 255});
+    tools::draw_text(
+      img,
+      fmt::format(
+        "PnP Dist: {:.2f} m  Track Dist: {:.2f} m", raw_pnp_distance_m, tracked_distance_m),
+      {40, 440}, {80, 230, 255});
+    tools::draw_text(
+      img, fmt::format("Center Error: dx={:+.1f}px dy={:+.1f}px", center_error_px.x,
+                       center_error_px.y),
+      {40, 480}, {80, 230, 255});
+    tools::draw_text(
+      img,
+      fmt::format(
+        "Visual Correction: yaw={:+.3f} pitch={:+.3f} deg",
+        planner.visual_yaw_correction_deg(), planner.visual_pitch_correction_deg()),
+      {40, 520}, {80, 230, 255});
 
     // 2. 绘制 YOLO 检测到的无人机 2D Bbox 和 关键点
     for (const auto& drone : drones) {
@@ -290,6 +356,7 @@ int main(int argc, char * argv[])
   // =================================================================
   quit = true;
   if (plan_thread.joinable()) plan_thread.join();
+  center_log.flush();
   
   // 发送归中或停止指令，防止下位机继续飞转
   auto current_state = gimbal.state();

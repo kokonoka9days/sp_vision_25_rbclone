@@ -28,14 +28,15 @@ gimbal_r3: 3
 model_path: "/home/lzhros/race/sp_vision_25_rbclone_new/assets/module_labgame_demo.engine"  # TensorRT 10.11 engine 路径
 
 #####----- 坐标系与相机内参 (Solver) -----#####
-# 云台到 IMU 机体的旋转矩阵 (3x3 行优先，需根据电控安装方向调整)
-R_gimbal2imubody: [-1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0]
+# 云台到 IMU 机体的旋转矩阵（3x3 行优先）。
+# 由上方 yaw 电机轴和左侧 pitch 电机轴实测后正交化；yaw 轴相对 IMU Z 倾斜约 19.45 度。
+R_gimbal2imubody: [-0.942866495480, -0.038152443966, -0.330979097105, 0.027506654139, -0.998944344435, 0.036791041012, -0.332033365310, 0.025584912352, 0.942920599298]
 
-#  相机同理想情况的偏角: yaw-1.07 pitch-0.14 roll0.16 degree
-# 标定板到世界坐标系原点的水平距离: 10.39 m
-# 标定板同竖直摆放时的偏角: yaw2.10 pitch10.98 roll-1.42 degree
-R_camera2gimbal: [0.018739345541106196, -0.0025173907791792727, 0.999821233857511, -0.9998206852451131, 0.0026798763249941513, 0.018746082760805548, -0.0027265884697292696, -0.9999932404804281, -0.0024667202454072895]
-t_camera2gimbal: [-0.8624362160878613, -0.04430571930068628, -0.2690074258643265]
+# 相机光轴相对理想云台坐标约为 yaw +2.03、pitch +18.98 degree。
+# 旋转使用 59 组手眼数据的 Park/Horaud 一致解；平移因 50 mm 窄视场退化，改用机械测量。
+R_camera2gimbal: [-0.040421293314026, 0.324421929857806, 0.945048427595651, -0.975158375276931, -0.218967173836949, 0.033459227563082, 0.217789490504245, -0.920219423947863, 0.325213698381750]
+# 相机光心位于电机轴交点前方约 4.5 cm、左右近似 0、下方约 5 cm。
+t_camera2gimbal: [0.045, 0.0, -0.050]
 # 重投影误差: 0.1181px
 camera_matrix: [14955.275481254272, 0, 424.5275247834595, 0, 14917.483385201438, 890.1436041583838, 0, 0, 1]
 distort_coeffs: [0.259455463319462, 7.781591144598162, 0.014803400834467228, -0.017879580487416027, 0.15829957121310623]
@@ -61,8 +62,20 @@ min_detect_count: 3           # 连续识别几帧后从 detecting 进入 tracki
 max_temp_lost_count: 10       # 丢失几帧后从 temp_lost 彻底判定为 lost
 
 #####----- 弹道与预测参数 (Planner) -----#####
-yaw_offset: 0.85            # Yaw 轴硬件偏置补偿 (度)
-pitch_offset: 0.20           # Pitch 轴硬件偏置补偿 (度)
+yaw_offset: 0.061           # 12m/16m 联合拟合的无穷远固定 yaw 残差 (度)
+pitch_offset: -0.195        # 12m/16m 联合拟合的无穷远固定 pitch 残差 (度)
+# 米制横向/纵向视差项；运行时分别以 atan2(offset_m, target_distance) 转成角度。
+yaw_distance_offset_m: -0.088
+pitch_distance_offset_m: 0.096
+
+# 图像中心误差闭环：距离补偿负责前馈，PI 项消除不同视角下剩余的 dx/dy。
+# 误差超过门限时拒绝该帧，最终修正角被限制在 +/-0.6 度以内。
+visual_servo_enabled: true
+visual_servo_kp: 0.65
+visual_servo_ki: 0.8
+visual_servo_max_correction_deg: 0.6
+visual_servo_error_limit_px: 200.0
+visual_servo_deadband_px: 1.5
 xyz_offset: [0,0,0]   # PnP 后 xyz 固定偏移 (米), [x, y, z]
 fire_thresh: 0.1              # 允许开火的角度误差阈值 (度)
 
@@ -89,12 +102,6 @@ square_size_mm: 30   # 棋盘格方块大小（毫米）
 laser_ray_enabled: true
 laser_line_origin_in_camera_m: [0.0, 0.0, 0.0]
 laser_line_direction_in_camera: [0.01979677, -0.02351310, 1.0]
-
-
-
-
-
-
 
 
 
