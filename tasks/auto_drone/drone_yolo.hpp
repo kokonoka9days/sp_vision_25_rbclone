@@ -3,13 +3,15 @@
 
 #include <array>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include <NvInfer.h>
+#include <cuda_runtime_api.h>
 #include <opencv2/opencv.hpp>
-#include <openvino/openvino.hpp>
 
 #include "drone_armor.hpp"
 
@@ -44,7 +46,9 @@ public:
     std::uint64_t frame_id, bool drop_if_busy = true);
   std::optional<YOLOResult> flush();
 
-  int inference_threads() const { return inference_threads_; }
+  // Kept for compatibility with the existing diagnostics UI. TensorRT does
+  // not use a configurable CPU inference thread pool.
+  int inference_threads() const { return 0; }
   int inference_streams() const { return inference_streams_; }
   std::uint64_t dropped_frames() const { return dropped_frames_; }
 
@@ -54,18 +58,26 @@ private:
     float scale = 1.0F;
     int pad_x = 0;
     int pad_y = 0;
+    int resized_w = 0;
+    int resized_h = 0;
   };
 
   struct Slot
   {
-    ov::InferRequest infer_request;
-    cv::Mat input;
+    nvinfer1::IExecutionContext * context = nullptr;
+    cudaStream_t stream = nullptr;
+    cudaEvent_t preprocess_started = nullptr;
+    cudaEvent_t inference_started = nullptr;
+    cudaEvent_t completed = nullptr;
+    std::uint8_t * device_source = nullptr;
+    std::size_t device_source_capacity = 0;
+    void * device_input = nullptr;
+    void * device_output = nullptr;
+    float * host_output = nullptr;
     cv::Mat frame;
     Letterbox letterbox;
     std::chrono::steady_clock::time_point timestamp;
-    std::chrono::steady_clock::time_point submitted_at;
     std::uint64_t frame_id = 0;
-    double preprocess_ms = 0.0;
     bool active = false;
   };
 
@@ -74,13 +86,16 @@ private:
   int num_classes_ = 1;
   int num_kpts_ = 8;
   int num_boxes_ = 0;
-  int inference_threads_ = 1;
   int inference_streams_ = 2;
   float score_threshold_ = 0.70F;
   float nms_threshold_ = 0.60F;
 
-  ov::Core core_;
-  ov::CompiledModel compiled_model_;
+  nvinfer1::IRuntime * runtime_ = nullptr;
+  nvinfer1::ICudaEngine * engine_ = nullptr;
+  std::string input_name_;
+  std::string output_name_;
+  std::size_t input_bytes_ = 0;
+  std::size_t output_bytes_ = 0;
   std::array<Slot, 2> slots_;
   std::uint64_t dropped_frames_ = 0;
 
@@ -89,10 +104,12 @@ private:
     std::uint64_t frame_id, bool preserve_frame);
   void start_slot(Slot & slot);
   YOLOResult finish_slot(Slot & slot);
+  bool slot_ready(const Slot & slot) const;
   std::optional<std::size_t> free_slot() const;
   std::optional<std::size_t> oldest_active_slot() const;
   std::vector<Drone> postprocess(const float * output, const Letterbox & letterbox) const;
   void wait_and_discard() noexcept;
+  void release_resources() noexcept;
 };
 
 }  // namespace auto_drone

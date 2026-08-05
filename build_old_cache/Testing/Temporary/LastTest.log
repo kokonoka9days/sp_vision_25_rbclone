@@ -1,0 +1,36 @@
+Start testing: Aug 01 19:37 CST
+----------------------------------------------------------
+2/4 Testing: drone_planner_laser_test
+2/4 Test: drone_planner_laser_test
+Command: "/home/rm/Desktop/sp_vision_25_rbclone/build/drone_planner_laser_test"
+Directory: /home/rm/Desktop/sp_vision_25_rbclone/build
+"drone_planner_laser_test" start time: Aug 01 19:37 CST
+Output:
+----------------------------------------------------------
+yaw=0.430000 pitch=0.170000 lambda=3.400000 residual=4.965e-16m
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"drone_planner_laser_test" end time: Aug 01 19:37 CST
+"drone_planner_laser_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/4 Testing: drone_planner_inline_config_test
+3/4 Test: drone_planner_inline_config_test
+Command: "/home/rm/Desktop/sp_vision_25_rbclone/build/drone_planner_inline_config_test"
+Directory: /home/rm/Desktop/sp_vision_25_rbclone/build
+"drone_planner_inline_config_test" start time: Aug 01 19:37 CST
+Output:
+----------------------------------------------------------
+[2026-08-01 19:37:05.816] [info] [Planner] Laser ray enabled from /tmp/drone_planner_inline_laser_2592284610570.yaml: origin_g=[0.000000, 0.010000, -0.020000]m, direction_g=[1.000000, 0.000000, 0.000000]
+inline laser configuration loaded without laser_ray_config_path
+<end of output>
+Test time =   0.17 sec
+----------------------------------------------------------
+Test Passed.
+"drone_planner_inline_config_test" end time: Aug 01 19:37 CST
+"drone_planner_inline_config_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Aug 01 19:37 CST

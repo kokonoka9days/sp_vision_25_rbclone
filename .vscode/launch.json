@@ -8,7 +8,7 @@
             "name": "(gdb) 启动",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/${fileBasenameNoExtension}",// 更改
+            "program": "${workspaceFolder}/build/rb_auto_drone_debug",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build",

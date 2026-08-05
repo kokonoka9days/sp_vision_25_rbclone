@@ -1,0 +1,242 @@
+[
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DDEFAULT_RMW_IMPLEMENTATION=rmw_fastrtps_cpp -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DOV_THREAD=OV_THREAD_TBB -DRCUTILS_ENABLE_FAULT_INJECTION -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -isystem /opt/ros/humble/include/rclcpp -isystem /opt/ros/humble/include/std_msgs -isystem /opt/ros/humble/include/ament_index_cpp -isystem /opt/ros/humble/include/libstatistics_collector -isystem /opt/ros/humble/include/builtin_interfaces -isystem /opt/ros/humble/include/rosidl_runtime_c -isystem /opt/ros/humble/include/rcutils -isystem /opt/ros/humble/include/rosidl_typesupport_interface -isystem /opt/ros/humble/include/fastcdr -isystem /opt/ros/humble/include/rosidl_runtime_cpp -isystem /opt/ros/humble/include/rosidl_typesupport_fastrtps_cpp -isystem /opt/ros/humble/include/rmw -isystem /opt/ros/humble/include/rosidl_typesupport_fastrtps_c -isystem /opt/ros/humble/include/rosidl_typesupport_introspection_c -isystem /opt/ros/humble/include/rosidl_typesupport_introspection_cpp -isystem /opt/ros/humble/include/rcl -isystem /opt/ros/humble/include/rcl_interfaces -isystem /opt/ros/humble/include/rcl_logging_interface -isystem /opt/ros/humble/include/rcl_yaml_param_parser -isystem /opt/ros/humble/include/libyaml_vendor -isystem /opt/ros/humble/include/tracetools -isystem /opt/ros/humble/include/rcpputils -isystem /opt/ros/humble/include/statistics_msgs -isystem /opt/ros/humble/include/rosgraph_msgs -isystem /opt/ros/humble/include/rosidl_typesupport_cpp -isystem /opt/ros/humble/include/rosidl_typesupport_c -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -Wno-error=deprecated-declarations -o CMakeFiles/rb_auto_drone_debug.dir/src/rb_auto_drone_debug.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/src/rb_auto_drone_debug.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/src/rb_auto_drone_debug.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DOV_THREAD=OV_THREAD_TBB -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -Wno-error=deprecated-declarations -o CMakeFiles/rb_auto_drone_diagnostics.dir/src/rb_auto_drone_diagnostics.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/src/rb_auto_drone_diagnostics.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/src/rb_auto_drone_diagnostics.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DDEFAULT_RMW_IMPLEMENTATION=rmw_fastrtps_cpp -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DOV_THREAD=OV_THREAD_TBB -DRCUTILS_ENABLE_FAULT_INJECTION -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -isystem /opt/ros/humble/include/rclcpp -isystem /opt/ros/humble/include/std_msgs -isystem /opt/ros/humble/include/ament_index_cpp -isystem /opt/ros/humble/include/libstatistics_collector -isystem /opt/ros/humble/include/builtin_interfaces -isystem /opt/ros/humble/include/rosidl_runtime_c -isystem /opt/ros/humble/include/rcutils -isystem /opt/ros/humble/include/rosidl_typesupport_interface -isystem /opt/ros/humble/include/fastcdr -isystem /opt/ros/humble/include/rosidl_runtime_cpp -isystem /opt/ros/humble/include/rosidl_typesupport_fastrtps_cpp -isystem /opt/ros/humble/include/rmw -isystem /opt/ros/humble/include/rosidl_typesupport_fastrtps_c -isystem /opt/ros/humble/include/rosidl_typesupport_introspection_c -isystem /opt/ros/humble/include/rosidl_typesupport_introspection_cpp -isystem /opt/ros/humble/include/rcl -isystem /opt/ros/humble/include/rcl_interfaces -isystem /opt/ros/humble/include/rcl_logging_interface -isystem /opt/ros/humble/include/rcl_yaml_param_parser -isystem /opt/ros/humble/include/libyaml_vendor -isystem /opt/ros/humble/include/tracetools -isystem /opt/ros/humble/include/rcpputils -isystem /opt/ros/humble/include/statistics_msgs -isystem /opt/ros/humble/include/rosgraph_msgs -isystem /opt/ros/humble/include/rosidl_typesupport_cpp -isystem /opt/ros/humble/include/rosidl_typesupport_c -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -Wno-error=deprecated-declarations -o CMakeFiles/rb_auto_drone_ros_debug.dir/src/rb_auto_drone_ros_debug.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/src/rb_auto_drone_ros_debug.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/src/rb_auto_drone_ros_debug.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DOV_THREAD=OV_THREAD_TBB -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -Wno-error=deprecated-declarations -o CMakeFiles/rb_auto_drone_video_test.dir/src/rb_auto_drone_video_test.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/src/rb_auto_drone_video_test.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/src/rb_auto_drone_video_test.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DCERES_EXPORT_INTERNAL_SYMBOLS -DGFLAGS_IS_A_DLL=0 -DGOOGLE_GLOG_DLL_DECL=\"\" -DGOOGLE_GLOG_DLL_DECL_FOR_UNITTESTS=\"\" -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/laser_ray_calibration.dir/calibration/laser_ray_calibration.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/calibration/laser_ray_calibration.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/calibration/laser_ray_calibration.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DCERES_EXPORT_INTERNAL_SYMBOLS -DFMT_LOCALE -DFMT_SHARED -DGFLAGS_IS_A_DLL=0 -DGOOGLE_GLOG_DLL_DECL=\"\" -DGOOGLE_GLOG_DLL_DECL_FOR_UNITTESTS=\"\" -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/calibrate_camera_laser_ray.dir/calibration/calibrate_camera_laser_ray.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/calibration/calibrate_camera_laser_ray.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/calibration/calibrate_camera_laser_ray.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DCERES_EXPORT_INTERNAL_SYMBOLS -DFMT_LOCALE -DFMT_SHARED -DGFLAGS_IS_A_DLL=0 -DGOOGLE_GLOG_DLL_DECL=\"\" -DGOOGLE_GLOG_DLL_DECL_FOR_UNITTESTS=\"\" -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/laser_ray_calibration_test.dir/calibration/laser_ray_calibration_test.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/calibration/laser_ray_calibration_test.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/calibration/laser_ray_calibration_test.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/drone_planner_laser_test.dir/tasks/auto_drone/laser_ray_aim_test.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/laser_ray_aim_test.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/laser_ray_aim_test.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/drone_planner_laser_test.dir/tasks/auto_drone/laser_ray_aim.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/laser_ray_aim.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/laser_ray_aim.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DOV_THREAD=OV_THREAD_TBB -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -Wno-error=deprecated-declarations -o CMakeFiles/drone_planner_inline_config_test.dir/tasks/auto_drone/drone_planner_inline_config_test.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/drone_planner_inline_config_test.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/drone_planner_inline_config_test.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -D_GLIBCXX_USE_CXX11_ABI=1 -I/usr/include/eigen3 -I/usr/include/opencv4 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/prediction_cadence_test.dir/tools/prediction_cadence_test.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tools/prediction_cadence_test.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tools/prediction_cadence_test.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/capture.dir/calibration/capture.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/calibration/capture.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/calibration/capture.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/calibrate_input.dir/calibration/calibrate_input.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/calibration/calibrate_input.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/calibration/calibrate_input.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/calibrate_camera.dir/calibration/calibrate_camera.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/calibration/calibrate_camera.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/calibration/calibrate_camera.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/calibrate_handeye.dir/calibration/calibrate_handeye.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/calibration/calibrate_handeye.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/calibration/calibrate_handeye.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/calibrate_robotworld_handeye.dir/calibration/calibrate_robotworld_handeye.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/calibration/calibrate_robotworld_handeye.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/calibration/calibrate_robotworld_handeye.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/split_video.dir/calibration/split_video.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/calibration/split_video.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/calibration/split_video.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/test_simple.dir/calibration/test_simple.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/calibration/test_simple.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/calibration/test_simple.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DOV_THREAD=OV_THREAD_TBB -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIE -Wall -Wextra -Wno-deprecated-declarations -Wno-error=deprecated-declarations -o CMakeFiles/run_calibration.dir/calibration/run_calibration.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/calibration/run_calibration.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/calibration/run_calibration.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tools",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/tools.dir/exiter.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tools/exiter.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tools/exiter.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tools",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/tools.dir/extended_kalman_filter.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tools/extended_kalman_filter.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tools/extended_kalman_filter.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tools",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/tools.dir/ransac_sine_fitter.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tools/ransac_sine_fitter.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tools/ransac_sine_fitter.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tools",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/tools.dir/img_tools.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tools/img_tools.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tools/img_tools.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tools",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/tools.dir/math_tools.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tools/math_tools.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tools/math_tools.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tools",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/tools.dir/plotter.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tools/plotter.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tools/plotter.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tools",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/tools.dir/trajectory.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tools/trajectory.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tools/trajectory.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tools",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/tools.dir/recorder.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tools/recorder.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tools/recorder.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tools",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/tools.dir/logger.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tools/logger.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tools/logger.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tools",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/tools.dir/pid.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tools/pid.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tools/pid.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tools",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/tools.dir/crc.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tools/crc.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tools/crc.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/io",
+  "command": "/usr/bin/c++ -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/usr/include/eigen3 -I/usr/include/opencv4 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/io.dir/daheng/daheng.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/io/daheng/daheng.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/daheng.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/io",
+  "command": "/usr/bin/c++ -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/usr/include/eigen3 -I/usr/include/opencv4 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/io.dir/hikrobot/hikrobot.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/hikrobot.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/hikrobot.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/io",
+  "command": "/usr/bin/c++ -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/usr/include/eigen3 -I/usr/include/opencv4 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/io.dir/camera.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/io/camera.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/io/camera.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/io",
+  "command": "/usr/bin/c++ -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/usr/include/eigen3 -I/usr/include/opencv4 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/io.dir/gimbal/gimbal.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/io/gimbal/gimbal.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/io/gimbal/gimbal.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/io/serial",
+  "command": "/usr/bin/c++ -D_GLIBCXX_USE_CXX11_ABI=1 -I/usr/include/eigen3 -I/usr/include/opencv4 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/serial.dir/src/serial.cc.o -c /home/rm/Desktop/sp_vision_25_rbclone/io/serial/src/serial.cc",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/io/serial/src/serial.cc"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/io/serial",
+  "command": "/usr/bin/c++ -D_GLIBCXX_USE_CXX11_ABI=1 -I/usr/include/eigen3 -I/usr/include/opencv4 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/serial.dir/src/impl/unix.cc.o -c /home/rm/Desktop/sp_vision_25_rbclone/io/serial/src/impl/unix.cc",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/io/serial/src/impl/unix.cc"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/io/serial",
+  "command": "/usr/bin/c++ -D_GLIBCXX_USE_CXX11_ABI=1 -I/usr/include/eigen3 -I/usr/include/opencv4 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/serial.dir/src/impl/list_ports/list_ports_linux.cc.o -c /home/rm/Desktop/sp_vision_25_rbclone/io/serial/src/impl/list_ports/list_ports_linux.cc",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/io/serial/src/impl/list_ports/list_ports_linux.cc"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tasks/auto_drone",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DOV_THREAD=OV_THREAD_TBB -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -Wno-error=deprecated-declarations -o CMakeFiles/auto_drone.dir/drone_armor.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/drone_armor.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/drone_armor.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tasks/auto_drone",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DOV_THREAD=OV_THREAD_TBB -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -Wno-error=deprecated-declarations -o CMakeFiles/auto_drone.dir/drone_solver.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/drone_solver.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/drone_solver.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tasks/auto_drone",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DOV_THREAD=OV_THREAD_TBB -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -Wno-error=deprecated-declarations -o CMakeFiles/auto_drone.dir/drone_target.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/drone_target.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/drone_target.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tasks/auto_drone",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DOV_THREAD=OV_THREAD_TBB -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -Wno-error=deprecated-declarations -o CMakeFiles/auto_drone.dir/laser_ray_aim.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/laser_ray_aim.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/laser_ray_aim.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tasks/auto_drone",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DOV_THREAD=OV_THREAD_TBB -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -Wno-error=deprecated-declarations -o CMakeFiles/auto_drone.dir/drone_planner.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/drone_planner.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/drone_planner.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tasks/auto_drone",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DOV_THREAD=OV_THREAD_TBB -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -Wno-error=deprecated-declarations -o CMakeFiles/auto_drone.dir/drone_yolo.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/drone_yolo.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/drone_yolo.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tasks/auto_drone",
+  "command": "/usr/bin/c++ -DFMT_LOCALE -DFMT_SHARED -DJSON_DIAGNOSTICS=0 -DJSON_USE_IMPLICIT_CONVERSIONS=1 -DOV_THREAD=OV_THREAD_TBB -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DSPDLOG_SHARED_LIB -DYAML_CPP_STATIC_DEFINE -D_GLIBCXX_USE_CXX11_ABI=1 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng -I/home/rm/Desktop/sp_vision_25_rbclone/io/daheng/include -I/home/rm/Desktop/sp_vision_25_rbclone/io/hikrobot/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -isystem /usr/include/eigen3 -isystem /usr/include/opencv4 -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -Wno-error=deprecated-declarations -o CMakeFiles/auto_drone.dir/drone_tracker.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/drone_tracker.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/drone_tracker.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tasks/auto_drone/tinympc",
+  "command": "/usr/bin/c++ -D_GLIBCXX_USE_CXX11_ABI=1 -I/usr/include/eigen3 -I/usr/include/opencv4 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/tinympcstatic.dir/admm.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/admm.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/admm.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tasks/auto_drone/tinympc",
+  "command": "/usr/bin/c++ -D_GLIBCXX_USE_CXX11_ABI=1 -I/usr/include/eigen3 -I/usr/include/opencv4 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/tinympcstatic.dir/tiny_api.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/tiny_api.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/tiny_api.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tasks/auto_drone/tinympc",
+  "command": "/usr/bin/c++ -D_GLIBCXX_USE_CXX11_ABI=1 -I/usr/include/eigen3 -I/usr/include/opencv4 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/tinympcstatic.dir/codegen.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/codegen.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/codegen.cpp"
+},
+{
+  "directory": "/home/rm/Desktop/sp_vision_25_rbclone/build/tasks/auto_drone/tinympc",
+  "command": "/usr/bin/c++ -D_GLIBCXX_USE_CXX11_ABI=1 -I/usr/include/eigen3 -I/usr/include/opencv4 -I/home/rm/Desktop/sp_vision_25_rbclone -I/home/rm/Desktop/sp_vision_25_rbclone/io/serial/include -I/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/.. -O3 -DNDEBUG -fPIC -Wall -Wextra -Wno-deprecated-declarations -o CMakeFiles/tinympcstatic.dir/rho_benchmark.cpp.o -c /home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/rho_benchmark.cpp",
+  "file": "/home/rm/Desktop/sp_vision_25_rbclone/tasks/auto_drone/tinympc/rho_benchmark.cpp"
+}
+]

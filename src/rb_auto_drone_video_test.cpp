@@ -494,12 +494,12 @@ int main(int argc, char * argv[])
 
   fmt::print(
     "Video: {}x{} @ {:.2f} FPS\n"
-    "Mode: {}, inference threads: {}\n"
+    "Mode: {}, TensorRT streams: {}\n"
     "Submitted: {}, completed: {}, dropped: {}, detections: {}\n"
     "Throughput: {:.2f} FPS total, {:.2f} FPS after warmup\n"
     "End-to-end latency: mean {:.2f} ms, P50 {:.2f} ms, P95 {:.2f} ms, max {:.2f} ms\n"
     "Stages mean: preprocess {:.2f} ms, request {:.2f} ms, postprocess {:.2f} ms\n",
-    width, height, source_fps, mode, yolo.inference_threads(), submitted, completed,
+    width, height, source_fps, mode, yolo.inference_streams(), submitted, completed,
     yolo.dropped_frames(), total_detections, total_fps, steady_fps, latency_samples.mean(),
     latency_samples.percentile(0.50), latency_samples.percentile(0.95),
     latency_samples.maximum(), preprocess_samples.mean(), request_samples.mean(),

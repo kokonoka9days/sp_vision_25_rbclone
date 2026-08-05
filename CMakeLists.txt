@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.16.3)
 
-# 【修改 1】: 移除 CUDA 语言支持，只保留 C 和 CXX
-project(sp_vision LANGUAGES CXX C)
+project(sp_vision LANGUAGES CXX C CUDA)
 
 # ==========================================
 # 0. 核心编译选项配置 (参考雷达规范)
@@ -13,8 +12,10 @@ endif()
 # 强制全项目生成 -fPIC (对动态链接至关重要)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# 【修改 2】: 删除了强制 CUDA 使用 C++14 和 g++-10 的限制，全项目统一使用 C++17
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_BUILD_TYPE Release)
 message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}--------------------")
 
@@ -32,9 +33,6 @@ find_package(yaml-cpp REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(Ceres REQUIRED)
 
-# 【修改 3】: 引入 OpenVINO 依赖
-find_package(OpenVINO REQUIRED)
-
 # ==========================================
 # 2. 查找 ROS 2 依赖
 # ==========================================
@@ -44,14 +42,34 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 
 # ==========================================
-# 3. 头文件包含路径
+# 3. TensorRT/CUDA 与头文件路径
 # ==========================================
-# 【修改 4】: 删除了原有的 TensorRT-10.11.0.33 搜索逻辑，并移除了 TRT_INC 和 CUDA 头文件挂载
+find_path(TRT_INC NvInfer.h
+  PATHS
+    /home/lzhros/TensorRT-10.11.0.33/include
+    /usr/local/TensorRT-10.11.0.33/include
+    /usr/include)
+find_library(TRT_LIB nvinfer
+  PATHS
+    /home/lzhros/TensorRT-10.11.0.33/lib
+    /usr/local/TensorRT-10.11.0.33/lib
+    /usr/lib/x86_64-linux-gnu)
+
+if(NOT TRT_INC OR NOT TRT_LIB)
+  message(FATAL_ERROR "TensorRT not found. Expected TensorRT 10.11 or a system installation.")
+endif()
+message(STATUS "Found TensorRT include: ${TRT_INC}")
+message(STATUS "Found TensorRT library: ${TRT_LIB}")
+
 include_directories(
     ${EIGEN3_INCLUDE_DIR}
     ${OpenCV_INCLUDE_DIRS}
     ${PROJECT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/io/serial/include
+)
+include_directories(SYSTEM
+    ${TRT_INC}
+    ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
 )
 
 add_subdirectory(tools)
@@ -64,7 +82,6 @@ add_executable(rb_auto_drone_diagnostics src/rb_auto_drone_diagnostics.cpp)
 add_executable(rb_auto_drone_ros_debug src/rb_auto_drone_ros_debug.cpp)
 add_executable(rb_auto_drone_video_test src/rb_auto_drone_video_test.cpp)
 
-# 【修改 5】: 链接常规依赖，将底部的 ${TRT_LIB} 统一替换为 openvino::runtime
 target_link_libraries(rb_auto_drone_debug 
     ${OpenCV_LIBS} 
     fmt::fmt 
@@ -72,7 +89,8 @@ target_link_libraries(rb_auto_drone_debug
     auto_drone 
     tools 
     io 
-    openvino::runtime
+    ${TRT_LIB}
+    cudart
 )
 
 target_link_libraries(rb_auto_drone_diagnostics
@@ -82,7 +100,8 @@ target_link_libraries(rb_auto_drone_diagnostics
     auto_drone
     tools
     io
-    openvino::runtime
+    ${TRT_LIB}
+    cudart
 )
 
 target_link_libraries(rb_auto_drone_ros_debug 
@@ -92,7 +111,8 @@ target_link_libraries(rb_auto_drone_ros_debug
     auto_drone 
     tools 
     io 
-    openvino::runtime
+    ${TRT_LIB}
+    cudart
 )
 
 target_link_libraries(rb_auto_drone_video_test
@@ -102,7 +122,8 @@ target_link_libraries(rb_auto_drone_video_test
     auto_drone
     tools
     io
-    openvino::runtime
+    ${TRT_LIB}
+    cudart
 )
 
 # 链接 ROS 2 依赖给主程序 (标准做法)
@@ -140,14 +161,14 @@ target_link_libraries(
 target_link_libraries(drone_planner_laser_test ${OpenCV_LIBS} fmt::fmt tools)
 target_link_libraries(
   drone_planner_inline_config_test
-  ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_drone tools io openvino::runtime)
+  ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_drone tools io ${TRT_LIB} cudart)
 enable_testing()
 add_test(NAME laser_ray_calibration_test COMMAND laser_ray_calibration_test)
 add_test(NAME drone_planner_laser_test COMMAND drone_planner_laser_test)
 add_test(NAME drone_planner_inline_config_test COMMAND drone_planner_inline_config_test)
 add_test(NAME prediction_cadence_test COMMAND prediction_cadence_test)
-# 【修改 6】: 校准工具同样将 ${TRT_LIB} 替换为 openvino::runtime
-target_link_libraries(run_calibration ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_drone tools io openvino::runtime)
+target_link_libraries(
+  run_calibration ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_drone tools io ${TRT_LIB} cudart)
 target_link_libraries(calibrate_input ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
 target_link_libraries(calibrate_camera ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
 target_link_libraries(calibrate_handeye ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)

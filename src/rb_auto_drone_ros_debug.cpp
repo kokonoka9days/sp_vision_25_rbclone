@@ -260,9 +260,9 @@ int main(int argc, char * argv[])
     tools::draw_text(
       img,
       fmt::format(
-        "YOLO: {:.1f}/{:.1f}/{:.1f} ms, {} streams, {} threads, {} dropped",
+        "YOLO: {:.1f}/{:.1f}/{:.1f} ms, {} TensorRT streams, {} dropped",
         result->preprocess_ms, result->request_ms, result->postprocess_ms,
-        yolo.inference_streams(), yolo.inference_threads(), yolo.dropped_frames()),
+        yolo.inference_streams(), yolo.dropped_frames()),
       {40, 160}, {255, 255, 0});
     tools::draw_text(img, fmt::format("Gimbal Yaw: {:.2f}", yaw_deg), {40, 200}, {0, 128, 255});
     tools::draw_text(img, fmt::format("Gimbal Pitch: {:.2f}", pitch_deg), {40, 240}, {0, 255, 255});

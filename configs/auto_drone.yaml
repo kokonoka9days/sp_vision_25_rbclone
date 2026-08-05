@@ -13,7 +13,7 @@ mirror: true                  # 图像左右镜像
 timestamp_offset_us: 2000     # 软硬件时间戳同步补偿 (微秒)
 
 #####----- 串口云台参数 (io::Gimbal) -----#####
-com_port: "/dev/ttyACM0"      # 串口号
+com_port: "/dev/ttyUSB0"      # 串口号
 # 陀螺仪轴向重映射 (0代表y, 1代表p, 2代表r, 负号代表反向)
 gimbal_y1: 1
 gimbal_p2: 2
@@ -25,8 +25,7 @@ gimbal_r3: 3
 # ==========================================
 
 #####----- 神经网络参数 (YOLO) -----#####
-model_path: "../assets/module_labgame_demo_int8.xml"  # OpenVINO IR 模型路径
-inference_num_threads: 0              # 0: 自动预留2个逻辑线程，且最多使用12个推理线程
+model_path: "/home/lzhros/race/sp_vision_25_rbclone_new/assets/module_labgame_demo.engine"  # TensorRT 10.11 engine 路径
 
 #####----- 坐标系与相机内参 (Solver) -----#####
 # 云台到 IMU 机体的旋转矩阵 (3x3 行优先，需根据电控安装方向调整)
@@ -62,8 +61,8 @@ min_detect_count: 3           # 连续识别几帧后从 detecting 进入 tracki
 max_temp_lost_count: 10       # 丢失几帧后从 temp_lost 彻底判定为 lost
 
 #####----- 弹道与预测参数 (Planner) -----#####
-yaw_offset: 0               # Yaw 轴硬件偏置补偿 (度)
-pitch_offset: 0.0           # Pitch 轴硬件偏置补偿 (度)
+yaw_offset: 0.85            # Yaw 轴硬件偏置补偿 (度)
+pitch_offset: 0.20           # Pitch 轴硬件偏置补偿 (度)
 xyz_offset: [0,0,0]   # PnP 后 xyz 固定偏移 (米), [x, y, z]
 fire_thresh: 0.1              # 允许开火的角度误差阈值 (度)
 
@@ -90,8 +89,6 @@ square_size_mm: 30   # 棋盘格方块大小（毫米）
 laser_ray_enabled: true
 laser_line_origin_in_camera_m: [0.0, 0.0, 0.0]
 laser_line_direction_in_camera: [0.01979677, -0.02351310, 1.0]
-
-
 
 
 

@@ -1,0 +1,2 @@
+/usr/bin/ar qc liblaser_ray_calibration.a CMakeFiles/laser_ray_calibration.dir/calibration/laser_ray_calibration.cpp.o
+/usr/bin/ranlib liblaser_ray_calibration.a

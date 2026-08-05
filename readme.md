@@ -118,7 +118,7 @@ sp_vision_25rbclone
 #### x86小电脑
 - [HikRobot SDK](https://www.hikrobotics.com/cn2/source/support/software/MVS_STD_GML_V2.1.2_231116.zip)
 - [daheng SDK]()
-- [OpenVINO](https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html)
+- CUDA 12.6 与 TensorRT 10.11（默认搜索 `/usr/local/TensorRT-10.11.0.33`）
 
 - 其余：
 ```bash
