@@ -196,6 +196,13 @@ int main(int argc, char * argv[])
     auto image_points =
       solver.reproject_armor(aim_xyza.head(3), aim_xyza[3], target.armor_type, target.name);
     tools::draw_points(img, image_points, {0, 0, 255});
+
+    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+    cv::imshow("reprojection", img);
+    auto key = cv::waitKey(1);
+    if (key == 'q') break;
+    
+
   }
 
   quit = true;

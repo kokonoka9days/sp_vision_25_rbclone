@@ -64,7 +64,7 @@ int main(int argc, char * argv[])
   io::Camera long_camera(long_camera_config_path);
   io::Gimbal gimbal(short_camera_config_path);
 
-  auto_aim::YOLO yolo(short_camera_config_path,true);
+  auto_aim::YOLO yolo(short_camera_config_path,false);
   auto_aim::Solver short_camera_solver(short_camera_config_path);
   auto_aim::Solver long_camera_solver(long_camera_config_path);
   auto_aim::Tracker short_camera_tracker(short_camera_config_path, &short_camera_solver);
@@ -373,6 +373,7 @@ int main(int argc, char * argv[])
       }
     }
 
+    
     const auto ypr = tools::eulers(q, 2, 1, 0);
     const float yaw_deg = ypr[0] * 180.0 / M_PI;
     const float pitch_deg = ypr[1] * 180.0 / M_PI;
@@ -450,11 +451,11 @@ int main(int argc, char * argv[])
     }
     
 
-    // cv::resize(img, img, {}, 0.5, 0.5);
-    // cv::imshow("reprojection", img);
-    // const auto key = cv::waitKey(1);
-    // if (key == 'q') break;
-    // if (key == 'c') binocular_aim.Switch(frame_tracker, true, false);
+    cv::resize(img, img, {}, 0.5, 0.5);
+    cv::imshow("reprojection", img);
+    const auto key = cv::waitKey(1);
+    if (key == 'q') break;
+    if (key == 'c') binocular_aim.Switch(frame_tracker, true, false);
   }
 
   if (fft_thread.joinable()) fft_thread.join();

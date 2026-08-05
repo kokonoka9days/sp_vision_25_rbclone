@@ -76,6 +76,8 @@ add_executable(omni_perception src/omni_perception.cpp)
 add_executable(hero  src/hero.cpp)
 add_executable(rb_auto_aim_debug_async src/rb_auto_aim_debug_async.cpp)
 add_executable(rb_binocular_aim_debug_async src/rb_binocular_aim_debug_async.cpp)
+add_executable(rb_auto_aim_debug_fft  src/rb_auto_aim_debug_fft.cpp)
+
 
 target_link_libraries(rb_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(sb_omn_aim_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io omniperception)
@@ -84,6 +86,7 @@ target_link_libraries(rb_binocular_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp au
 target_link_libraries(hero ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(rb_auto_aim_debug_async ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
 target_link_libraries(rb_binocular_aim_debug_async ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
+target_link_libraries(rb_auto_aim_debug_fft ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 endif()
 
 if(OPENVINO_MAKE OR TENSOR_RT_MAKE)

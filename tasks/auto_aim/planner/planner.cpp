@@ -16,6 +16,7 @@ Planner::Planner(const std::string & config_path)
   yaw_offset_ = tools::read<double>(yaml, "yaw_offset") / 57.3;
   pitch_offset_ = tools::read<double>(yaml, "pitch_offset") / 57.3;
   far_pitch_offset_ = tools::read<double>(yaml, "far_pitch_offset") / 57.3;
+  far_high_pitch_offset_ = tools::read<double>(yaml, "far_high_pitch_offset") / 57.3;
   target_dist_error_ = tools::read<double>(yaml, "target_dist_error");
   target_h_error_ = tools::read<double>(yaml, "target_h_error");
   fire_thresh_ = tools::read<double>(yaml, "fire_thresh");
@@ -387,9 +388,10 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, target_h);
   
   target.predict(bullet_traj.fly_time);
-  is_far = min_dist > 6.0;
+  is_far = min_dist > 5.0;
+  is_high = target_h > 1.3;
 
-  // tools::logger()->info("h:{}, xy_d:{}, xyz_d:{}, fly_time:{}, ", target_h, min_dist, xyz.norm(), bullet_traj.fly_time);
+  tools::logger()->info("h:{}, xy_d:{}, xyz_d:{}, fly_time:{}, ", target_h, min_dist, xyz.norm(), bullet_traj.fly_time);
 
   // 2. Get trajectory
   double yaw0;
@@ -398,7 +400,7 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
   try {
     yaw_pitch = aim(target, bullet_speed);
     yaw0 = yaw_pitch(0);
-    traj = get_trajectory(target, yaw0, bullet_speed);
+    traj = rbget_trajectory(target, yaw0, bullet_speed);
   } catch (const std::exception & e) {
     tools::logger()->warn("Unsolvable target {:.2f}", bullet_speed);
     return {false};
@@ -748,9 +750,19 @@ Eigen::Matrix<double, 2, 1> Planner::rbaim(const Target & target, double bullet_
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
   if (bullet_traj.unsolvable) throw std::runtime_error("Unsolvable bullet trajectory!");
 
-  // auto now_pitch_offset = is_far ? far_pitch_offset_ : pitch_offset_;
+  double now_pitch_offset = 0;
+  if(is_far & is_high) {now_pitch_offset = far_high_pitch_offset_;
+    // tools::logger()->info("far_high_pitch_offset_");
+  }
+  else if(is_far) {
+    now_pitch_offset = far_pitch_offset_;
+    // tools::logger()->info("far_pitch_offset_");
+  }
+  else {now_pitch_offset = pitch_offset_; 
+    // tools::logger()->info("pitch_offset_");
+  }
 
-  return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + pitch_offset_};
+  return {tools::limit_rad(azim + yaw_offset_), bullet_traj.pitch + now_pitch_offset};
 
 
 }

@@ -61,14 +61,15 @@ outpost_max_temp_lost_count: 75
 
 #####-----aimer参数-----##### 12mm
 yaw_offset: 1.2 # degree 
-pitch_offset: 2.1 # degree 2
+pitch_offset: 1.2 # degree 2
 comming_angle: 60 # degree
 leaving_angle: 20 # degree
 decision_speed: 8 # rad/
 
-high_speed_delay_time: 0.017 # s   远 0.25
-low_speed_delay_time: 0.017 # s    远 0.25
-far_pitch_offset: 1.6
+high_speed_delay_time: 0.012 # s   远 0.25
+low_speed_delay_time: 0.012 # s    远 0.25
+far_pitch_offset: 0.9
+far_high_pitch_offset: 1.6
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree
@@ -76,26 +77,6 @@ second_tolerance: 2 # 远距离射击容差，degree
 judge_distance: 2 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
-#12mm camera
-# camera_name: "hikrobot"
-# camera_sn: "DA7188471"
-# exposure_us: 6000
-# gain: 0.7
-# gamma: 0.5  
-# vid_pid: "2ba2:4d55"
-# flip: true
-# mirror: true
-# timestamp_offset_us: 1000 #us
-
-#6mm camera
-# camera_name: "hikrobot"
-# camera_sn: "DA7188471"
-# exposure_us: 9000
-# gain: 0.5
-# vid_pid: "2bdf:0001"
-# flip: true
-# mirror: true
-# timestamp_offset_us: 2000
 
 camera_name: "daheng"
 camera_sn: "FDN24040487"
@@ -108,6 +89,18 @@ vid_pid: "2ba2:4d55"
 flip: true
 mirror: true
 timestamp_offset_us: 2000
+
+# camera_name: "daheng"
+# camera_sn: "FDN24040487"
+# exposure_us: 3000
+# gain: 1
+# gamma: 0.7
+# # img_gamma: 0.6
+# img_gamma: 1
+# vid_pid: "2ba2:4d55"
+# flip: true
+# mirror: true
+# timestamp_offset_us: 2000
 
 # -1  0  0
 #  0 -1  0
@@ -152,14 +145,14 @@ com_port: "/dev/ttyACM1"
 
 #####-----planner-----#####
 target_dist_error: 0.0
-target_h_error: 0.4
+target_h_error: 0.75
 fire_thresh: 0.003 # 
-small_armor_tolerance: 0.12
+small_armor_tolerance: 0.15
 big_armor_tolerance: 0.22
 tower_and_base_armor_tolerance_: 0.10  # 26赛季前哨站和基地装甲板检测宽度
 gimbal_control_delay: 0.0 
 tower_pitch_prediction_time: 0.3
-gimbal_delay: 0.001
+gimbal_delay: 0.000
 shoot_offset: 2
 max_yaw_acc: 50
 Q_yaw: [9e6, 0]

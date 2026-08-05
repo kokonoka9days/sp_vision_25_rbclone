@@ -59,6 +59,7 @@ public:
 
     auto future = std::chrono::steady_clock::now() + std::chrono::microseconds(int(delay_time * 1e6));
     is_far = false;
+    is_high = false;
     
     target->predict(future);
 
@@ -83,9 +84,11 @@ public:
   Plan rbHeroplan(Target target, double bullet_speed, double gimbal_yaw); 
 private:
   bool is_far = false;
+  bool is_high = false;
   double yaw_offset_;
   double pitch_offset_;
   double far_pitch_offset_;
+  double far_high_pitch_offset_;
   double fire_thresh_;
   double target_dist_error_, target_h_error_;
   double low_speed_delay_time_, high_speed_delay_time_, decision_speed_;
