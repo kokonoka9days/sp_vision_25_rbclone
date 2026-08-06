@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.16.3)
 
+set(CMAKE_BUILD_TYPE Release)
+
 project(sp_vision)
 
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # 设置用户本地库路径(jetson 专属)
@@ -61,11 +62,13 @@ add_executable(sb_omn_aim_mpc src/sb_omn_aim_mpc.cpp)
 add_executable(hero  src/hero.cpp)
 add_executable(rb_auto_standard_debug  src/rb_auto_standard_debug.cpp)
 add_executable(rb_auto_standard  src/rb_auto_standard.cpp)
+add_executable(rb_auto_buff src/rb_auto_buff.cpp)
 
 target_link_libraries(rb_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(sb_omn_aim_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io omniperception)
 target_link_libraries(rb_binocular_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(hero ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
+target_link_libraries(rb_auto_buff ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 endif()
 # rv
 add_executable(rb_rv_aim_debug src/rb_rv_aim_debug.cpp)

@@ -1,12 +1,12 @@
 #include <fmt/core.h>
 
 #include <chrono>
+#include <cmath>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
 
 #include "tasks/auto_buff/buff_aimer.hpp"
-#include "tasks/auto_buff/buff_detector.hpp"
 #include "tasks/auto_buff/buff_solver.hpp"
 #include "tasks/auto_buff/buff_target.hpp"
 #include "tasks/auto_buff/buff_type.hpp"
@@ -19,10 +19,10 @@
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明 }"
-  "{config-path c  | ../configs/demo.yaml    | yaml配置文件的路径}"
+  "{config-path c  | ../configs/xiaohei.yaml | 包含相机标定和打符参数的yaml配置文件路径}"
   "{start-index s  | 0                      | 视频起始帧下标    }"
   "{end-index e    | 0                      | 视频结束帧下标    }"
-  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/assets/buff/small_buff  | avi和txt文件的路径}";
+  "{@input-path    |    /home/cyn/Desktop/sp_vision_25_rbclone/yolo_buff/123/2026-05-12_20-46-14  | avi和txt文件的路径}";
 
 int main(int argc, char * argv[])
 {
@@ -44,25 +44,32 @@ int main(int argc, char * argv[])
   auto text_path = fmt::format("{}.txt", input_path);
   cv::VideoCapture video(video_path);
   std::ifstream text(text_path);
+  if (!video.isOpened()) {
+    tools::logger()->error("无法打开打符录像: {}", video_path);
+    return 1;
+  }
+  bool use_pose_log = text.is_open();
+  const double video_fps = std::max(video.get(cv::CAP_PROP_FPS), 1.0);
+  if (!use_pose_log) {
+    tools::logger()->warn(
+      "未找到位姿文件 {}，使用视频帧时间和单位四元数；检测与预测框仍可正常调试", text_path);
+  }
 
-  auto_buff::Buff_Detector detector(config_path);
   auto_buff::Rm_Buff_Detector rm_detector(config_path);
   rm_detector.set_debug_draw(true);
   auto_buff::Solver solver(config_path);
   auto_buff::SmallTarget target;
-  // auto_buff::BigTarget target;
   auto_buff::Aimer aimer(config_path);
 
   cv::Mat img, drawing;
   auto t0 = std::chrono::steady_clock::now();
 
   io::Command last_command;
-  double last_t = -1;
 
   video.set(cv::CAP_PROP_POS_FRAMES, start_index);
-  for (int i = 0; i < start_index; i++) {
+  for (int i = 0; use_pose_log && i < start_index; i++) {
     double t, w, x, y, z;
-    text >> t >> w >> x >> y >> z;
+    if (!(text >> t >> w >> x >> y >> z)) use_pose_log = false;
   }
 
   for (int frame_count = start_index; !exiter.exit(); frame_count++) {
@@ -71,15 +78,30 @@ int main(int argc, char * argv[])
     video.read(img);
     if (img.empty()) break;
 
-    double t, w, x, y, z;
-    text >> t >> w >> x >> y >> z;
-    auto timestamp = t0 + std::chrono::microseconds(int(t * 1e6));
+    double frame_time = 0.0;
+    double w = 1.0;
+    double x = 0.0;
+    double y = 0.0;
+    double z = 0.0;
+    if (use_pose_log) {
+      if (!(text >> frame_time >> w >> x >> y >> z) || !std::isfinite(frame_time)) {
+        tools::logger()->warn("位姿文件在第 {} 帧无有效数据，后续改用视频帧时间", frame_count);
+        use_pose_log = false;
+        w = 1.0;
+        x = y = z = 0.0;
+      }
+    }
+    if (!use_pose_log) {
+      frame_time = static_cast<double>(frame_count) / video_fps;
+    }
+    auto timestamp = t0 + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                            std::chrono::duration<double>(frame_time));
 
     /// 自瞄核心逻辑
 
     solver.set_R_gimbal2world({w, x, y, z});
 
-    auto power_runes = rm_detector.detect(img);
+    auto power_runes = rm_detector.detect(img, timestamp);
 
     // ===== 诊断 1: 检测是否产出 PowerRune =====
 if (!power_runes.has_value()) {
@@ -104,10 +126,6 @@ target.get_target(power_runes, timestamp);
 
 // ===== 诊断 3: EKF 是否收敛 =====
 fmt::print("[TARGET] is_unsolve={}\n", target.is_unsolve());
-
-    solver.solve(power_runes);
-
-    target.get_target(power_runes, timestamp);
 
     auto target_copy = target;
 
@@ -172,13 +190,6 @@ fmt::print("[TARGET] is_unsolve={}\n", target.is_unsolve());
 
       data["angle"] = x[5] * 57.3;
       data["spd"] = x[6] * 57.3;
-      if (x.size() >= 10) {
-        data["spd"] = x[6];
-        data["a"] = x[7];
-        data["w"] = x[8];
-        data["fi"] = x[9];
-        data["spd0"] = target.spd;
-      }
     }
 
     // 云台响应情况

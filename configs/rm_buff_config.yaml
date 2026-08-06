@@ -1,8 +1,30 @@
 # Rm_Buff_Detector 配置文件
 # 基于 rm_vision_core 经典 CV 特征识别的神符检测器参数
+# 仅供单独调试检测器参数；完整打符程序还需要车辆配置中的相机标定、云台变换和瞄准参数。
 
-# 目标颜色: 0 = 红色 (RED), 1 = 蓝色 (BLUE)
-color: 0
+# 与主程序配置一致；auto 时由电控上报的敌方颜色动态切换
+enemy_color: "auto"
 
-# 二值化阈值 (0~255)，用于提取目标颜色通道
+# 二值化阈值初始值 (0~255)，用于提取目标颜色通道
 color_thresh: 80
+
+# 根据红蓝通道差分自动调整二值化阈值
+auto_color_thresh: true
+color_thresh_min: 35
+color_thresh_max: 140
+color_thresh_alpha: 0.2
+color_thresh_max_step: 4
+
+# Otsu 候选值的前景比例超出范围时保持当前阈值，避免无目标时漂移
+min_foreground_ratio: 0.0001
+max_foreground_ratio: 0.15
+
+# 有跟踪结果时只在神符附近统计；scale 为包围区域外扩比例
+auto_thresh_use_roi: true
+auto_thresh_roi_scale: 1.35
+auto_thresh_roi_min_size: 240
+
+# 绿色预测框：前视时间、角速度平滑系数、异常角速度上限 (rad/s)
+prediction_box_time: 0.08
+prediction_velocity_alpha: 0.25
+prediction_max_angular_speed: 3.0

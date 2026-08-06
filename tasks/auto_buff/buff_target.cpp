@@ -79,14 +79,6 @@ void SmallTarget::get_target(
   // kalman update
   unsolvable_ = false;
   update(time_gap, p.value());
-
-  // 处理发散
-  if (std::abs(ekf_.x[6]) > SMALL_W + CV_PI / 18 || std::abs(ekf_.x[6]) < SMALL_W - CV_PI / 18) {
-    unsolvable_ = true;
-    tools::logger()->debug("[Target] 小符角度发散spd: {:.2f}", ekf_.x[6] * 180 / CV_PI);
-    first_in_ = true;
-    return;
-  }
 }
 
 void SmallTarget::predict(double dt)
@@ -295,6 +287,9 @@ void SmallTarget::update(double nowtime, const PowerRune & p)
 
   ekf_.update(z2, H2, R2, h2, z_subtract2);
 
+  // 小符速度幅值由规则确定，观测只用于判断旋转方向。
+  ekf_.x[6] = SMALL_W * voter.clockwise();
+
   // 更新lasttime
   lasttime_ = nowtime;
   return;
@@ -354,6 +349,7 @@ Eigen::MatrixXd SmallTarget::h_jacobian() const
 
 /// BigTarget
 
+#if 0  // 当前版本只保留小符自瞄，大符状态模型停用。
 BigTarget::BigTarget() : Target(), spd_fitter_(100, 0.5, 1.884, 2.000) {}
 
 void BigTarget::get_target(
@@ -710,4 +706,5 @@ Eigen::MatrixXd BigTarget::h_jacobian() const
   //   return B_ypd;
   // };
 }
+#endif
 }  // namespace auto_buff

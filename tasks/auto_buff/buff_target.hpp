@@ -13,7 +13,6 @@
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
-#include "tools/ransac_sine_fitter.hpp"
 
 namespace auto_buff
 {
@@ -91,6 +90,7 @@ private:
 
 /// BigTarget子类
 
+#if 0  // 当前版本只保留小符自瞄，大符状态模型停用。
 class BigTarget : public Target
 {
 public:
@@ -112,6 +112,7 @@ private:
 
   double fit_spd_;
 };
+#endif
 
 }  // namespace auto_buff
 #endif

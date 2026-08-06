@@ -22,7 +22,7 @@
 
 // 打符相关头文件
 #include "tasks/auto_buff/buff_aimer.hpp"
-#include "tasks/auto_buff/buff_detector.hpp"
+#include "tasks/auto_buff/rm_buff_detector.hpp"
 #include "tasks/auto_buff/buff_solver.hpp"
 #include "tasks/auto_buff/buff_target.hpp"
 #include "tasks/auto_buff/buff_type.hpp"
@@ -59,10 +59,9 @@ int main(int argc, char * argv[])
   auto_aim::Planner planner(config_path);
 
   // 打符相关对象初始化
-  auto_buff::Buff_Detector buff_detector(config_path);
+  auto_buff::Rm_Buff_Detector buff_detector(config_path);
   auto_buff::Solver buff_solver(config_path);
   auto_buff::SmallTarget buff_small_target;
-  auto_buff::BigTarget buff_big_target;
   auto_buff::Aimer buff_aimer(config_path);
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
@@ -77,7 +76,7 @@ int main(int argc, char * argv[])
 
     while (!quit) {
       // 非打符模式，全认为是自瞄
-      if (mode.load() != io::GimbalMode::SMALL_BUFF && mode.load() != io::GimbalMode::BIG_BUFF) {
+      if (mode.load() != io::GimbalMode::SMALL_BUFF) {
         auto target = target_queue.front(); 
         auto gs = gimbal.state();
 
@@ -170,31 +169,19 @@ int main(int argc, char * argv[])
     auto q = gimbal.q(t);
 
     // 如果是打符模式
-   if (mode.load() == io::GimbalMode::SMALL_BUFF || mode.load() == io::GimbalMode::BIG_BUFF) {
+   if (mode.load() == io::GimbalMode::SMALL_BUFF) {
       auto gs = gimbal.state();
       buff_solver.set_R_gimbal2world(q);
 
-      auto power_runes = buff_detector.detect_24(img);
+      buff_detector.set_enemy_color(gs.enemy_color);
+      auto power_runes = buff_detector.detect(img, t);
 
       buff_solver.solve(power_runes);
 
       auto_aim::Plan buff_plan;
-      auto_buff::Target* active_target = nullptr;
-      std::unique_ptr<auto_buff::Target> target_copy_ptr = nullptr;
-
-      if (mode.load() == io::GimbalMode::SMALL_BUFF) {
-        buff_small_target.get_target(power_runes, t);
-        active_target = &buff_small_target;
-        auto target_copy = buff_small_target;
-        buff_plan = buff_aimer.mpc_aim(target_copy, t, gs, true);
-        target_copy_ptr = std::make_unique<auto_buff::SmallTarget>(target_copy);
-      } else if (mode.load() == io::GimbalMode::BIG_BUFF) {
-        buff_big_target.get_target(power_runes, t);
-        active_target = &buff_big_target;
-        auto target_copy = buff_big_target;
-        buff_plan = buff_aimer.mpc_aim(target_copy, t, gs, true);
-        target_copy_ptr = std::make_unique<auto_buff::BigTarget>(target_copy);
-      }
+      buff_small_target.get_target(power_runes, t);
+      auto target_copy = buff_small_target;
+      buff_plan = buff_aimer.mpc_aim(target_copy, t, gs, true);
       
       // 直接发送打符相关的控制指令
       gimbal.send(
@@ -230,8 +217,8 @@ int main(int argc, char * argv[])
         data["fire"] = buff_plan.fire ? 1 : 0;
         data["fired"] = fired ? 1 : 0;
 
-        if (active_target && !active_target->is_unsolve()) {
-          Eigen::VectorXd x = active_target->ekf_x();
+        if (!buff_small_target.is_unsolve()) {
+          Eigen::VectorXd x = buff_small_target.ekf_x();
           data["R_yaw"] = x[0];
           data["R_V_yaw"] = x[1];
           data["R_pitch"] = x[2];
@@ -240,13 +227,6 @@ int main(int argc, char * argv[])
 
           data["angle"] = x[5] * 57.3;
           data["spd"] = x[6] * 57.3;
-          if (x.size() >= 10) { // 大符状态量更多
-            data["spd"] = x[6];
-            data["a"] = x[7];
-            data["w"] = x[8];
-            data["fi"] = x[9];
-            data["spd0"] = active_target->spd;
-          }
         }
 
         plotter.plot(data);

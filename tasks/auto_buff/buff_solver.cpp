@@ -1,6 +1,39 @@
 #include "buff_solver.hpp"
+
+#include <stdexcept>
+
 namespace auto_buff
 {
+namespace
+{
+std::vector<double> read_vector(
+  const YAML::Node & yaml, const std::string & key, std::size_t expected_size,
+  const std::string & config_path)
+{
+  const auto node = yaml[key];
+  if (!node || !node.IsSequence()) {
+    throw std::runtime_error(
+      "打符配置 " + config_path + " 缺少数组字段 " + key +
+      "；请使用包含相机内参和手眼标定的完整车辆配置，而不是 rm_buff_config.yaml");
+  }
+
+  std::vector<double> values;
+  try {
+    values = node.as<std::vector<double>>();
+  } catch (const YAML::Exception & e) {
+    throw std::runtime_error(
+      "打符配置字段 " + key + " 无法转换为数字数组: " + std::string(e.what()));
+  }
+
+  if (values.size() != expected_size) {
+    throw std::runtime_error(
+      "打符配置字段 " + key + " 应包含 " + std::to_string(expected_size) + " 个数，实际为 " +
+      std::to_string(values.size()));
+  }
+  return values;
+}
+}  // namespace
+
 cv::Matx33f Solver::rotation_matrix(double angle) const
 {
   return cv::Matx33f(
@@ -27,15 +60,15 @@ Solver::Solver(const std::string & config_path) : R_gimbal2world_(Eigen::Matrix3
 {
   auto yaml = YAML::LoadFile(config_path);
 
-  auto R_gimbal2imubody_data = yaml["R_gimbal2imubody"].as<std::vector<double>>();
-  auto R_camera2gimbal_data = yaml["R_camera2gimbal"].as<std::vector<double>>();
-  auto t_camera2gimbal_data = yaml["t_camera2gimbal"].as<std::vector<double>>();
+  auto R_gimbal2imubody_data = read_vector(yaml, "R_gimbal2imubody", 9, config_path);
+  auto R_camera2gimbal_data = read_vector(yaml, "R_camera2gimbal", 9, config_path);
+  auto t_camera2gimbal_data = read_vector(yaml, "t_camera2gimbal", 3, config_path);
   R_gimbal2imubody_ = Eigen::Matrix<double, 3, 3, Eigen::RowMajor>(R_gimbal2imubody_data.data());
   R_camera2gimbal_ = Eigen::Matrix<double, 3, 3, Eigen::RowMajor>(R_camera2gimbal_data.data());
   t_camera2gimbal_ = Eigen::Matrix<double, 3, 1>(t_camera2gimbal_data.data());
 
-  auto camera_matrix_data = yaml["camera_matrix"].as<std::vector<double>>();
-  auto distort_coeffs_data = yaml["distort_coeffs"].as<std::vector<double>>();
+  auto camera_matrix_data = read_vector(yaml, "camera_matrix", 9, config_path);
+  auto distort_coeffs_data = read_vector(yaml, "distort_coeffs", 5, config_path);
   Eigen::Matrix<double, 3, 3, Eigen::RowMajor> camera_matrix(camera_matrix_data.data());
   Eigen::Matrix<double, 1, 5> distort_coeffs(distort_coeffs_data.data());
   cv::eigen2cv(camera_matrix, camera_matrix_);

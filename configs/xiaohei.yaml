@@ -1,5 +1,5 @@
 # enemy_color: "red"
-enemy_color: "auto"
+enemy_color: "red"
 
 #####-----神经网络参数-----#####
 yolo_name: yolov8
@@ -128,6 +128,24 @@ Q_pitch: [9e6,0]
 R_pitch: [1]
 
 #####-----buff_detector参数-----#####
+# rm_buff_detector 红蓝通道差分阈值
+color_thresh: 140
+auto_color_thresh: true
+color_thresh_min: 35
+color_thresh_max: 140
+color_thresh_alpha: 0.2
+color_thresh_max_step: 4
+min_foreground_ratio: 0.0001
+max_foreground_ratio: 0.15
+auto_thresh_use_roi: true
+auto_thresh_roi_scale: 1.35
+auto_thresh_roi_min_size: 240
+
+# 绿色预测框参数
+prediction_box_time: 0.08
+prediction_velocity_alpha: 0.25
+prediction_max_angular_speed: 3.0
+
 detect:
   contrast: 1
   brightness: 

@@ -3,6 +3,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <algorithm>
+#include <cmath>
 #include <fmt/core.h>
 
 #include "tools/logger.hpp"
@@ -15,14 +16,41 @@
 
 namespace auto_buff
 {
+namespace
+{
+constexpr double SMALL_BUFF_ANGULAR_SPEED = 1.0471975511965976;  // pi / 3 rad/s
+constexpr double MIN_DIRECTION_SPEED = 0.05;
+}  // namespace
 
 struct Rm_Buff_Detector::Impl
 {
   std::unique_ptr<RuneDetector> detector;
   std::vector<FeatureNode_ptr> groups;
   int64_t tick = 0;
-  PixChannel color = PixChannel::RED;
+  PixChannel color = PixChannel::BLUE;
+  bool auto_enemy_color = false;
   int color_thresh = 80;
+  bool auto_color_thresh = true;
+  int color_thresh_min = 35;
+  int color_thresh_max = 140;
+  int color_thresh_max_step = 4;
+  double color_thresh_alpha = 0.2;
+  double min_foreground_ratio = 0.0001;
+  double max_foreground_ratio = 0.15;
+  bool auto_thresh_use_roi = true;
+  double auto_thresh_roi_scale = 1.35;
+  int auto_thresh_roi_min_size = 240;
+  cv::Rect last_threshold_roi;
+  bool threshold_roi_from_tracking = false;
+  double prediction_box_time = 0.08;
+  double prediction_velocity_alpha = 0.25;
+  double prediction_max_angular_speed = 3.0;
+  std::chrono::steady_clock::time_point frame_timestamp = std::chrono::steady_clock::now();
+  std::chrono::steady_clock::time_point last_target_timestamp;
+  std::optional<double> last_target_angle;
+  double filtered_measured_angular_velocity = 0.0;
+  double predicted_angular_velocity = 0.0;
+  bool prediction_velocity_ready = false;
   std::optional<PowerRune> last_powerrune;
   bool debug_draw = false;
 
@@ -36,19 +64,180 @@ struct Rm_Buff_Detector::Impl
   {
     try {
       YAML::Node cfg = YAML::LoadFile(config_path);
-      if (cfg["color"]) {
+      if (cfg["enemy_color"]) {
+        const auto enemy_color = cfg["enemy_color"].as<std::string>();
+        if (enemy_color == "auto") {
+          auto_enemy_color = true;
+        } else if (enemy_color == "red") {
+          color = PixChannel::RED;
+        } else if (enemy_color == "blue") {
+          color = PixChannel::BLUE;
+        } else {
+          tools::logger()->warn(
+            "[Rm_Buff_Detector] 未知 enemy_color={}，默认使用蓝色", enemy_color);
+        }
+      } else if (cfg["color"]) {
+        // 兼容旧版 rm_buff_config.yaml: 0 = 红色，1 = 蓝色。
         int c = cfg["color"].as<int>();
         color = (c == 1) ? PixChannel::BLUE : PixChannel::RED;
       }
       if (cfg["color_thresh"]) {
         color_thresh = cfg["color_thresh"].as<int>();
       }
+      if (cfg["auto_color_thresh"]) {
+        auto_color_thresh = cfg["auto_color_thresh"].as<bool>();
+      }
+      if (cfg["color_thresh_min"]) {
+        color_thresh_min = cfg["color_thresh_min"].as<int>();
+      }
+      if (cfg["color_thresh_max"]) {
+        color_thresh_max = cfg["color_thresh_max"].as<int>();
+      }
+      if (cfg["color_thresh_max_step"]) {
+        color_thresh_max_step = cfg["color_thresh_max_step"].as<int>();
+      }
+      if (cfg["color_thresh_alpha"]) {
+        color_thresh_alpha = cfg["color_thresh_alpha"].as<double>();
+      }
+      if (cfg["min_foreground_ratio"]) {
+        min_foreground_ratio = cfg["min_foreground_ratio"].as<double>();
+      }
+      if (cfg["max_foreground_ratio"]) {
+        max_foreground_ratio = cfg["max_foreground_ratio"].as<double>();
+      }
+      if (cfg["auto_thresh_use_roi"]) {
+        auto_thresh_use_roi = cfg["auto_thresh_use_roi"].as<bool>();
+      }
+      if (cfg["auto_thresh_roi_scale"]) {
+        auto_thresh_roi_scale = cfg["auto_thresh_roi_scale"].as<double>();
+      }
+      if (cfg["auto_thresh_roi_min_size"]) {
+        auto_thresh_roi_min_size = cfg["auto_thresh_roi_min_size"].as<int>();
+      }
+      if (cfg["prediction_box_time"]) {
+        prediction_box_time = cfg["prediction_box_time"].as<double>();
+      }
+      if (cfg["prediction_velocity_alpha"]) {
+        prediction_velocity_alpha = cfg["prediction_velocity_alpha"].as<double>();
+      }
+      if (cfg["prediction_max_angular_speed"]) {
+        prediction_max_angular_speed = cfg["prediction_max_angular_speed"].as<double>();
+      }
+
+      color_thresh_min = std::clamp(color_thresh_min, 0, 255);
+      color_thresh_max = std::clamp(color_thresh_max, color_thresh_min, 255);
+      color_thresh = std::clamp(color_thresh, color_thresh_min, color_thresh_max);
+      color_thresh_max_step = std::max(color_thresh_max_step, 1);
+      color_thresh_alpha = std::clamp(color_thresh_alpha, 0.0, 1.0);
+      min_foreground_ratio = std::clamp(min_foreground_ratio, 0.0, 1.0);
+      max_foreground_ratio =
+        std::clamp(max_foreground_ratio, min_foreground_ratio, 1.0);
+      auto_thresh_roi_scale = std::max(auto_thresh_roi_scale, 1.0);
+      auto_thresh_roi_min_size = std::max(auto_thresh_roi_min_size, 32);
+      prediction_box_time = std::clamp(prediction_box_time, 0.0, 0.5);
+      prediction_velocity_alpha = std::clamp(prediction_velocity_alpha, 0.0, 1.0);
+      prediction_max_angular_speed = std::max(prediction_max_angular_speed, 0.1);
+
       tools::logger()->info(
-        "[Rm_Buff_Detector] 配置加载完成 color={} thresh={}",
-        static_cast<int>(color), color_thresh);
+        "[Rm_Buff_Detector] 配置加载完成 color={} auto_enemy_color={} thresh={} auto_thresh={}",
+        static_cast<int>(color), auto_enemy_color, color_thresh, auto_color_thresh);
     } catch (const std::exception & e) {
       tools::logger()->warn(
         "[Rm_Buff_Detector] 配置加载失败: {}, 使用默认参数", e.what());
+    }
+  }
+
+  std::optional<cv::Rect> getThresholdRoi(const cv::Mat & img) const
+  {
+    if (!auto_thresh_use_roi || groups.empty()) return std::nullopt;
+
+    auto rune_group = RuneGroup::cast(groups.front());
+    if (!rune_group) return std::nullopt;
+
+    std::vector<cv::Point2f> points;
+    for (const auto & tracker : rune_group->getTrackers()) {
+      auto tracking = TrackingFeatureNode::cast(tracker);
+      if (!tracking || tracking->getHistoryNodes().empty()) continue;
+
+      auto combo = RuneCombo::cast(tracking->getHistoryNodes().front());
+      if (!combo) continue;
+
+      const auto & cache = combo->imageCache();
+      points.push_back(cache.getCenter());
+      const auto corners = cache.getCorners();
+      points.insert(points.end(), corners.begin(), corners.end());
+    }
+    if (points.empty()) return std::nullopt;
+
+    const cv::Rect2f bounds = cv::boundingRect(points);
+    const cv::Point2f center(
+      bounds.x + bounds.width * 0.5f, bounds.y + bounds.height * 0.5f);
+    const double side = std::max(
+      static_cast<double>(auto_thresh_roi_min_size),
+      std::max(bounds.width, bounds.height) * auto_thresh_roi_scale);
+
+    cv::Rect roi(
+      static_cast<int>(std::floor(center.x - side * 0.5)),
+      static_cast<int>(std::floor(center.y - side * 0.5)),
+      static_cast<int>(std::ceil(side)), static_cast<int>(std::ceil(side)));
+    roi &= cv::Rect(0, 0, img.cols, img.rows);
+    if (roi.width < 32 || roi.height < 32) return std::nullopt;
+    return roi;
+  }
+
+  void updateColorThreshold(const cv::Mat & img)
+  {
+    if (!auto_color_thresh || img.empty() || img.type() != CV_8UC3) return;
+
+    const auto tracked_roi = getThresholdRoi(img);
+    last_threshold_roi = tracked_roi.value_or(cv::Rect(0, 0, img.cols, img.rows));
+    threshold_roi_from_tracking = tracked_roi.has_value();
+    const cv::Mat threshold_image = img(last_threshold_roi);
+
+    cv::Mat target_channel;
+    cv::Mat opposite_channel;
+    cv::extractChannel(threshold_image, target_channel, static_cast<int>(color));
+    cv::extractChannel(
+      threshold_image, opposite_channel,
+      static_cast<int>(color == PixChannel::RED ? PixChannel::BLUE : PixChannel::RED));
+
+    cv::Mat color_difference;
+    cv::subtract(target_channel, opposite_channel, color_difference);
+
+    cv::Mat sampled_difference;
+    constexpr int SAMPLE_WIDTH = 480;
+    if (color_difference.cols > SAMPLE_WIDTH) {
+      const double scale = static_cast<double>(SAMPLE_WIDTH) / color_difference.cols;
+      cv::resize(
+        color_difference, sampled_difference, cv::Size(), scale, scale, cv::INTER_AREA);
+    } else {
+      sampled_difference = color_difference;
+    }
+
+    cv::Mat otsu_binary;
+    const int otsu_thresh = static_cast<int>(std::lround(cv::threshold(
+      sampled_difference, otsu_binary, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU)));
+    const int candidate = std::clamp(otsu_thresh, color_thresh_min, color_thresh_max);
+
+    cv::Mat candidate_binary;
+    cv::compare(sampled_difference, candidate, candidate_binary, cv::CMP_GT);
+    const double foreground_ratio =
+      static_cast<double>(cv::countNonZero(candidate_binary)) / candidate_binary.total();
+    if (foreground_ratio < min_foreground_ratio || foreground_ratio > max_foreground_ratio) {
+      return;
+    }
+
+    const int smoothed = static_cast<int>(
+      std::lround((1.0 - color_thresh_alpha) * color_thresh + color_thresh_alpha * candidate));
+    const int delta = std::clamp(
+      smoothed - color_thresh, -color_thresh_max_step, color_thresh_max_step);
+    color_thresh = std::clamp(color_thresh + delta, color_thresh_min, color_thresh_max);
+
+    if (tick % 60 == 0) {
+      tools::logger()->debug(
+        "[Rm_Buff_Detector] 自动阈值={} otsu={} foreground={:.4f} roi={}x{} tracked={}",
+        color_thresh, otsu_thresh, foreground_ratio, last_threshold_roi.width,
+        last_threshold_roi.height, threshold_roi_from_tracking);
     }
   }
 
@@ -210,6 +399,77 @@ struct Rm_Buff_Detector::Impl
       if (fd.target_corners.size() >= 4) sortCorners(fd.target_corners, r_center);
     }
 
+    std::vector<cv::Point2f> predicted_target_corners;
+    cv::Point2f predicted_target_center;
+    double prediction_forward_time = 0.0;
+    auto target_it = std::find_if(
+      fan_data_list.begin(), fan_data_list.end(),
+      [](const FanData & fd) { return fd.type == RuneType::PENDING_STRUCK; });
+    const bool prediction_target_found = target_it != fan_data_list.end();
+    if (target_it != fan_data_list.end()) {
+      const auto target_vector = target_it->target_center - r_center;
+      const double target_angle = std::atan2(target_vector.y, target_vector.x);
+
+      if (last_target_angle.has_value()) {
+        const double dt = std::chrono::duration<double>(
+          frame_timestamp - last_target_timestamp).count();
+        const double angle_delta = std::atan2(
+          std::sin(target_angle - last_target_angle.value()),
+          std::cos(target_angle - last_target_angle.value()));
+        if (dt > 1e-4 && dt < 0.25) {
+          const double measured_velocity = angle_delta / dt;
+          if (std::abs(measured_velocity) <= prediction_max_angular_speed) {
+            if (!prediction_velocity_ready) {
+              filtered_measured_angular_velocity = measured_velocity;
+              if (std::abs(filtered_measured_angular_velocity) >= MIN_DIRECTION_SPEED) {
+                predicted_angular_velocity = std::copysign(
+                  SMALL_BUFF_ANGULAR_SPEED, filtered_measured_angular_velocity);
+                prediction_velocity_ready = true;
+                tools::logger()->info(
+                  "[Rm_Buff_Detector] 小符预测框已启用 direction={} speed={:.3f}rad/s "
+                  "measured={:.3f}rad/s",
+                  predicted_angular_velocity > 0.0 ? "CW" : "CCW",
+                  std::abs(predicted_angular_velocity), measured_velocity);
+              }
+            } else {
+              filtered_measured_angular_velocity =
+                (1.0 - prediction_velocity_alpha) * filtered_measured_angular_velocity +
+                prediction_velocity_alpha * measured_velocity;
+              if (std::abs(filtered_measured_angular_velocity) >= MIN_DIRECTION_SPEED) {
+                predicted_angular_velocity = std::copysign(
+                  SMALL_BUFF_ANGULAR_SPEED, filtered_measured_angular_velocity);
+              }
+            }
+          }
+        }
+      }
+      last_target_angle = target_angle;
+      last_target_timestamp = frame_timestamp;
+
+      if (prediction_velocity_ready) {
+        const double processing_delay = std::clamp(
+          std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - frame_timestamp).count(),
+          0.0, 0.2);
+        prediction_forward_time = prediction_box_time + processing_delay;
+        const double prediction_angle = predicted_angular_velocity * prediction_forward_time;
+        const double cos_angle = std::cos(prediction_angle);
+        const double sin_angle = std::sin(prediction_angle);
+        auto rotate_point = [&](const cv::Point2f & point) {
+          const auto offset = point - r_center;
+          return r_center + cv::Point2f(
+            static_cast<float>(offset.x * cos_angle - offset.y * sin_angle),
+            static_cast<float>(offset.x * sin_angle + offset.y * cos_angle));
+        };
+
+        predicted_target_corners.reserve(target_it->target_corners.size());
+        for (const auto & point : target_it->target_corners) {
+          predicted_target_corners.push_back(rotate_point(point));
+        }
+        predicted_target_center = rotate_point(target_it->target_center);
+      }
+    }
+
     // ====== 调试绘制 (靶标菱形角点+中心+方向, 编号对应 kpt[0..5]) ======
     if (debug_draw) {
       for (auto & fd : fan_data_list) {
@@ -285,6 +545,30 @@ struct Rm_Buff_Detector::Impl
           img, "6", fd.fan_inner_mid + cv::Point2f(6, -6),
           cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(255, 0, 0), 1);
       }
+
+      if (predicted_target_corners.size() >= 4) {
+        const cv::Scalar prediction_color(0, 255, 0);
+        for (size_t i = 0; i < predicted_target_corners.size(); ++i) {
+          cv::line(
+            img, predicted_target_corners[i],
+            predicted_target_corners[(i + 1) % predicted_target_corners.size()],
+            prediction_color, 3);
+        }
+        cv::circle(img, predicted_target_center, 6, prediction_color, 3);
+        cv::putText(
+          img, fmt::format("PRED +{:.0f}ms", prediction_forward_time * 1000.0),
+          predicted_target_center + cv::Point2f(8, -8),
+          cv::FONT_HERSHEY_SIMPLEX, 0.5, prediction_color, 2);
+      }
+
+      if (threshold_roi_from_tracking && last_threshold_roi.area() > 0) {
+        const cv::Scalar roi_color(255, 255, 0);
+        cv::rectangle(img, last_threshold_roi, roi_color, 1);
+        cv::putText(
+          img, "THRESH ROI", last_threshold_roi.tl() + cv::Point(4, 18),
+          cv::FONT_HERSHEY_SIMPLEX, 0.45, roi_color, 1);
+      }
+
       // 旋转中心
       cv::drawMarker(
         img, r_center, cv::Scalar(0, 0, 255), cv::MARKER_CROSS, 20, 2);
@@ -292,8 +576,19 @@ struct Rm_Buff_Detector::Impl
         img, "R", r_center + cv::Point2f(12, -8),
         cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
       cv::putText(
-        img, "rm_vision:" + std::to_string(tick), cv::Point(10, 30),
+        img, "rm_vision:" + std::to_string(tick) + " thresh:" + std::to_string(color_thresh),
+        cv::Point(10, 30),
         cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 2);
+      const std::string prediction_status = !prediction_target_found
+                                              ? "PRED: NO TARGET"
+                                              : prediction_velocity_ready
+                                                  ? fmt::format(
+                                                      "PRED w={:.2f}rad/s",
+                                                      predicted_angular_velocity)
+                                                  : "PRED: WAIT MOTION";
+      cv::putText(
+        img, prediction_status, cv::Point(10, 58), cv::FONT_HERSHEY_SIMPLEX, 0.65,
+        prediction_velocity_ready ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 165, 255), 2);
     }
 
     // 构建 FanBlade 列表 — 使用靶标(target)角点, 确保 _target 在 fanblades[0]
@@ -358,8 +653,34 @@ void Rm_Buff_Detector::set_debug_draw(bool enable) { impl_->debug_draw = enable;
 
 bool Rm_Buff_Detector::is_debug_draw() const { return impl_->debug_draw; }
 
+void Rm_Buff_Detector::set_enemy_color(uint8_t enemy_color)
+{
+  if (!impl_->auto_enemy_color) return;
+
+  const auto color = enemy_color == 0 ? PixChannel::BLUE : PixChannel::RED;
+  if (color == impl_->color) return;
+
+  impl_->color = color;
+  impl_->groups.clear();
+  impl_->last_powerrune.reset();
+  impl_->last_target_angle.reset();
+  impl_->filtered_measured_angular_velocity = 0.0;
+  impl_->prediction_velocity_ready = false;
+  tools::logger()->info(
+    "[Rm_Buff_Detector] 自动切换敌方颜色为{}", enemy_color == 0 ? "蓝色" : "红色");
+}
+
 std::optional<PowerRune> Rm_Buff_Detector::detect(cv::Mat & img)
 {
+  return detect(img, std::chrono::steady_clock::now());
+}
+
+std::optional<PowerRune> Rm_Buff_Detector::detect(
+  cv::Mat & img, std::chrono::steady_clock::time_point timestamp)
+{
+  impl_->frame_timestamp = timestamp;
+  impl_->updateColorThreshold(img);
+
   DetectorInput input;
   input.setImage(img);
   input.setTick(impl_->tick++);

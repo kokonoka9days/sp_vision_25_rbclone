@@ -1,6 +1,8 @@
 #ifndef AUTO_BUFF__RM_BUFF_DETECTOR_HPP
 #define AUTO_BUFF__RM_BUFF_DETECTOR_HPP
 
+#include <chrono>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -39,6 +41,17 @@ public:
    * @return 检测到的 PowerRune，失败时返回 std::nullopt
    */
   std::optional<PowerRune> detect(cv::Mat & img);
+
+  std::optional<PowerRune> detect(
+    cv::Mat & img, std::chrono::steady_clock::time_point timestamp);
+
+  /**
+   * @brief 使用电控上报的敌方颜色更新检测颜色
+   * @param enemy_color 0 = 蓝色，1 = 红色
+   *
+   * 仅当配置中的 enemy_color 为 "auto" 时生效。
+   */
+  void set_enemy_color(uint8_t enemy_color);
 
   /**
    * @brief 开启/关闭调试绘制 (在 img 上绘制识别框和关键点)

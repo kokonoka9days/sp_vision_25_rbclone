@@ -24,7 +24,7 @@
 
 // 打符相关头文件
 #include "tasks/auto_buff/buff_aimer.hpp"
-#include "tasks/auto_buff/buff_detector.hpp"
+#include "tasks/auto_buff/rm_buff_detector.hpp"
 #include "tasks/auto_buff/buff_solver.hpp"
 #include "tasks/auto_buff/buff_target.hpp"
 #include "tasks/auto_buff/buff_type.hpp"
@@ -64,10 +64,10 @@ int main(int argc, char * argv[])
   bool stopkey = false;
 
   // 打符相关对象初始化
-  auto_buff::Buff_Detector buff_detector(config_path);
+  auto_buff::Rm_Buff_Detector buff_detector(config_path);
+  buff_detector.set_debug_draw(true);
   auto_buff::Solver buff_solver(config_path);
   auto_buff::SmallTarget buff_small_target;
-  auto_buff::BigTarget buff_big_target;
   auto_buff::Aimer buff_aimer(config_path);
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
@@ -82,7 +82,7 @@ int main(int argc, char * argv[])
 
     while (!quit) {
       // 【修改】非打符模式，全认为是自瞄
-      if (mode.load() != io::GimbalMode::SMALL_BUFF && mode.load() != io::GimbalMode::BIG_BUFF) {
+      if (mode.load() != io::GimbalMode::SMALL_BUFF) {
         auto target = target_queue.front(); 
         auto gs = gimbal.state();
 
@@ -195,31 +195,19 @@ int main(int argc, char * argv[])
     // std::cout << "Roll: " << roll_deg << std::endl;
 
     // 【修改】如果是打符模式
-   if (mode.load() == io::GimbalMode::SMALL_BUFF || mode.load() == io::GimbalMode::BIG_BUFF) {
+   if (mode.load() == io::GimbalMode::SMALL_BUFF) {
       auto gs = gimbal.state();
       buff_solver.set_R_gimbal2world(q);
 
-      auto power_runes = buff_detector.detect_24(img);
+      buff_detector.set_enemy_color(gs.enemy_color);
+      auto power_runes = buff_detector.detect(img, t);
 
       buff_solver.solve(power_runes);
 
       auto_aim::Plan buff_plan;
-      auto_buff::Target* active_target = nullptr;
-      std::unique_ptr<auto_buff::Target> target_copy_ptr = nullptr;
-
-      if (mode.load() == io::GimbalMode::SMALL_BUFF) {
-        buff_small_target.get_target(power_runes, t);
-        active_target = &buff_small_target;
-        auto target_copy = buff_small_target;
-        buff_plan = buff_aimer.mpc_aim(target_copy, t, gs, true);
-        target_copy_ptr = std::make_unique<auto_buff::SmallTarget>(target_copy);
-      } else if (mode.load() == io::GimbalMode::BIG_BUFF) {
-        buff_big_target.get_target(power_runes, t);
-        active_target = &buff_big_target;
-        auto target_copy = buff_big_target;
-        buff_plan = buff_aimer.mpc_aim(target_copy, t, gs, true);
-        target_copy_ptr = std::make_unique<auto_buff::BigTarget>(target_copy);
-      }
+      buff_small_target.get_target(power_runes, t);
+      auto target_copy = buff_small_target;
+      buff_plan = buff_aimer.mpc_aim(target_copy, t, gs, true);
       
       // 直接发送打符相关的控制指令
       gimbal.send(
@@ -230,7 +218,7 @@ int main(int argc, char * argv[])
       last_bullet_count_main = gs.bullet_count;
 
       // ========================== 新增：打符图像调试重投影 ==========================
-      if (active_target && !active_target->is_unsolve() && power_runes.has_value()) {
+      if (!buff_small_target.is_unsolve() && power_runes.has_value()) {
         auto & p = power_runes.value();
 
         // 1. 显示识别的特征点和中心
@@ -238,25 +226,25 @@ int main(int argc, char * argv[])
         tools::draw_point(img, p.target().center, {0, 0, 255}, 3);
         tools::draw_point(img, p.r_center, {0, 0, 255}, 3);
 
-        // 2. 当前帧target更新后buff位置 (绿色)
-        auto Rxyz_in_world_now = active_target->point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
+        // 2. 当前帧 target 更新后的 buff 位置（白色，避免与绿色预测框混淆）
+        auto Rxyz_in_world_now = buff_small_target.point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
         auto image_points_now =
-          buff_solver.reproject_buff(Rxyz_in_world_now, active_target->ekf_x()[4], active_target->ekf_x()[5]);
+          buff_solver.reproject_buff(Rxyz_in_world_now, buff_small_target.ekf_x()[4], buff_small_target.ekf_x()[5]);
         tools::draw_points(
-          img, std::vector<cv::Point2f>(image_points_now.begin(), image_points_now.begin() + 4), {0, 255, 0});
+          img, std::vector<cv::Point2f>(image_points_now.begin(), image_points_now.begin() + 4),
+          {255, 255, 255});
         tools::draw_points(
-          img, std::vector<cv::Point2f>(image_points_now.begin() + 4, image_points_now.end()), {0, 255, 0});
+          img, std::vector<cv::Point2f>(image_points_now.begin() + 4, image_points_now.end()),
+          {255, 255, 255});
 
         // 3. buff瞄准预测位置 (红色)
-        if (target_copy_ptr) {
-          auto Rxyz_in_world_pre = active_target->point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
-          auto image_points_pre =
-            buff_solver.reproject_buff(Rxyz_in_world_pre, target_copy_ptr->ekf_x()[4], target_copy_ptr->ekf_x()[5]);
-          tools::draw_points(
-            img, std::vector<cv::Point2f>(image_points_pre.begin(), image_points_pre.begin() + 4), {255, 0, 0});
-          tools::draw_points(
-            img, std::vector<cv::Point2f>(image_points_pre.begin() + 4, image_points_pre.end()), {255, 0, 0});
-        }
+        auto Rxyz_in_world_pre = buff_small_target.point_buff2world(Eigen::Vector3d(0.0, 0.0, 0.0));
+        auto image_points_pre =
+          buff_solver.reproject_buff(Rxyz_in_world_pre, target_copy.ekf_x()[4], target_copy.ekf_x()[5]);
+        tools::draw_points(
+          img, std::vector<cv::Point2f>(image_points_pre.begin(), image_points_pre.begin() + 4), {255, 0, 0});
+        tools::draw_points(
+          img, std::vector<cv::Point2f>(image_points_pre.begin() + 4, image_points_pre.end()), {255, 0, 0});
       }
       // =========================================================================
 
@@ -287,8 +275,8 @@ int main(int argc, char * argv[])
         data["fired"] = fired ? 1 : 0;
 
         // ========================== 新增：打符内部数据上传PlotJuggler ==========================
-        if (active_target && !active_target->is_unsolve()) {
-          Eigen::VectorXd x = active_target->ekf_x();
+        if (!buff_small_target.is_unsolve()) {
+          Eigen::VectorXd x = buff_small_target.ekf_x();
           data["R_yaw"] = x[0];
           data["R_V_yaw"] = x[1];
           data["R_pitch"] = x[2];
@@ -297,13 +285,6 @@ int main(int argc, char * argv[])
 
           data["angle"] = x[5] * 57.3;
           data["spd"] = x[6] * 57.3;
-          if (x.size() >= 10) { // 大符状态量更多
-            data["spd"] = x[6];
-            data["a"] = x[7];
-            data["w"] = x[8];
-            data["fi"] = x[9];
-            data["spd0"] = active_target->spd;
-          }
         }
         // ==================================================================================
 
