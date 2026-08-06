@@ -125,6 +125,13 @@ R_pitch: [1]
 
 #####-----buff_detector参数-----#####
 model: "assets/yolo11_buff_int8.xml"
+buff_confidence_threshold: 0.7
+buff_keypoint_threshold: 0.3
+buff_rune_radius_m: 0.700
+buff_locked_gate_deg: 25
+buff_switch_gate_deg: 10
+buff_switch_confirm_frames: 3
+buff_locked_lost_max: 6
 
 #####-----buff_aimer参数-----#####
 fire_gap_time: 0.700   # s

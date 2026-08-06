@@ -117,8 +117,31 @@ sp_vision_25rbclone
 ### 小电脑环境配置依赖（部署前）
 #### x86小电脑
 - [HikRobot SDK](https://www.hikrobotics.com/cn2/source/support/software/MVS_STD_GML_V2.1.2_231116.zip)
-- [daheng SDK]()
+
+- [daheng SDK](https://www.daheng-imaging.com/)
+位置：下载中心 -> 软件下载 -> Galaxy_Linux_CN-EN_32bits/64bits
+解压tar.gz后，用终端cd到文件夹路径，运行安装脚本 ./Galaxy_camera.run
+
 - [OpenVINO](https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html)
+##### 命令行安装（对网络环境有要求）：
+- 1. 导入Intel官方GPG公钥：
+```bash
+    curl -fsSL https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | 
+    sudo  gpg --dearmor -o /usr/share/keyrings/intel-openvino-archive-keyring.gpg
+```
+- 2. 添加统一的 OpenVINO APT 源（Ubuntu 22.04 Jammy）：
+```bash
+    echo "deb [signed-by=/usr/share/keyrings/intel-openvino-archive-keyring.gpg] https://apt.repos.intel.com/openvino      ubuntu22 main" | 
+    sudo tee /etc/apt/sources.list.d/intel-openvino.list
+```
+- 3. 
+```bash
+    sudo apt update
+    sudo apt install -y openvino-2024.6.0
+    export OpenVINO_DIR=/usr/lib/cmake/openvino2024.6.0
+    export LD_LIBRARY_PATH=/usr/lib/openvino-2024.6.0:$LD_LIBRARY_PATH
+```
+
 
 - 其余：
 ```bash
@@ -146,15 +169,16 @@ to do list
 更改配置文件
 ```yaml
 camera_name: "daheng"      # 相机品牌 daheng 或者hikrobot
-camera_sn: "KE0210030295"  # 相机序列号，相机唯一标识
+camera_sn: "KE0210030295"  # 相机序列号，相机唯一标识（需要与所使用相机一致）
 exposure_us: 4000          # 相机曝光
 gain: 0.5                  # 相机增益，这里限定0~1之间
 gamma: 0.5                 # 相机gamma值，0~1之间，1代表不开伽马，越低gamma越强
+img_gamma: 0.5
 vid_pid: "2ba2:4d55"       # 相机接口所对应的vid和pid，一般同一个相机品牌vid_pid都相同，大恒是2ba2:4d55， 海康是2bdf:0001
 flip: false                # 相机画面是否倒置（翻转）
 mirror: false              # 相机画面是否镜像
 ```
-一栏后，运行test/camera_test
+一栏后，编译运行./build/camera_test
 
 ## 部署步骤
 ### 1. 编译：
@@ -178,17 +202,22 @@ make -C build/ -j`nproc`
 配置文件串口通信信息：
 ```yaml
 #####-----gimbal参数-----#####
-com_port: "/dev/ttyACM0" # 串口板文件路径
+com_port:                 # 串口板文件路径，按顺序尝试
+  - "/dev/ttyACM0"
+  - "/dev/ttyACM1"
 # 陀螺仪是否装错, 编号012分别代表电控坐标系ypr，想换旋转轴只需要对编号进行互换即可，负号就是对当前值取负，交换完再取负
 # 上车前记得对齐电控坐标系和济瞄惯性系
 gimbal_y1: 1
 gimbal_p2: -3
 gimbal_r3: -2
-# 济瞄的惯性系  z轴往上, x轴是枪管指向
-#     x  z
-#      \ |
-#       \|
+# 济瞄的惯性系  z轴往上, x轴反方向是枪管指向
+#        z
+#        |
+#        |
 # y_ _ _ 0   z:yaw   x:roll   y:pitch
+          \
+           \
+            \x
 ```
 - 若通信成功，终端会打印出电控四元数转欧拉角的信息，检查通信流畅度，保证不能存在卡顿，注意电控陀螺仪坐标要与济瞄坐标系对齐
 - 若通信不成功，检查串口助手是否接收到信息？检查帧头帧尾是否对齐？crc校验是否通过？如果确认没问题，可以换回老代码通信查看接收输出，如果也没数据，大概率是板子有问题或者电控有问题
