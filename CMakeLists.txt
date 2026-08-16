@@ -167,6 +167,13 @@ add_executable(roi_test tests/roi_test.cpp)
 target_link_libraries(roi_test ${OpenCV_LIBS})
 add_test(NAME roi_test COMMAND roi_test)
 
+add_executable(
+    camera_image_processing_test
+    tests/camera_image_processing_test.cpp
+    io/image_processing.cpp)
+target_link_libraries(camera_image_processing_test ${OpenCV_LIBS})
+add_test(NAME camera_image_processing_test COMMAND camera_image_processing_test)
+
 add_executable(planner_raii_test tests/planner_raii_test.cpp)
 target_link_libraries(
     planner_raii_test

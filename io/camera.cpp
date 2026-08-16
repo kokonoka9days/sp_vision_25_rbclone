@@ -1,7 +1,9 @@
 #include "camera.hpp"
 
+#include <cmath>
 #include <stdexcept>
 
+#include "image_processing.hpp"
 #include "hikrobot/hikrobot.hpp"
 #include "mindvision/mindvision.hpp"
 #include "daheng/daheng.hpp"
@@ -26,12 +28,16 @@ Camera::Camera(const std::string & config_path)
   bool mirror = tools::read<bool>(yaml, "mirror");
 
   img_gamma = tools::read<double>(yaml, "img_gamma");
-
-  int lut_size = 1 << 8;
-  this->img_gamma_lut = cv::Mat(lut_size, 1, CV_8U);
-  for(int i = 0; i < lut_size; i++){
-    img_gamma_lut.data[i] = cv::saturate_cast<uchar>(pow(i/255.0, img_gamma) * 255.0);
-  }
+  img_gamma_shadow_offset =
+    yaml["img_gamma_shadow_offset"] ? yaml["img_gamma_shadow_offset"].as<double>() : 0.04;
+  img_gamma_luma_denoise_sigma = yaml["img_gamma_luma_denoise_sigma"]
+                                     ? yaml["img_gamma_luma_denoise_sigma"].as<double>()
+                                     : 0.7;
+  img_gamma_chroma_denoise_sigma = yaml["img_gamma_chroma_denoise_sigma"]
+                                       ? yaml["img_gamma_chroma_denoise_sigma"].as<double>()
+                                       : 1.0;
+  img_gamma_lut =
+    image_processing::make_protected_gamma_lut(img_gamma, img_gamma_shadow_offset);
 
   if (camera_name == "mindvision") {
     auto gamma = tools::read<double>(yaml, "gamma");
@@ -62,17 +68,19 @@ Camera::Camera(const std::string & config_path)
 void Camera::read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp)
 {
   camera_->read(img, timestamp);
-  // if(img_gamma == 1.0){
-  //   cv::LUT(img, img_gamma_lut, img);
-  // }
-
-  if (std::abs(img_gamma - 1.0) > 1e-6)
-  {
-    cv::LUT(img, img_gamma_lut, img);
-  }
+  process_image(img);
 }
 bool Camera::try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp)
 {
-  return camera_->try_read(img, timestamp);
+  const bool read = camera_->try_read(img, timestamp);
+  if (read) process_image(img);
+  return read;
+}
+
+void Camera::process_image(cv::Mat & img) const
+{
+  if (std::abs(img_gamma - 1.0) <= 1e-6) return;
+  image_processing::apply_luma_protected_gamma(
+    img, img_gamma_lut, img_gamma_luma_denoise_sigma, img_gamma_chroma_denoise_sigma);
 }
 }  // namespace io

@@ -44,6 +44,9 @@ public:
   std::chrono::microseconds timestamp_offset = std::chrono::microseconds(0); //时间戳偏移量
   cv::Mat img_gamma_lut;
   double  img_gamma = 1.0;
+  double img_gamma_shadow_offset = 0.04;
+  double img_gamma_luma_denoise_sigma = 0.7;
+  double img_gamma_chroma_denoise_sigma = 1.0;
 
 
   /** @brief 根据配置文件创建具体相机实例 @param config_path YAML 配置文件路径 */
@@ -82,6 +85,9 @@ public:
   
 
 private:
+  /** @brief 对相机图像执行亮度降噪和暗部保护 Gamma */
+  void process_image(cv::Mat & img) const;
+
   std::unique_ptr<CameraBase> camera_;
 };
 
