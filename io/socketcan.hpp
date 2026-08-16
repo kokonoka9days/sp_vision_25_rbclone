@@ -24,6 +24,7 @@ namespace io
 class SocketCAN
 {
 public:
+  /** @brief 打开 SocketCAN 接口并启动接收守护线程 @param interface CAN 网络接口名 @param rx_handler 接收帧回调 */
   SocketCAN(const std::string & interface, std::function<void(const can_frame & frame)> rx_handler)
   : interface_(interface),
     socket_fd_(-1),
@@ -49,6 +50,7 @@ public:
     }};
   }
 
+  /** @brief 停止线程并关闭 SocketCAN 接口 */
   ~SocketCAN()
   {
     quit_ = true;
@@ -58,6 +60,7 @@ public:
     tools::logger()->info("SocketCAN destructed.");
   }
 
+  /** @brief 发送 CAN 数据帧 @param frame 待发送帧 @throws std::runtime_error 当发送失败 */
   void write(can_frame * frame) const
   {
     if (::write(socket_fd_, frame, sizeof(can_frame)) == -1)
@@ -76,6 +79,7 @@ private:
   epoll_event events_[MAX_EVENTS];
   std::function<void(const can_frame & frame)> rx_handler_;
 
+  /** @brief 打开并绑定 CAN 套接字 @throws std::runtime_error 当任一系统调用失败 */
   void open()
   {
     socket_fd_ = socket(PF_CAN, SOCK_RAW, CAN_RAW);
@@ -123,6 +127,7 @@ private:
     tools::logger()->info("SocketCAN opened.");
   }
 
+  /** @brief 尝试打开 CAN 接口，失败时记录日志 */
   void try_open()
   {
     try {
@@ -132,6 +137,7 @@ private:
     }
   }
 
+  /** @brief 轮询并分发接收到的 CAN 帧 @throws std::runtime_error 当轮询或接收失败 */
   void read()
   {
     int num_events = epoll_wait(epoll_fd_, events_, MAX_EVENTS, 2);
@@ -145,6 +151,7 @@ private:
     }
   }
 
+  /** @brief 从 epoll 注销并关闭套接字 */
   void close()
   {
     if (socket_fd_ == -1) return;

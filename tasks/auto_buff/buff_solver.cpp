@@ -9,6 +9,7 @@ namespace auto_buff
 {
 namespace
 {
+/** @brief 计算三维点重投影均方根误差 @param object_points 三维模型点 @param image_points 二维观测点 @param rvec 旋转向量 @param tvec 平移向量 @param camera_matrix 相机内参 @param distort_coeffs 畸变系数 @return 像素均方根误差 */
 double reprojection_error(
   const std::vector<cv::Point3f> & object_points, const std::vector<cv::Point2f> & image_points,
   const cv::Vec3d & rvec, const cv::Vec3d & tvec, const cv::Mat & camera_matrix,
@@ -24,11 +25,13 @@ double reprojection_error(
   return std::sqrt(squared_error / static_cast<double>(projected.size()));
 }
 
+/** @brief 计算像素点绕中心的极角 @param point 查询点 @param center 中心 @return 极角 */
 double image_angle_around_center(const cv::Point2f & point, const cv::Point2f & center)
 {
   return std::atan2(point.y - center.y, point.x - center.x);
 }
 
+/** @brief 将观测类型转换为日志名称 @param type 观测类型 @return 静态字符串 */
 const char * observation_name(BuffObservationType type)
 {
   switch (type) {
@@ -65,11 +68,15 @@ void Solver::compute_rotated_points(std::vector<std::vector<cv::Point3f>> & obje
   }
 }
 
-Solver::Solver(const std::string & config_path) : R_gimbal2world_(Eigen::Matrix3d::Identity())
+Solver::Solver(const std::string & config_path)
+: Solver(config_path, load_buff_config(config_path))
+{
+}
+
+Solver::Solver(const std::string & config_path, BuffConfig config)
+: config_(std::move(config)), R_gimbal2world_(Eigen::Matrix3d::Identity())
 {
   auto yaml = YAML::LoadFile(config_path);
-  if (yaml["buff_rune_radius_m"]) RUNE_RADIUS_M = yaml["buff_rune_radius_m"].as<double>();
-  if (yaml["buff_small_direction"]) SMALL_BUFF_DIRECTION = yaml["buff_small_direction"].as<int>();
   if (yaml["buff_pnp_full_reprojection_gate_px"]) {
     full_reprojection_gate_px_ = yaml["buff_pnp_full_reprojection_gate_px"].as<double>();
   }
@@ -103,7 +110,7 @@ Solver::Solver(const std::string & config_path) : R_gimbal2world_(Eigen::Matrix3
 
 std::vector<cv::Point3f> Solver::reproject_object_points() const
 {
-  const float r = static_cast<float>(RUNE_RADIUS_M);
+  const float r = static_cast<float>(config_.rune_radius_m);
   return {
     cv::Point3f(0.0f, 0.0f, r + 0.095f), cv::Point3f(0.0f, -0.095f, r),
     cv::Point3f(0.0f, 0.0f, r - 0.095f), cv::Point3f(0.0f, 0.095f, r),
@@ -112,10 +119,15 @@ std::vector<cv::Point3f> Solver::reproject_object_points() const
     cv::Point3f(0.0f, 0.0f, 0.0f)};
 }
 
-Eigen::Matrix3d Solver::R_gimbal2world() const { return R_gimbal2world_; }
+Eigen::Matrix3d Solver::R_gimbal2world() const
+{
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  return R_gimbal2world_;
+}
 
 void Solver::set_R_gimbal2world(const Eigen::Quaterniond & q)
 {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   Eigen::Matrix3d R_imubody2imuabs = q.toRotationMatrix();
   R_gimbal2world_ = R_gimbal2imubody_.transpose() * R_imubody2imuabs * R_gimbal2imubody_;
 }
@@ -123,6 +135,7 @@ void Solver::set_R_gimbal2world(const Eigen::Quaterniond & q)
 std::optional<PowerRune> Solver::solve(
   const std::optional<BuffObservation> & observation) const
 {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   if (!observation.has_value()) {
     has_pnp_solution_ = false;
     return std::nullopt;
@@ -133,6 +146,7 @@ std::optional<PowerRune> Solver::solve(
 std::vector<PowerRune> Solver::solve_all(
   const std::vector<BuffObservation> & observations) const
 {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   has_pnp_solution_ = false;
   std::vector<PowerRune> solved;
   solved.reserve(observations.size());
@@ -153,6 +167,7 @@ std::vector<PowerRune> Solver::solve_all(
 
 std::optional<PowerRune> Solver::solve(const BuffObservation & observation) const
 {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   has_pnp_solution_ = false;
   if (!observation.has_target() && !observation.has_fan()) {
     tools::logger()->debug("[Buff_Solver] observation has no real keypoints");
@@ -175,7 +190,7 @@ std::optional<PowerRune> Solver::solve(const BuffObservation & observation) cons
   const bool use_detected_center =
     partial && observation.center_source == RuneCenterSource::DETECTED;
   if (use_detected_center) {
-    object_points.emplace_back(0.0f, static_cast<float>(RUNE_RADIUS_M), 0.0f);
+    object_points.emplace_back(0.0f, static_cast<float>(config_.rune_radius_m), 0.0f);
     image_points.push_back(observation.r_center);
   }
 
@@ -223,7 +238,7 @@ std::optional<PowerRune> Solver::solve(const BuffObservation & observation) cons
 
     std::vector<cv::Point3f> probes{
       cv::Point3f(0.0f, 0.0f, 0.0f),
-      cv::Point3f(0.0f, static_cast<float>(RUNE_RADIUS_M), 0.0f)};
+      cv::Point3f(0.0f, static_cast<float>(config_.rune_radius_m), 0.0f)};
     std::vector<cv::Point2f> projected_probes;
     cv::projectPoints(
       probes, rvecs[i], tvecs[i], camera_matrix_, distort_coeffs_, projected_probes);
@@ -298,7 +313,7 @@ std::optional<PowerRune> Solver::solve(const BuffObservation & observation) cons
   Eigen::Matrix3d R_target2camera;
   cv::cv2eigen(rmat, R_target2camera);
 
-  const Eigen::Vector3d center_in_target(0.0, RUNE_RADIUS_M, 0.0);
+  const Eigen::Vector3d center_in_target(0.0, config_.rune_radius_m, 0.0);
   const Eigen::Vector3d target_in_camera = t_target2camera;
   Eigen::Vector3d center_in_camera = R_target2camera * center_in_target + t_target2camera;
   if (!partial && observation.center_source == RuneCenterSource::DETECTED) {
@@ -336,6 +351,7 @@ std::optional<PowerRune> Solver::solve(const BuffObservation & observation) cons
 
 cv::Point2f Solver::point_buff2pixel(cv::Point3f x)
 {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::vector<cv::Point3d> world_points;
   std::vector<cv::Point2d> image_points;
   world_points.push_back(x);
@@ -345,6 +361,7 @@ cv::Point2f Solver::point_buff2pixel(cv::Point3f x)
 
 std::optional<std::vector<cv::Point2f>> Solver::reproject_pnp_points() const
 {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   if (!has_pnp_solution_) return std::nullopt;
 
   std::vector<cv::Point2f> image_points;
@@ -355,6 +372,7 @@ std::optional<std::vector<cv::Point2f>> Solver::reproject_pnp_points() const
 std::vector<cv::Point2f> Solver::reproject_buff(
   const Eigen::Vector3d & xyz_in_world, const Eigen::Matrix3d & R_buff2world) const
 {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   const Eigen::Vector3d & t_buff2world = xyz_in_world;
   Eigen::Matrix3d R_buff2camera =
     R_camera2gimbal_.transpose() * R_gimbal2world_.transpose() * R_buff2world;

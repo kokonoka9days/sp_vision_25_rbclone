@@ -14,6 +14,7 @@
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/tracker.hpp"
 #include "tasks/auto_aim/yolo.hpp"
+#include "tasks/auto_aim/multithread/detection_pool.hpp"
 #include "tools/exiter.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
@@ -26,10 +27,10 @@ const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明}"
   "{@config-path   | configs/ascento.yaml | 位置参数，yaml配置文件路径 }";
 
-tools::OrderedQueue frame_queue;
+auto_aim::OrderedDetectionQueue frame_queue;
 
 // 处理detect任务的线程函数
-void detect_frame(tools::Frame && frame, auto_aim::YOLO & yolo)
+void detect_frame(auto_aim::DetectionFrame && frame, auto_aim::YOLO & yolo)
 {
   frame.armors = yolo.detect(frame.img);
   frame_queue.enqueue(frame);
@@ -50,7 +51,7 @@ int main(int argc, char * argv[])
 
   // 处理线程函数
   auto process_thread = std::thread([&]() {
-    tools::Frame process_frame;
+    auto_aim::DetectionFrame process_frame;
     while (!exiter.exit()) {
       process_frame = frame_queue.dequeue();
       auto img = process_frame.img;
@@ -68,8 +69,7 @@ int main(int argc, char * argv[])
 
   io::Camera camera(config_path);
   int num_yolo_thread = 8;
-  auto yolos = tools::create_yolov8s(config_path, num_yolo_thread, true);
-  // auto yolos = tools::create_yolo11s(config_path, num_yolo_thread, true);
+  auto yolos = auto_aim::create_detectors(config_path, num_yolo_thread, true);
   std::vector<bool> yolo_used(num_yolo_thread, false);
   tools::ThreadPool thread_pool(num_yolo_thread);
 
@@ -106,7 +106,7 @@ int main(int argc, char * argv[])
         }
       }
       if (yolo) {
-        tools::Frame frame{frame_id, img.clone(), t};
+        auto_aim::DetectionFrame frame{frame_id, img.clone(), t};
         detect_frame(std::move(frame), *yolo);
 
         yolo_used[yolo_id] = false;

@@ -19,6 +19,7 @@ message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}-------
 # engine backend to be enabled from the command line without editing this file.
 option(OPENVINO_MAKE "Build the OpenVINO backend" OFF)
 option(TENSOR_RT_MAKE "Build the TensorRT backend" ON)
+option(ENABLE_GPU_TESTS "Enable TensorRT tests that require a CUDA GPU" OFF)
 
 if(OPENVINO_MAKE AND TENSOR_RT_MAKE)
     message(FATAL_ERROR "OPENVINO_MAKE and TENSOR_RT_MAKE cannot both be enabled")
@@ -102,6 +103,26 @@ target_link_libraries(rb_auto_standard_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp au
 target_link_libraries(rb_auto_standard_async ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(rb_auto_standard_debug_async ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(rb_auto_aim_debug_fft ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
+
+add_executable(buff_config_isolation_test tests/buff_config_isolation_test.cpp)
+target_link_libraries(
+    buff_config_isolation_test
+    ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
+add_test(NAME buff_config_isolation_test COMMAND buff_config_isolation_test)
+
+add_executable(buff_track_bank_test tests/buff_track_bank_test.cpp)
+target_link_libraries(
+    buff_track_bank_test
+    ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
+add_test(NAME buff_track_bank_test COMMAND buff_track_bank_test)
+
+add_executable(buff_solver_thread_test tests/buff_solver_thread_test.cpp)
+target_link_libraries(
+    buff_solver_thread_test
+    ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
+add_test(
+    NAME buff_solver_thread_test
+    COMMAND buff_solver_thread_test ${PROJECT_SOURCE_DIR}/configs/sb_long.yaml)
 endif()
 # rv
 add_executable(rb_rv_aim_debug src/rb_rv_aim_debug.cpp)
@@ -131,6 +152,28 @@ target_link_libraries(calibrate ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
 ##################tests##################
 add_executable(fft_fit_test tests/fft_fit_test.cpp tools/fft.cpp)
 add_test(NAME fft_fit_test COMMAND fft_fit_test)
+
+add_executable(thread_safe_queue_test tests/thread_safe_queue_test.cpp)
+add_test(NAME thread_safe_queue_test COMMAND thread_safe_queue_test)
+
+add_executable(thread_pool_test tests/thread_pool_test.cpp)
+add_test(NAME thread_pool_test COMMAND thread_pool_test)
+
+add_executable(enemy_color_policy_test tests/enemy_color_policy_test.cpp)
+target_link_libraries(enemy_color_policy_test ${OpenCV_LIBS})
+add_test(NAME enemy_color_policy_test COMMAND enemy_color_policy_test)
+
+add_executable(roi_test tests/roi_test.cpp)
+target_link_libraries(roi_test ${OpenCV_LIBS})
+add_test(NAME roi_test COMMAND roi_test)
+
+add_executable(planner_raii_test tests/planner_raii_test.cpp)
+target_link_libraries(
+    planner_raii_test
+    ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
+add_test(
+    NAME planner_raii_test
+    COMMAND planner_raii_test ${PROJECT_SOURCE_DIR}/configs/sb_long.yaml)
 
 # add_executable(
 #     kf_posterior_residual_test
@@ -189,6 +232,22 @@ target_link_libraries(planner_test_offline ${OpenCV_LIBS} fmt::fmt yaml-cpp auto
 
     add_executable(auto_aim_test_async tests/auto_aim_test_async.cpp)
     target_link_libraries(auto_aim_test_async ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+
+    add_executable(perceptron_stop_test tests/perceptron_stop_test.cpp)
+    target_link_libraries(
+        perceptron_stop_test
+        ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim omniperception)
+    add_test(
+        NAME perceptron_stop_test
+        COMMAND perceptron_stop_test ${PROJECT_SOURCE_DIR}/configs/test/sentry.yaml)
+
+    add_executable(safety_boundaries_test tests/safety_boundaries_test.cpp)
+    target_link_libraries(
+        safety_boundaries_test
+        ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim omniperception)
+    add_test(
+        NAME safety_boundaries_test
+        COMMAND safety_boundaries_test ${PROJECT_SOURCE_DIR}/configs/test/sentry.yaml)
 endif()
 
 if(TENSOR_RT_MAKE)
@@ -202,7 +261,21 @@ if(TENSOR_RT_MAKE)
     add_executable(auto_aim_test_async tests/auto_aim_test_async.cpp)
     target_link_libraries(auto_aim_test_async ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 
-    
+    if(ENABLE_GPU_TESTS)
+        add_executable(trt_pipeline_test tests/trt_pipeline_test.cpp)
+        target_link_libraries(
+            trt_pipeline_test
+            ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+        add_test(
+            NAME trt_pipeline_0526_test
+            COMMAND trt_pipeline_test ${PROJECT_SOURCE_DIR}/configs/mouse.yaml)
+        add_test(
+            NAME trt_pipeline_0708_test
+            COMMAND trt_pipeline_test ${PROJECT_SOURCE_DIR}/tests/config/trt_0708_test.yaml)
+        set_tests_properties(
+            trt_pipeline_0526_test trt_pipeline_0708_test
+            PROPERTIES LABELS gpu TIMEOUT 30)
+    endif()
 
     add_executable(rbnx_auto_aim_debug src/rbnx_auto_aim_debug.cpp)
     target_link_libraries(rbnx_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim  tools io)

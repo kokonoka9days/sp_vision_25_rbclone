@@ -302,7 +302,7 @@ bool DahengCamera::initialize_camera()
             pGammaLut = new int[nLutLength];
             DXStatus = DxGetGammatLut(gamma_, pGammaLut, &nLutLength);
             if (DXStatus != DX_OK) {
-                delete[] pGammaLut;
+                delete[] static_cast<int*>(pGammaLut);
                 pGammaLut = nullptr;
             }
         }

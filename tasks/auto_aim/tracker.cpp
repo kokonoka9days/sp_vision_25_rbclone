@@ -3,7 +3,12 @@
 #include <yaml-cpp/yaml.h>
 
 #include <tuple>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
 
+#include "enemy_color_policy.hpp"
+#include "solver.hpp"
 #include "tools/logger.hpp"
 #include "tools/fft.hpp"
 #include "tools/math_tools.hpp"
@@ -11,7 +16,33 @@
 
 namespace auto_aim
 {
+namespace
+{
+/** @brief 计算装甲板归一化中心到图像中心的距离 @param armor 装甲板 @return 中心距离；坐标无效时返回正无穷 */
+double normalized_center_distance(const Armor & armor)
+{
+  if (!std::isfinite(armor.center_norm.x) || !std::isfinite(armor.center_norm.y) ||
+      armor.center_norm.x < 0.0F || armor.center_norm.y < 0.0F) {
+    return std::numeric_limits<double>::infinity();
+  }
+  return cv::norm(armor.center_norm - cv::Point2f(0.5F, 0.5F));
+}
+
+/** @brief 按装甲板到图像中心的距离原地排序 @param armors 装甲板列表 */
+void sort_by_image_center(std::list<Armor> & armors)
+{
+  armors.sort([](const Armor & a, const Armor & b) {
+    return normalized_center_distance(a) < normalized_center_distance(b);
+  });
+}
+}  // namespace
+
 Tracker::Tracker(const std::string & config_path, Solver * solver)
+: Tracker(config_path, static_cast<IArmorPoseSolver *>(solver))
+{
+}
+
+Tracker::Tracker(const std::string & config_path, IArmorPoseSolver * solver)
 : solver_{solver},
   detect_count_(0),
   temp_lost_count_(0),
@@ -20,6 +51,7 @@ Tracker::Tracker(const std::string & config_path, Solver * solver)
   last_timestamp_(std::chrono::steady_clock::now()),
   omni_target_priority_{ArmorPriority::fifth}
 {
+  if (solver_ == nullptr) throw std::invalid_argument("Tracker requires a non-null Solver");
   auto yaml = YAML::LoadFile(config_path);
   enemy_color_str_ = yaml["enemy_color"].as<std::string>();
   enemy_color_ = (enemy_color_str_ == "red") ? Color::red : Color::blue;
@@ -29,6 +61,17 @@ Tracker::Tracker(const std::string & config_path, Solver * solver)
   normal_temp_lost_count_ = max_temp_lost_count_;
 
   last_cam_is_short = true;
+}
+
+void Tracker::setSolver(Solver * solver)
+{
+  setPoseSolver(solver);
+}
+
+void Tracker::setPoseSolver(IArmorPoseSolver * solver)
+{
+  if (solver == nullptr) throw std::invalid_argument("Tracker requires a non-null Solver");
+  solver_ = solver;
 }
 
 std::string Tracker::state() const { return state_; }
@@ -73,7 +116,9 @@ std::list<Target> Tracker::sb_track(
     return {};
   }
   io::GimbalState g = gimbal_->state();
-  if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ? Color::blue : Color::red;
+  if (enemy_color_str_ == "auto") {
+    enemy_color_ = enemy_color_from_gimbal(EnemyColorPolicy::Sentry, g.enemy_color);
+  }
 
   target_.cam_is_short = cam_is_short;
 
@@ -83,7 +128,7 @@ std::list<Target> Tracker::sb_track(
     state_ = "lost";
   }
   // 过滤掉非我方装甲板
-  armors.remove_if([&](const auto_aim::Armor & a) { return a.color != enemy_color_; });
+  filter_enemy_armors(armors, enemy_color_, use_enemy_color);
 
   // 过滤前哨站顶部装甲板
   // armors.remove_if([this](const auto_aim::Armor & a) {
@@ -93,12 +138,7 @@ std::list<Target> Tracker::sb_track(
   // });
 
   // 优先选择靠近图像中心的装甲板
-  armors.sort([](const Armor & a, const Armor & b) {
-    cv::Point2f img_center(1440 / 2, 1080 / 2);  // TODO
-    auto distance_1 = cv::norm(a.center - img_center);
-    auto distance_2 = cv::norm(b.center - img_center);
-    return distance_1 < distance_2;
-  });
+  sort_by_image_center(armors);
 
   // 按优先级排序，优先级最高在首位(优先级越高数字越小，1的优先级最高)
   armors.sort(
@@ -147,7 +187,9 @@ std::list<Target> Tracker::track(
     return {};
   }
   io::GimbalState g = gimbal_->state();
-  if(enemy_color_str_ == "auto") enemy_color_ = (g.enemy_color == 0) ?   Color::red :Color::blue;
+  if (enemy_color_str_ == "auto") {
+    enemy_color_ = enemy_color_from_gimbal(EnemyColorPolicy::Standard, g.enemy_color);
+  }
 
   target_.cam_is_short = cam_is_short;
 
@@ -157,7 +199,7 @@ std::list<Target> Tracker::track(
     state_ = "lost";
   }
   // 过滤掉非我方装甲板
-  armors.remove_if([&](const auto_aim::Armor & a) { return a.color != enemy_color_; });
+  filter_enemy_armors(armors, enemy_color_, use_enemy_color);
 
   // 过滤前哨站顶部装甲板
   // armors.remove_if([this](const auto_aim::Armor & a) {
@@ -167,12 +209,7 @@ std::list<Target> Tracker::track(
   // });
 
   // 优先选择靠近图像中心的装甲板
-  armors.sort([](const Armor & a, const Armor & b) {
-    cv::Point2f img_center(1440 / 2, 1080 / 2);  // TODO
-    auto distance_1 = cv::norm(a.center - img_center);
-    auto distance_2 = cv::norm(b.center - img_center);
-    return distance_1 < distance_2;
-  });
+  sort_by_image_center(armors);
 
   // 按优先级排序，优先级最高在首位(优先级越高数字越小，1的优先级最高)
   // armors.sort(
@@ -259,7 +296,7 @@ std::list<Target> Tracker::test_track(
     state_ = "lost";
   }
   // 过滤掉非我方装甲板
-  armors.remove_if([&](const auto_aim::Armor & a) { return a.color != enemy_color_; });
+  filter_enemy_armors(armors, enemy_color_, use_enemy_color);
 
   // 过滤前哨站顶部装甲板
   // armors.remove_if([this](const auto_aim::Armor & a) {
@@ -269,12 +306,7 @@ std::list<Target> Tracker::test_track(
   // });
 
   // 优先选择靠近图像中心的装甲板
-  armors.sort([](const Armor & a, const Armor & b) {
-    cv::Point2f img_center(1440 / 2, 1080 / 2);  // TODO
-    auto distance_1 = cv::norm(a.center - img_center);
-    auto distance_2 = cv::norm(b.center - img_center);
-    return distance_1 < distance_2;
-  });
+  sort_by_image_center(armors);
 
   // 按优先级排序，优先级最高在首位(优先级越高数字越小，1的优先级最高)
   // armors.sort(
@@ -331,6 +363,8 @@ std::tuple<omniperception::DetectionResult, std::list<Target>> Tracker::track(
   auto dt = tools::delta_time(t, last_timestamp_);
   last_timestamp_ = t;
 
+  filter_enemy_armors(armors, enemy_color_, use_enemy_color);
+
   // 时间间隔过长，说明可能发生了相机离线
   if (state_ != "lost" && dt > 0.1) {
     tools::logger()->warn("[Tracker] Large dt: {:.3f}s", dt);
@@ -338,12 +372,7 @@ std::tuple<omniperception::DetectionResult, std::list<Target>> Tracker::track(
   }
 
   // 优先选择靠近图像中心的装甲板
-  armors.sort([](const Armor & a, const Armor & b) {
-    cv::Point2f img_center(1440 / 2, 1080 / 2);  // TODO
-    auto distance_1 = cv::norm(a.center - img_center);
-    auto distance_2 = cv::norm(b.center - img_center);
-    return distance_1 < distance_2;
-  });
+  sort_by_image_center(armors);
 
   // 按优先级排序，优先级最高在首位(优先级越高数字越小，1的优先级最高)
   armors.sort([](const Armor & a, const Armor & b) { return a.priority < b.priority; });
@@ -457,7 +486,7 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
 
   const bool cam_is_short = target_.cam_is_short;
   auto & armor = armors.front();
-  solver_->solve(armor);
+  if (!solver_->try_solve(armor)) return false;
 
   // 根据兵种优化初始化参数
   auto is_balance = (armor.type == ArmorType::big) &&
@@ -508,7 +537,7 @@ bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock
   // 遍历找到的第一个匹配目标的装甲板，即为视野中最居中、畸变最小的装甲板
   for (auto & armor : armors) {
     if (armor.name == target_.name && armor.type == target_.armor_type) {
-      solver_->solve(armor);
+      if (!solver_->try_solve(armor)) continue;
       target_.update(armor);
 
       update_fft_sample(armor, t);

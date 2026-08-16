@@ -99,7 +99,7 @@ struct GimbalState
   float q2yaw;
   float q2pitch;
   uint8_t mode;
-  uint8_t enemy_color; // 0: 蓝色, 1: 红色
+  uint8_t enemy_color; // 0: 红色, 1: 蓝色
   float bullet_speed;
   uint16_t bullet_count;
 };
@@ -107,31 +107,44 @@ struct GimbalState
 class Gimbal
 {
 public:
+  /** @brief 根据配置文件初始化云台串口通信 @param config_path YAML 配置文件路径 */
   Gimbal(const std::string & config_path);
 
+  /** @brief 停止接收线程并关闭串口 */
   ~Gimbal();
 
+  /** @brief 获取当前云台工作模式 @return 云台模式 */
   GimbalMode mode() const;
+  /** @brief 获取线程安全的云台状态快照 @return 云台状态 */
   GimbalState state() const;
+  /** @brief 将云台模式转换为字符串 @param mode 云台模式 @return 模式名称 */
   std::string str(GimbalMode mode) const;
+  /** @brief 插值得到指定时刻的云台姿态 @param t 查询时间戳 @return 姿态四元数 */
   Eigen::Quaterniond q(std::chrono::steady_clock::time_point t);
 
+  /** @brief 发送自瞄控制量 @param control 是否接管控制 @param fire 是否开火 @param yaw 目标偏航角 @param yaw_vel 偏航角速度 @param yaw_acc 偏航角加速度 @param pitch 目标俯仰角 @param pitch_vel 俯仰角速度 @param pitch_acc 俯仰角加速度 */
   void send(
     bool control,bool fire, float yaw, float yaw_vel, float yaw_acc, float pitch, float pitch_vel,
     float pitch_acc);
   
+  /** @brief 发送哨兵自瞄控制量 @param control 是否接管控制 @param fire 是否开火 @param yaw 目标偏航角 @param yaw_vel 偏航角速度 @param yaw_acc 偏航角加速度 @param pitch 目标俯仰角 @param pitch_vel 俯仰角速度 @param pitch_acc 俯仰角加速度 @param target_x 目标横坐标 @param target_y 目标纵坐标 @param target_name 目标编号 */
   void sb_send(
   bool control, bool fire, float yaw, float yaw_vel, float yaw_acc,
   float pitch, float pitch_vel, float pitch_acc, float target_x, float target_y, uint8_t target_name);
 
+  /** @brief 发送已组装的自瞄数据帧 @param VisionToGimbal 数据帧 */
   void send(io::VisionToGimbal VisionToGimbal);
 
+  /** @brief 发送已组装的哨兵自瞄数据帧 @param VisionToGimbal 数据帧 */
   void sb_send(io::sb_VisionToGimbal VisionToGimbal);
 
+  /** @brief 发送全向感知目标 @param mode 控制模式 @param yaw 目标偏航角 @param pitch 目标俯仰角 @param distance 目标距离，单位 m */
   void omni_send(uint8_t mode, float yaw, float pitch, float distance);
 
+  /** @brief 发送已组装的全向感知数据帧 @param VisionToGimbal 数据帧 */
   void omni_send(const io::OmniVisionToGimbal & VisionToGimbal);
 
+  /** @brief 获取内部状态的可写指针 @return 云台状态指针 */
   GimbalState* set_state_(){
     return &state_;
   }
@@ -156,9 +169,13 @@ private:
 
   int gimbal_yaw2vision, gimbal_pitch2vision, gimbal_roll2vision;
 
+  /** @brief 从串口读取指定字节数 @param buffer 输出缓冲区 @param size 期望字节数 @return 读取成功时返回 true */
   bool read(uint8_t * buffer, size_t size);
+  /** @brief 尝试打开配置的串口 @return 打开成功时返回 true */
   bool open_serial();
+  /** @brief 云台串口接收线程入口 */
   void read_thread();
+  /** @brief 循环尝试重新连接串口 */
   void reconnect();
 };
 

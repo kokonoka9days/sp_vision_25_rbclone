@@ -2,6 +2,7 @@
 #include "tiny_api_constants.hpp"
 
 #include <iostream>
+#include <memory>
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,34 +23,10 @@ int tiny_setup(TinySolver** solverp,
                 tinyMatrix Adyn, tinyMatrix Bdyn, tinyMatrix fdyn, tinyMatrix Q, tinyMatrix R, 
                 tinytype rho, int nx, int nu, int N, int verbose) {
 
-    TinySolution *solution = new TinySolution();
-    TinyCache *cache = new TinyCache();
-    TinySettings *settings = new TinySettings();
-    TinyWorkspace *work = new TinyWorkspace();
-    TinySolver *solver = new TinySolver();
+    if (!solverp || nx <= 0 || nu <= 0 || N < 2) return 1;
+    *solverp = nullptr;
 
-    solver->solution = solution;
-    solver->cache = cache;
-    solver->settings = settings;
-    solver->work = work;
-
-    *solverp = solver;
-
-    // Initialize solution
-    solution->iter = 0;
-    solution->solved = 0;
-    solution->x = tinyMatrix::Zero(nx, N);
-    solution->u = tinyMatrix::Zero(nu, N-1);
-
-    // Initialize settings
-    tiny_set_default_settings(settings);
-
-    // Initialize workspace
-    work->nx = nx;
-    work->nu = nu;
-    work->N = N;
-
-    // Make sure arguments are the correct shapes
+    // Validate dimensions before allocating the solver graph.
     int status = 0;
     status |= check_dimension("State transition matrix (A)", "rows", Adyn.rows(), nx);
     status |= check_dimension("State transition matrix (A)", "columns", Adyn.cols(), nx);
@@ -61,9 +38,32 @@ int tiny_setup(TinySolver** solverp,
     status |= check_dimension("State stage cost (Q)", "columns",  Q.cols(), nx);
     status |= check_dimension("State input cost (R)", "rows",  R.rows(), nu);
     status |= check_dimension("State input cost (R)", "columns",  R.cols(), nu);
-    if (status) {
-        return status;
-    }
+    if (status) return status;
+
+    auto solution = std::make_unique<TinySolution>();
+    auto cache = std::make_unique<TinyCache>();
+    auto settings = std::make_unique<TinySettings>();
+    auto work = std::make_unique<TinyWorkspace>();
+    auto solver = std::make_unique<TinySolver>();
+
+    solver->solution = solution.get();
+    solver->cache = cache.get();
+    solver->settings = settings.get();
+    solver->work = work.get();
+
+    // Initialize solution
+    solution->iter = 0;
+    solution->solved = 0;
+    solution->x = tinyMatrix::Zero(nx, N);
+    solution->u = tinyMatrix::Zero(nu, N-1);
+
+    // Initialize settings
+    tiny_set_default_settings(settings.get());
+
+    // Initialize workspace
+    work->nx = nx;
+    work->nu = nu;
+    work->N = N;
     
     work->x = tinyMatrix::Zero(nx, N);
     work->u = tinyMatrix::Zero(nu, N-1);
@@ -123,17 +123,31 @@ int tiny_setup(TinySolver** solverp,
     work->iter = 0;
 
     // Initialize cache
-    status = tiny_precompute_and_set_cache(cache, Adyn, Bdyn, fdyn, work->Q.asDiagonal(), work->R.asDiagonal(), nx, nu, rho, verbose);
+    status = tiny_precompute_and_set_cache(cache.get(), Adyn, Bdyn, fdyn, work->Q.asDiagonal(), work->R.asDiagonal(), nx, nu, rho, verbose);
     if (status) {
         return status;
     }
 
     // Initialize sensitivity matrices for adaptive rho
     if (solver->settings->adaptive_rho) {
-        tiny_initialize_sensitivity_matrices(solver);
+        tiny_initialize_sensitivity_matrices(solver.get());
     }
 
+    *solverp = solver.release();
+    solution.release();
+    cache.release();
+    settings.release();
+    work.release();
     return 0;
+}
+
+void tiny_cleanup(TinySolver* solver) noexcept {
+    if (!solver) return;
+    delete solver->solution;
+    delete solver->cache;
+    delete solver->settings;
+    delete solver->work;
+    delete solver;
 }
 
 int tiny_set_bound_constraints(TinySolver* solver,

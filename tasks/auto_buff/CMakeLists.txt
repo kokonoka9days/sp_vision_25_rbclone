@@ -2,12 +2,15 @@ cmake_minimum_required(VERSION 3.16)
 find_package(Ceres REQUIRED)
 
 set(AUTO_BUFF_SOURCES
+    buff_config.cpp
     buff_type.cpp
     buff_track_bank.cpp
     buff_detector.cpp
+    buff_detector_center.cpp
     buff_solver.cpp
     buff_aimer.cpp
     buff_target.cpp
+    buff_direction_tracker.cpp
     yolo11_buff.cpp
 )
 

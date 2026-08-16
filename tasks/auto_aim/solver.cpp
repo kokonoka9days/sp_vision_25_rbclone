@@ -4,7 +4,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include "tools/logger.hpp"
@@ -95,18 +97,41 @@ void Solver::set_camera2gimbal(
 //solvePnP（获得姿态）
 void Solver::solve(Armor & armor) const
 {
+  if (!try_solve(armor)) {
+    tools::logger()->warn("[Solver] solvePnP failed; armor pose was not updated");
+  }
+}
+
+bool Solver::try_solve(Armor & armor) const
+{
+  if (armor.points.size() != 4 ||
+      !std::all_of(armor.points.begin(), armor.points.end(), [](const cv::Point2f & point) {
+        return std::isfinite(point.x) && std::isfinite(point.y);
+      })) {
+    return false;
+  }
+
   const auto & object_points =
     (armor.type == ArmorType::big) ? BIG_ARMOR_POINTS : SMALL_ARMOR_POINTS;
 
   cv::Vec3d rvec, tvec;
-  cv::solvePnP(
-    object_points, armor.points, camera_matrix_, distort_coeffs_, rvec, tvec, false,
-    cv::SOLVEPNP_IPPE);
+  try {
+    if (!cv::solvePnP(
+          object_points, armor.points, camera_matrix_, distort_coeffs_, rvec, tvec, false,
+          cv::SOLVEPNP_IPPE)) {
+      return false;
+    }
+  } catch (const cv::Exception &) {
+    return false;
+  }
+  if (!cv::checkRange(rvec) || !cv::checkRange(tvec)) return false;
+
+  Armor solved = armor;
 
   Eigen::Vector3d xyz_in_camera;
   cv::cv2eigen(tvec, xyz_in_camera);
-  armor.xyz_in_gimbal = R_camera2gimbal_ * xyz_in_camera + t_camera2gimbal_;
-  armor.xyz_in_world = R_gimbal2world_ * armor.xyz_in_gimbal;
+  solved.xyz_in_gimbal = R_camera2gimbal_ * xyz_in_camera + t_camera2gimbal_;
+  solved.xyz_in_world = R_gimbal2world_ * solved.xyz_in_gimbal;
 
   cv::Mat rmat;
   cv::Rodrigues(rvec, rmat);
@@ -114,18 +139,24 @@ void Solver::solve(Armor & armor) const
   cv::cv2eigen(rmat, R_armor2camera);
   Eigen::Matrix3d R_armor2gimbal = R_camera2gimbal_ * R_armor2camera;
   Eigen::Matrix3d R_armor2world = R_gimbal2world_ * R_armor2gimbal;
-  armor.ypr_in_gimbal = tools::eulers(R_armor2gimbal, 2, 1, 0);
-  armor.ypr_in_world = tools::eulers(R_armor2world, 2, 1, 0);
+  solved.ypr_in_gimbal = tools::eulers(R_armor2gimbal, 2, 1, 0);
+  solved.ypr_in_world = tools::eulers(R_armor2world, 2, 1, 0);
 
-  armor.ypd_in_world = tools::xyz2ypd(armor.xyz_in_world);
+  solved.ypd_in_world = tools::xyz2ypd(solved.xyz_in_world);
+  if (!solved.xyz_in_gimbal.allFinite() || !solved.xyz_in_world.allFinite() ||
+      !solved.ypr_in_gimbal.allFinite() || !solved.ypr_in_world.allFinite() ||
+      !solved.ypd_in_world.allFinite()) {
+    return false;
+  }
 
   // 平衡不做yaw优化，因为pitch假设不成立
   auto is_balance = (armor.type == ArmorType::big) &&
                     (armor.name == ArmorName::three || armor.name == ArmorName::four ||
                      armor.name == ArmorName::five);
-  if (is_balance) return;
+  if (!is_balance) optimize_yaw(solved);
 
-  optimize_yaw(armor);
+  armor = std::move(solved);
+  return true;
 }
 
 void Solver::omn_dig_yaw_solve(Armor & armor, Eigen::Vector3d R_camera2biggimbal_ypr, Eigen::Vector3d t_camera2biggimbal ) const{
@@ -134,9 +165,12 @@ void Solver::omn_dig_yaw_solve(Armor & armor, Eigen::Vector3d R_camera2biggimbal
   const auto & object_points =
   (armor.type == auto_aim::ArmorType::big) ? auto_aim::BIG_ARMOR_POINTS : SMALL_ARMOR_POINTS;
 
-  cv::solvePnP(
-    object_points, armor.points, camera_matrix_, distort_coeffs_, rvec, tvec, false,
-    cv::SOLVEPNP_IPPE);
+  if (armor.points.size() != 4 ||
+      !cv::solvePnP(
+        object_points, armor.points, camera_matrix_, distort_coeffs_, rvec, tvec, false,
+        cv::SOLVEPNP_IPPE)) {
+    return;
+  }
 
 
   Eigen::Vector3d xyz_in_camera;
@@ -206,9 +240,12 @@ double Solver::oupost_reprojection_error(Armor armor, const double & pitch)
     (armor.type == ArmorType::big) ? BIG_ARMOR_POINTS : SMALL_ARMOR_POINTS;
 
   cv::Vec3d rvec, tvec;
-  cv::solvePnP(
-    object_points, armor.points, camera_matrix_, distort_coeffs_, rvec, tvec, false,
-    cv::SOLVEPNP_IPPE);
+  if (armor.points.size() != 4 ||
+      !cv::solvePnP(
+        object_points, armor.points, camera_matrix_, distort_coeffs_, rvec, tvec, false,
+        cv::SOLVEPNP_IPPE)) {
+    return std::numeric_limits<double>::infinity();
+  }
 
   Eigen::Vector3d xyz_in_camera;
   cv::cv2eigen(tvec, xyz_in_camera);

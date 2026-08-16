@@ -7,17 +7,21 @@
 
 namespace tools
 {
+/** @brief 在图像上绘制点 @param img 输出图像 @param point 点坐标 @param color 颜色 @param radius 半径 */
 void draw_point(
   cv::Mat & img, const cv::Point & point, const cv::Scalar & color = {0, 0, 255}, int radius = 3);
 
+/** @brief 在图像上绘制整数坐标点集 @param img 输出图像 @param points 点集 @param color 颜色 @param thickness 线宽 */
 void draw_points(
   cv::Mat & img, const std::vector<cv::Point> & points, const cv::Scalar & color = {0, 0, 255},
   int thickness = 2);
 
+/** @brief 在图像上绘制浮点坐标点集 @param img 输出图像 @param points 点集 @param color 颜色 @param thickness 线宽 */
 void draw_points(
   cv::Mat & img, const std::vector<cv::Point2f> & points, const cv::Scalar & color = {0, 0, 255},
   int thickness = 2);
 
+/** @brief 在图像上绘制文本 @param img 输出图像 @param text 文本 @param point 左下角坐标 @param color 颜色 @param font_scale 字体缩放比例 @param thickness 线宽 */
 void draw_text(
   cv::Mat & img, const std::string & text, const cv::Point & point,
   const cv::Scalar & color = {0, 255, 255}, double font_scale = 1.0, int thickness = 2);

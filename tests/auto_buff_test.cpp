@@ -241,12 +241,12 @@ int main(int argc, char * argv[])
   auto_buff::Solver solver(config_path);
   std::unique_ptr<auto_buff::Target> target;
   if (buff_mode == "big") {
-    target = std::make_unique<auto_buff::BigTarget>();
+    target = std::make_unique<auto_buff::BigTarget>(config_path);
   } else {
     if (buff_mode != "small") {
       tools::logger()->warn("[auto_buff_test] unknown buff-mode: {}, using small", buff_mode);
     }
-    target = std::make_unique<auto_buff::SmallTarget>();
+    target = std::make_unique<auto_buff::SmallTarget>(config_path);
   }
   auto_buff::Aimer aimer(config_path);
 

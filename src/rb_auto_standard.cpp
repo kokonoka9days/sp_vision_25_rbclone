@@ -63,8 +63,8 @@ int main(int argc, char * argv[])
   // 打符相关对象初始化
   auto_buff::Buff_Detector buff_detector(config_path);
   auto_buff::Solver buff_solver(config_path);
-  auto_buff::SmallTarget buff_small_target;
-  auto_buff::BigTarget buff_big_target;
+  auto_buff::SmallTarget buff_small_target(config_path);
+  auto_buff::BigTarget buff_big_target(config_path);
   auto_buff::Aimer buff_aimer(config_path);
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);

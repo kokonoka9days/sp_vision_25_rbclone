@@ -6,55 +6,49 @@
 
 namespace tools
 {
-// 将弧度值限制在(-pi, pi]
+/** @brief 将弧度角归一化到 (-pi, pi] @param angle 输入角度，单位 rad @return 归一化角度 */
 double limit_rad(double angle);
 
-// 四元数转欧拉角
-// x = 0, y = 1, z = 2
-// e.g. 先绕z轴旋转，再绕y轴旋转，最后绕x轴旋转：axis0=2, axis1=1, axis2=0
-// 参考：https://github.com/evbernardes/quaternion_to_euler
+/** @brief 将四元数转换为指定旋转顺序的欧拉角 @param q 四元数 @param axis0 第一旋转轴 @param axis1 第二旋转轴 @param axis2 第三旋转轴 @param extrinsic 是否采用外旋 @return 欧拉角向量，单位 rad */
 Eigen::Vector3d eulers(
   Eigen::Quaterniond q, int axis0, int axis1, int axis2, bool extrinsic = false);
 
-//欧拉角转四元数
+/** @brief 将欧拉角转换为四元数 @param ypr 欧拉角向量 @param axis0 第一旋转轴 @param axis1 第二旋转轴 @param axis2 第三旋转轴 @return 旋转四元数 */
 Eigen::Quaterniond toeuler(Eigen::Vector3d ypr, int axis0, int axis1, int axis2);
 
-// 旋转矩阵转欧拉角
-// x = 0, y = 1, z = 2
-// e.g. 先绕z轴旋转，再绕y轴旋转，最后绕x轴旋转：axis0=2, axis1=1, axis2=0
+/** @brief 将旋转矩阵转换为指定旋转顺序的欧拉角 @param R 旋转矩阵 @param axis0 第一旋转轴 @param axis1 第二旋转轴 @param axis2 第三旋转轴 @param extrinsic 是否采用外旋 @return 欧拉角向量，单位 rad */
 Eigen::Vector3d eulers(Eigen::Matrix3d R, int axis0, int axis1, int axis2, bool extrinsic = false);
 
-// 欧拉角转旋转矩阵
-// zyx:先绕z轴旋转，再绕y轴旋转，最后绕x轴旋转
+/** @brief 将 Z-Y-X 欧拉角转换为旋转矩阵 @param ypr 偏航、俯仰、横滚角，单位 rad @return 旋转矩阵 */
 Eigen::Matrix3d rotation_matrix(const Eigen::Vector3d & ypr);
 
-// 直角坐标系转球坐标系
-// ypd为yaw、pitch、distance的缩写
+/** @brief 将直角坐标转换为偏航、俯仰和距离 @param xyz 直角坐标 @return yaw、pitch、distance 向量 */
 Eigen::Vector3d xyz2ypd(const Eigen::Vector3d & xyz);
 
-// 直角坐标系转球坐标系转换函数对xyz的雅可比矩阵
+/** @brief 计算 xyz2ypd 对直角坐标的雅可比矩阵 @param xyz 直角坐标 @return 雅可比矩阵 */
 Eigen::MatrixXd xyz2ypd_jacobian(const Eigen::Vector3d & xyz);
 
-// 球坐标系转直角坐标系
+/** @brief 将偏航、俯仰和距离转换为直角坐标 @param ypd yaw、pitch、distance 向量 @return 直角坐标 */
 Eigen::Vector3d ypd2xyz(const Eigen::Vector3d & ypd);
 
-// 球坐标系转直角坐标系转换函数对xyz的雅可比矩阵
+/** @brief 计算 ypd2xyz 对球坐标的雅可比矩阵 @param ypd yaw、pitch、distance 向量 @return 雅可比矩阵 */
 Eigen::MatrixXd ypd2xyz_jacobian(const Eigen::Vector3d & ypd);
 
-// 计算时间差a - b，单位：s
+/** @brief 计算时间差 a-b @param a 较新的时间点 @param b 较早的时间点 @return 时间差，单位 s */
 double delta_time(
   const std::chrono::steady_clock::time_point & a, const std::chrono::steady_clock::time_point & b);
 
-// 向量夹角 总是返回 0 ~ pi 来自SJTU
+/** @brief 计算两个二维向量的无符号夹角 @param vec1 向量一 @param vec2 向量二 @return 0 到 pi 的夹角 */
 double get_abs_angle(const Eigen::Vector2d & vec1, const Eigen::Vector2d & vec2);
 
-// 返回输入值的平方
+/** @brief 计算输入值的平方 @tparam T 数值类型 @param a 输入值 @return a 的平方 */
 template <typename T>
 T square(T const & a)
 {
   return a * a;
 };
 
+/** @brief 将输入值限制在给定区间 @param input 输入值 @param min 下限 @param max 上限 @return 限幅后的值 */
 double limit_min_max(double input, double min, double max);
 }  // namespace tools
 

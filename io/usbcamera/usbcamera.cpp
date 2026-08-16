@@ -61,6 +61,7 @@ USBCamera::USBCamera(const std::string & open_name, const std::string & config_p
 USBCamera::~USBCamera()
 {
   quit_ = true;
+  queue_.close();
   {
     std::lock_guard<std::mutex> lock(cap_mutex_);
     close();
@@ -83,11 +84,27 @@ cv::Mat USBCamera::read()
 
 void USBCamera::read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp)
 {
-  CameraData data;
-  queue_.pop(data);
+  const auto data = queue_.wait_pop();
+  if (!data.has_value()) {
+    img.release();
+    return;
+  }
+  img = data->img;
+  timestamp = data->timestamp;
+}
 
-  img = data.img;
-  timestamp = data.timestamp;
+bool USBCamera::read_for(
+  cv::Mat & img, std::chrono::steady_clock::time_point & timestamp,
+  std::chrono::milliseconds timeout)
+{
+  const auto data = queue_.wait_pop_for(timeout);
+  if (!data.has_value()) {
+    img.release();
+    return false;
+  }
+  img = data->img;
+  timestamp = data->timestamp;
+  return true;
 }
 
 void USBCamera::open()

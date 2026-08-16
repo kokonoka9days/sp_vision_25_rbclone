@@ -65,9 +65,12 @@ typedef struct
 class DM_IMU
 {
 public:
+  /** @brief 打开串口并启动 IMU 接收线程 */
   DM_IMU();
+  /** @brief 停止接收线程并关闭串口 */
   ~DM_IMU();
 
+  /** @brief 插值得到指定时刻的 IMU 姿态 @param timestamp 查询时间戳 @return 姿态四元数 */
   Eigen::Quaterniond imu_at(std::chrono::steady_clock::time_point timestamp);
 
 private:
@@ -77,7 +80,9 @@ private:
     std::chrono::steady_clock::time_point timestamp;
   };
 
+  /** @brief 初始化 IMU 串口 */
   void init_serial();
+  /** @brief IMU 数据接收线程入口 */
   void get_imu_data_thread();
 
   serial::Serial serial_;

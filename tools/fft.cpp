@@ -128,6 +128,8 @@ FrequencyFit fit_frequency(
 
 /**
  * @brief 计算残差绝对值的中位数（用于鲁棒尺度估计）
+ * @param residual 残差向量
+ * @return 绝对残差中位数
  */
 double median_absolute_residual(const Eigen::VectorXd & residual)
 {

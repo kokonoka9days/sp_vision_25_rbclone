@@ -11,6 +11,7 @@
 #include "tools/logger.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/math_tools.hpp"
+#include "tasks/auto_aim/roi.hpp"
 
 #define IS_ASYNC true
 
@@ -19,6 +20,7 @@ namespace auto_aim
 
 namespace {
 class Logger : public nvinfer1::ILogger {
+    /** @brief 输出 TensorRT 警告及更严重日志 @param severity 严重级别 @param msg 日志文本 */
     void log(Severity severity, const char* msg) noexcept override {
         if (severity <= Severity::kWARNING)
             std::cout << "[TensorRT] " << msg << std::endl;
@@ -35,10 +37,11 @@ void TensorrtInferEngine::softmax(const float* input, float* output, int len) {
     for (int i = 0; i < len; ++i) output[i] /= sum;
 }
 
-TensorrtInferEngine::TensorrtInferEngine(const string& engine_path, const string& device) : task_queue(3), free_buffer_queue(3), result_queue(3){
+TensorrtInferEngine::TensorrtInferEngine(const string& engine_path, const string& device)
+    : task_queue(3, tools::OverflowPolicy::Block),
+      free_buffer_queue(3, tools::OverflowPolicy::Block),
+      result_queue(3, tools::OverflowPolicy::Block) {
     loadEngine(engine_path);
-    context = engine->createExecutionContext();
-    if(!IS_ASYNC) cudaStreamCreate(&stream);
 
 
     // 获取输入输出张量名称和形状
@@ -63,36 +66,14 @@ TensorrtInferEngine::TensorrtInferEngine(const string& engine_path, const string
         const int POOL_SIZE = 3;
         for (int i = 0; i < POOL_SIZE; ++i) {
             TRTFrameData task;
-            task.frame_id = -1;
-            cudaStreamCreate(&task.stream);
-            cudaMalloc(&task.input_device, input_size);
-            cudaMalloc(&task.output_device, output_size);
-            cudaHostAlloc(&task.output_host, output_size, cudaHostAllocDefault); // 独立页锁定内存
-            // d_img 大小可以在运行时动态分配，或在这里预分配一个最大分辨率(比如 1920*1080*3)
-            free_buffer_queue.push(task);
+            task.initialize(engine.get(), input_size, output_size);
+            free_buffer_queue.push(std::move(task));
         }        
-        infer_work_thread_is_running = true;
         infer_work_thread = std::thread(&TensorrtInferEngine::infer_workerLoop, this);
-        // infer_work_thread.detach();
     }
 
-    if(!IS_ASYNC){
-        cudaMalloc(&input_device, input_size);
-        cudaMalloc(&output_device, output_size);        
-    }
-
-
-    // 分配页锁定主机内存，用于快速异步拷贝输出
-    cudaError_t err = cudaHostAlloc(&d_output_host, output_size, cudaHostAllocDefault);
-    if (err != cudaSuccess) {
-        std::cerr << "Failed to allocate pinned memory: " << cudaGetErrorString(err) << std::endl;
-        throw std::runtime_error("Pinned memory allocation failed");
-    }
-
-    // 创建 CUDA 事件
-    cudaEventCreate(&preprocess_done);
-    cudaEventCreate(&inference_done);
-    cudaEventCreate(&copy_done);
+    // The synchronous facade owns a separate context and buffers.
+    sync_slot_.initialize(engine.get(), input_size, output_size);
 }
 
 void TensorrtInferEngine::loadEngine(const string& engine_path) {
@@ -105,59 +86,33 @@ void TensorrtInferEngine::loadEngine(const string& engine_path) {
     file.read(data.data(), size);
     file.close();
 
-    nvinfer1::IRuntime* runtime = nvinfer1::createInferRuntime(gLogger);
-    engine = runtime->deserializeCudaEngine(data.data(), size);
-    delete runtime;
+    std::unique_ptr<nvinfer1::IRuntime> runtime(nvinfer1::createInferRuntime(gLogger));
+    if (!runtime) throw runtime_error("Failed to create TensorRT runtime");
+    engine.reset(runtime->deserializeCudaEngine(data.data(), size));
     if (!engine) throw runtime_error("Failed to deserialize engine");
 }
 TensorrtInferEngine::~TensorrtInferEngine() {
 
-    if(!IS_ASYNC){
-        cudaStreamDestroy(stream);        
-    } else {
-        // 1. 下达毒丸，强制唤醒并退出工作线程
-        infer_work_thread_is_running = false;
-        TRTFrameData poison_pill;
-        poison_pill.frame_id = -1; 
-        task_queue.push(poison_pill);
-
-        // 2. 阻塞等待 GPU 线程安全结束当前任务并退出循环
+    if(IS_ASYNC){
+        task_queue.close();
+        result_queue.close();
         if (infer_work_thread.joinable()) {
             infer_work_thread.join();
         }
 
-        // 3. 定义显存释放函数
-        auto free_task_memory = [](TRTFrameData& task) {
-            if (task.stream) cudaStreamDestroy(task.stream);
-            if (task.input_device) cudaFree(task.input_device);
-            if (task.output_device) cudaFree(task.output_device);
-            if (task.output_host) cudaFreeHost(task.output_host);
-            if (task.d_img) cudaFree(task.d_img);
-        };
-
-        // 4. 使用 try_pop 非阻塞式榨干所有队列，防止死锁
-        TRTFrameData task;
-        while (free_buffer_queue.try_pop(task)) { free_task_memory(task); }
-        while (task_queue.try_pop(task))        { free_task_memory(task); }
-        while (result_queue.try_pop(task))      { free_task_memory(task); }
+        free_buffer_queue.close();
+        free_buffer_queue.clear();
+        task_queue.clear();
+        result_queue.clear();
     }
 
-    // 释放基础资源
-    if (input_device) cudaFree(input_device);
-    if (output_device) cudaFree(output_device);
-    if (d_img) cudaFree(d_img);
-    if (d_output_host) cudaFreeHost(d_output_host);
-    
-    delete context;
-    delete engine;
-
-    cudaEventDestroy(preprocess_done);
-    cudaEventDestroy(inference_done);
-    cudaEventDestroy(copy_done);
+    sync_slot_.reset();
 }
 
 
 void TensorrtInferEngine::infer(Mat img, int detect_color) {
+    std::lock_guard<std::mutex> sync_lock(sync_mutex_);
+    auto & slot = sync_slot_;
     auto t0 = std::chrono::steady_clock::now();
     objects.clear();
     tmp_objects.clear();
@@ -166,36 +121,23 @@ void TensorrtInferEngine::infer(Mat img, int detect_color) {
     size_t needed_size = img.total() * img.elemSize();
     
     // 如果之前分配的显存不够大，才重新分配（避免每帧 cudaMalloc 带来的严重性能开销）
-    if (d_img_size < needed_size) {
-        if (d_img) cudaFree(d_img);
-        cudaMalloc(&d_img, needed_size);
-        d_img_size = needed_size;
-    }
+    slot.ensure_image_capacity(needed_size);
 
-    cudaMemcpyAsync(d_img, img.data, needed_size, cudaMemcpyHostToDevice, stream);
+    check_cuda(
+      cudaMemcpyAsync(slot.d_img, img.data, needed_size, cudaMemcpyHostToDevice, slot.stream),
+      "cudaMemcpyAsync(image)");
 
     // 启动 CUDA 核函数，直接输出到 input_device
-    launch_preprocess(d_img, img.cols, img.rows,
-                      (float*)input_device, IMAGE_WIDTH, IMAGE_HEIGHT,
-                      stream); 
-    
-    cudaEventRecord(preprocess_done, stream);   // 记录预处理完成事件
-    cudaEventSynchronize(preprocess_done);
+    launch_preprocess(slot.d_img, img.cols, img.rows,
+                      slot.input_device, IMAGE_WIDTH, IMAGE_HEIGHT,
+                      slot.stream);
+    check_cuda(cudaGetLastError(), "launch_preprocess");
     
     // 注意：删除了此处的 cudaFree(d_img); 将其留到下一次或析构时处理
 
     // 推理
     auto t1 = std::chrono::steady_clock::now();
-    context->setTensorAddress(input_name.c_str(), input_device);
-    context->setTensorAddress(output_name.c_str(), output_device);
-    context->enqueueV3(stream);
-
-    cudaEventRecord(inference_done, stream);    // 记录推理完成事件
-
-    // 直接拷贝到页锁定内存
-    cudaMemcpyAsync(d_output_host, output_device, output_size, cudaMemcpyDeviceToHost, stream);
-    cudaEventRecord(copy_done, stream);         // 记录拷贝完成事件
-    cudaStreamSynchronize(stream);
+    execute(slot);
 
     auto t2 = std::chrono::steady_clock::now();
     
@@ -213,7 +155,7 @@ void TensorrtInferEngine::infer(Mat img, int detect_color) {
 
     float color_probs[4], class_probs[9];
     for (int i = 0; i < rows; ++i) {
-        const float* ptr = d_output_host + i * cols;
+        const float* ptr = slot.output_host + i * cols;
 
         float obj_conf = sigmoid(ptr[8]);
         if (obj_conf < conf_threshold) continue;
@@ -297,28 +239,30 @@ void TensorrtInferEngine::infer(Mat img, int detect_color) {
 bool TensorrtInferEngine::async_enabled_infer(const cv::Mat& bgr_img, const YOLOFrameData& frame_info, int frame_count, int detect_color, std::vector<Object>& out_objects, YOLOFrameData& out_frame_data) {
     
     // 1. 从空闲池获取一个 Buffer
-    TRTFrameData task = free_buffer_queue.pop();
+    auto available_task = free_buffer_queue.wait_pop();
+    if (!available_task.has_value()) return false;
+    TRTFrameData task = std::move(*available_task);
     task.setTRTFrameData(frame_info);
     task.frame_id = frame_count;
     task.detect_color = detect_color;
 
     // 2. 动态调整设备显存大小并异步拷贝图像
     size_t needed_size = bgr_img.total() * bgr_img.elemSize();
-    if (task.d_img_size < needed_size) {
-        if (task.d_img) cudaFree(task.d_img);
-        cudaMalloc(&task.d_img, needed_size);
-        task.d_img_size = needed_size;
-    }
+    task.ensure_image_capacity(needed_size);
     
-    cudaMemcpyAsync(task.d_img, bgr_img.data, needed_size, cudaMemcpyHostToDevice, task.stream);
+    check_cuda(
+      cudaMemcpyAsync(
+        task.d_img, bgr_img.data, needed_size, cudaMemcpyHostToDevice, task.stream),
+      "cudaMemcpyAsync(image)");
 
     // 3. 启动 CUDA 预处理核函数（非阻塞，交由 Stream 自动排队）
     launch_preprocess(task.d_img, bgr_img.cols, bgr_img.rows,
                       (float*)task.input_device, IMAGE_WIDTH, IMAGE_HEIGHT,
                       task.stream); 
+    check_cuda(cudaGetLastError(), "launch_preprocess");
     
     // 4. 将任务推入队列，让推理线程接管
-    task_queue.push(task);
+    if (task_queue.push(std::move(task)) == tools::QueuePushResult::Closed) return false;
     in_flight_count++;
 
     // 5. 核心逻辑：流水线深度控制 (Pipeline Depth)
@@ -328,7 +272,9 @@ bool TensorrtInferEngine::async_enabled_infer(const cv::Mat& bgr_img, const YOLO
     
     if (in_flight_count >= MAX_IN_FLIGHT) {
         // 阻塞获取最早推入的帧的计算结果
-        TRTFrameData finished_task = result_queue.pop();
+        auto finished = result_queue.wait_pop();
+        if (!finished.has_value()) return false;
+        TRTFrameData finished_task = std::move(*finished);
         in_flight_count--;
 
         // 在 CPU 端执行 YOLO Sigmoid 和 NMS (纯 CPU 耗时操作)
@@ -338,7 +284,7 @@ bool TensorrtInferEngine::async_enabled_infer(const cv::Mat& bgr_img, const YOLO
         out_frame_data = finished_task; 
 
         // 结果已取出，将 Buffer 洗净后归还给空闲池
-        free_buffer_queue.push(finished_task);
+        free_buffer_queue.push(std::move(finished_task));
         return true; 
     }
 
@@ -446,28 +392,33 @@ std::vector<Object> TensorrtInferEngine::decode_outputs(const float* output_ptr,
 
 void TensorrtInferEngine::infer_workerLoop(){
     // std::cout << "[Worker] Thread started" << std::endl;
-    while(infer_work_thread_is_running){
-        TRTFrameData task = task_queue.pop();
-        // std::cout << "[Worker] Got task " << task.frame_id << std::endl;
-        if(task.frame_id == -1) break; // 毒丸机制：安全退出线程
-
-        context->setTensorAddress(input_name.c_str(), task.input_device);
-        context->setTensorAddress(output_name.c_str(), task.output_device);
-        
-        // 异步推理
-        context->enqueueV3(task.stream);
-        
-        // 异步拷贝回主机
-        cudaMemcpyAsync(task.output_host, task.output_device, output_size, cudaMemcpyDeviceToHost, task.stream);
-        
-        // 等待当前 Stream 的所有任务（拷贝+预处理+推理+回传）全部做完
-        cudaStreamSynchronize(task.stream);
-
-        // std::cout << "[Worker] Finished task " << task.frame_id << std::endl;
-
-        // 推送到结果队列供主线程做 NMS
-        result_queue.push(task);
+    try {
+        while (auto queued_task = task_queue.wait_pop()) {
+            TRTFrameData task = std::move(*queued_task);
+            execute(task);
+            if (result_queue.push(std::move(task)) == tools::QueuePushResult::Closed) return;
+        }
+    } catch (const std::exception& error) {
+        tools::logger()->error("[TensorRT 0708] worker failed: {}", error.what());
+        task_queue.close();
+        free_buffer_queue.close();
+        result_queue.close();
     }
+}
+
+void TensorrtInferEngine::execute(TRTExecutionSlot<float>& slot) {
+    if (!slot.context->setTensorAddress(input_name.c_str(), slot.input_device) ||
+        !slot.context->setTensorAddress(output_name.c_str(), slot.output_device)) {
+        throw std::runtime_error("TensorRT 0708 failed to bind inference tensors");
+    }
+    if (!slot.context->enqueueV3(slot.stream)) {
+        throw std::runtime_error("TensorRT 0708 enqueueV3 failed");
+    }
+    check_cuda(
+      cudaMemcpyAsync(slot.output_host, slot.output_device, output_size,
+                      cudaMemcpyDeviceToHost, slot.stream),
+      "cudaMemcpyAsync(output)");
+    check_cuda(cudaStreamSynchronize(slot.stream), "cudaStreamSynchronize");
 }
 
 
@@ -502,26 +453,20 @@ std::list<Armor> TensorRTYolo0708::detect(const cv::Mat& raw_img, int frame_coun
         return {};
     }
 
-    cv::Mat bgr_img;
+    cv::Mat inference_img = raw_img;
     if (use_roi_) {
-        // 处理 -1 表示不裁剪
-        cv::Rect valid_roi = roi_;
-        if (valid_roi.width == -1) valid_roi.width = raw_img.cols - valid_roi.x;
-        if (valid_roi.height == -1) valid_roi.height = raw_img.rows - valid_roi.y;
-        // 边界检查
-        valid_roi.x = std::max(0, valid_roi.x);
-        valid_roi.y = std::max(0, valid_roi.y);
-        valid_roi.width = std::min(valid_roi.width, raw_img.cols - valid_roi.x);
-        valid_roi.height = std::min(valid_roi.height, raw_img.rows - valid_roi.y);
-        bgr_img = raw_img(valid_roi);
-    } else {
-        bgr_img = raw_img;
+        try {
+            inference_img = raw_img(resolve_roi(roi_, raw_img.size()));
+        } catch (const std::exception& error) {
+            tools::logger()->error("[TensorRTYolo0708] invalid ROI: {}", error.what());
+            return {};
+        }
     }
 
     // 调用 TensorRT 推理
-    engine_->infer(bgr_img, detect_color_);
+    engine_->infer(inference_img, detect_color_);
     // 转换为 Armor 列表
-    return convertToArmors(bgr_img, frame_count);
+    return convertToArmors(inference_img, raw_img, frame_count);
 }
 
 YOLOFrameData TensorRTYolo0708::detect(YOLOFrameData frame_data, int frame_count){
@@ -530,27 +475,22 @@ if (frame_data.frame.empty()) {
         return YOLOFrameData(); // 返回空
     }
 
-    cv::Mat bgr_img;
+    cv::Mat inference_img = frame_data.frame;
     if (use_roi_) {
-        // 处理 -1 表示不裁剪
-        cv::Rect valid_roi = roi_;
-        if (valid_roi.width == -1) valid_roi.width = frame_data.frame.cols - valid_roi.x;
-        if (valid_roi.height == -1) valid_roi.height = frame_data.frame.rows - valid_roi.y;
-        // 边界检查
-        valid_roi.x = std::max(0, valid_roi.x);
-        valid_roi.y = std::max(0, valid_roi.y);
-        valid_roi.width = std::min(valid_roi.width, frame_data.frame.cols - valid_roi.x);
-        valid_roi.height = std::min(valid_roi.height, frame_data.frame.rows - valid_roi.y);
-        bgr_img = frame_data.frame(valid_roi);
-    } else {
-        bgr_img = frame_data.frame;
+        try {
+            inference_img = frame_data.frame(resolve_roi(roi_, frame_data.frame.size()));
+        } catch (const std::exception& error) {
+            tools::logger()->error("[TensorRTYolo0708] invalid ROI: {}", error.what());
+            return YOLOFrameData();
+        }
     }
 
     std::vector<Object> parsed_objects;
     YOLOFrameData finished_frame; // 存放几十毫秒前那张图的完整数据
 
     // 塞入最新帧，同时尝试获取历史帧结果
-    bool has_result = engine_->async_enabled_infer(bgr_img, frame_data, frame_count, detect_color_, parsed_objects, finished_frame);
+    bool has_result = engine_->async_enabled_infer(
+      inference_img, frame_data, frame_count, detect_color_, parsed_objects, finished_frame);
 
     if (!has_result) {
         // 流水线预热中，直接返回空结果给外层，外层这帧不要进行自瞄解算
@@ -565,21 +505,28 @@ if (frame_data.frame.empty()) {
 
     // 重点：生成 Armor 列表。
     // 必须传入 finished_frame 的图片和 frame_count，因为缩放比例(sx, sy)依赖于当时截图的大小
-    finished_frame.armors = convertToArmors(finished_frame.frame, frame_count);
+    cv::Mat finished_inference_img = finished_frame.frame;
+    if (use_roi_) {
+        finished_inference_img =
+          finished_frame.frame(resolve_roi(roi_, finished_frame.frame.size()));
+    }
+    finished_frame.armors =
+      convertToArmors(finished_inference_img, finished_frame.frame, frame_count);
 
     // 返回旧帧。外层代码将使用 finished_frame.gimbal_q 和 finished_frame.armors 进行 PNP 和坐标系转换
     finished_frame.is_empty = false;
     return finished_frame;
 } 
 
-std::list<Armor> TensorRTYolo0708::convertToArmors(const cv::Mat& bgr_img, int frame_count)
+std::list<Armor> TensorRTYolo0708::convertToArmors(
+  const cv::Mat& inference_img, const cv::Mat& raw_img, int frame_count)
 {
     std::list<Armor> armors;
     const auto& objects = engine_->tmp_objects;
 
     // 计算缩放因子
-    float sx = static_cast<float>(bgr_img.cols) / engine_->IMAGE_WIDTH;
-    float sy = static_cast<float>(bgr_img.rows) / engine_->IMAGE_HEIGHT;
+    float sx = static_cast<float>(inference_img.cols) / engine_->IMAGE_WIDTH;
+    float sy = static_cast<float>(inference_img.rows) / engine_->IMAGE_HEIGHT;
 
     for (const auto& obj : objects) {
         if (detect_color_ == 0 && obj.color != 0) continue;
@@ -611,13 +558,13 @@ std::list<Armor> TensorRTYolo0708::convertToArmors(const cv::Mat& bgr_img, int f
         if (!checkType(armor)) continue;
 
         // 计算归一化
-        armor.center_norm = cv::Point2f(armor.center.x / (bgr_img.cols + (use_roi_ ? offset_.x : 0)),
-                                        armor.center.y / (bgr_img.rows + (use_roi_ ? offset_.y : 0)));
+        armor.center_norm = cv::Point2f(
+          armor.center.x / raw_img.cols, armor.center.y / raw_img.rows);
 
         armors.push_back(armor);
     }
 
-    if (debug_) drawDetections(bgr_img, armors, frame_count);
+    if (debug_) drawDetections(raw_img, armors, frame_count);
     return armors;
 }
 

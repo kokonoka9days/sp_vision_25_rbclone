@@ -7,6 +7,7 @@
 
 namespace
 {
+/** @brief 获取卡方分布 95% 上分位阈值 @param degrees_of_freedom 自由度 @return 卡方阈值 @throws std::invalid_argument 当自由度非正 */
 double chi_square_95_upper_threshold(Eigen::Index degrees_of_freedom)
 {
   // Exact 95th percentiles for every observation dimension currently used by this project.

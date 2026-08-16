@@ -1,5 +1,6 @@
 #include <cuda_runtime.h>
 
+/** @brief 将 GPU BGR 图像缩放、归一化并转换为 RGB CHW @param src 输入图像 @param src_w 输入宽度 @param src_h 输入高度 @param dst 输出张量 @param dst_w 输出宽度 @param dst_h 输出高度 @param scale_x X 缩放映射 @param scale_y Y 缩放映射 */
 __global__ void resize_bgr_to_rgb_chw_kernel(const unsigned char* src, int src_w, int src_h,
                                              float* dst, int dst_w, int dst_h,
                                              float scale_x, float scale_y) {
@@ -21,7 +22,7 @@ __global__ void resize_bgr_to_rgb_chw_kernel(const unsigned char* src, int src_w
     dst[2 * dst_h * dst_w + dst_idx] = b;
 }
 
-// 封装为 C 接口函数，供 .cpp 调用
+/** @brief 在指定 CUDA 流上启动 0708 模型预处理 @param src GPU 输入图像 @param src_w 输入宽度 @param src_h 输入高度 @param dst GPU 输出张量 @param dst_w 输出宽度 @param dst_h 输出高度 @param stream CUDA 流 */
 extern "C" void launch_preprocess(const unsigned char* src, int src_w, int src_h,
                                   float* dst, int dst_w, int dst_h,
                                   cudaStream_t stream) {

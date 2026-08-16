@@ -14,26 +14,29 @@
 namespace io {
 class CameraManager {
 public:
+    /** @brief 构造空的相机管理器 */
     CameraManager() : daemon_quit_(false) {}
     
+    /** @brief 销毁相机管理器 */
     ~CameraManager() {
         
     }
 
-    // 注册受管理的相机
+    /** @brief 注册全向感知相机 @param cam 非拥有相机指针 @param solver 非拥有求解器指针 */
     void add_omn_camera(io::Camera* cam, auto_aim::Solver* solver) {
         if (cam != nullptr && solver != nullptr) {
             omn_cameras_.push_back(std::pair(cam, solver));
         }
     }
 
+    /** @brief 注册自瞄相机 @param cam 非拥有相机指针 @param solver 非拥有求解器指针 @param planner 对应规划器 */
     void add_aim_camera(io::Camera* cam, auto_aim::Solver * solver, auto_aim::Planner planner){
         if (cam != nullptr && solver != nullptr) {
             aim_cameras_.push_back(std::tuple(cam, solver, planner));
         }
     }
 
-    // 启动统一守护线程
+    /** @brief 启动统一相机状态守护线程 */
     void start_daemon() {
         daemon_thread_ = std::thread([this]() {
             tools::logger()->info("[CameraManager] Unified camera daemon thread started.");

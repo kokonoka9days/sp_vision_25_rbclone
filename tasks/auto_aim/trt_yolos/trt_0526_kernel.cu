@@ -1,6 +1,7 @@
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
 
+/** @brief 将 GPU BGR 图像双线性缩放并转换为半精度 RGB CHW @param src 输入图像 @param dst 输出张量 @param src_width 输入宽度 @param src_height 输入高度 @param src_step 输入行步长 @param dst_width 输出宽度 @param dst_height 输出高度 */
 __global__ void preprocess_kernel(const unsigned char* src, half* dst,
                                   int src_width, int src_height, int src_step,
                                   int dst_width, int dst_height) {
@@ -28,6 +29,7 @@ __global__ void preprocess_kernel(const unsigned char* src, half* dst,
     }
 }
 
+/** @brief 在指定 CUDA 流上启动 0526 模型预处理 @param src GPU 输入图像 @param dst GPU 输出张量 @param src_width 输入宽度 @param src_height 输入高度 @param src_step 输入行步长 @param dst_width 输出宽度 @param dst_height 输出高度 @param stream CUDA 流 */
 extern "C" void launchPreprocess(const unsigned char* src, half* dst,
                                  int src_width, int src_height, int src_step,
                                  int dst_width, int dst_height,

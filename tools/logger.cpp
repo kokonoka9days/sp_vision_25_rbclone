@@ -12,6 +12,7 @@ namespace tools
 {
 std::shared_ptr<spdlog::logger> logger_ = nullptr;
 
+/** @brief 创建文件与控制台日志接收器并初始化全局日志器 */
 void set_logger()
 {
   auto file_name = fmt::format("logs/{:%Y-%m-%d_%H-%M-%S}.log", std::chrono::system_clock::now());

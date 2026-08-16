@@ -16,7 +16,7 @@ struct DetectionResult
   double delta_yaw;    //rad
   double delta_pitch;  //rad
 
-  // Assignment operator
+  /** @brief 复制赋值检测结果 @param other 源检测结果 @return 当前对象 */
   DetectionResult & operator=(const DetectionResult & other)
   {
     if (this != &other) {

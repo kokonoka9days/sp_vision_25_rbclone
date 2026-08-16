@@ -24,6 +24,7 @@ namespace io
 class DahengCamera  : public CameraBase{
 public:
 
+    /** @brief 初始化大恒相机 SDK */
     static void initSDK(){
         // 初始化SDK
         GX_STATUS status = GXInitLib();
@@ -34,10 +35,12 @@ public:
     }
     /**
      * @brief 构造函数
-     * @param exposure_us 曝光时间(微秒)
+     * @param camera_sn 相机序列号，为空时使用首个设备
+     * @param exposure_us 曝光时间，单位 us
      * @param gain 增益值
-     * @param frame_rate 帧率
-     * @param serial_number 相机序列号(为空时使用第一个相机)
+     * @param gamma 伽马值
+     * @param flip 是否垂直翻转
+     * @param mirror 是否水平镜像
      */
     DahengCamera(std::string camera_sn, 
                                 double exposure_us, 
@@ -47,8 +50,10 @@ public:
                                 bool mirror
                             );
     
+    /** @brief 停止采集并释放大恒相机资源 */
     ~DahengCamera();
 
+    /** @brief 停止图像采集 @return 停止成功时返回 true */
     bool capture_stop();
     
     /**
@@ -57,7 +62,9 @@ public:
      * @param timestamp 时间戳
      */
     void read(cv::Mat& img, std::chrono::steady_clock::time_point& timestamp) override;
+    /** @brief 尝试读取一帧图像 @param img 输出图像 @param timestamp 输出采集时间戳 @return 成功读取时返回 true */
     bool try_read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) override;
+    /** @brief 清空采集帧队列 */
     void clear_camera_frame_buffer() override { queue_.clear(); }
 private:
 
@@ -65,13 +72,18 @@ private:
         cv::Mat img;
         std::chrono::steady_clock::time_point timestamp;
     };
-    // 相机操作
+    /** @brief 枚举并确认配置相机存在 @return 找到相机时返回 true */
     bool enum_and_check_camera();  // 枚举并检查相机
+    /** @brief 配置相机采集参数 @return 初始化成功时返回 true */
     bool initialize_camera();
+    /** @brief 打开相机并启动采集 @return 打开成功时返回 true */
     bool open_camera();
+    /** @brief 关闭相机设备 @return 关闭成功时返回 true */
     bool close_camera();
 
+    /** @brief 从 SDK 获取并转换一帧图像 @return 转换后的 OpenCV 图像 */
     cv::Mat getFrame( );
+    /** @brief 转换并修正相机原始图像 @param pImageBuf SDK 输入图像 @param pImageRaw8Buf 8 位原始缓冲区 @param pImageRGBBuf RGB 输出缓冲区 @param nImageWidth 图像宽度 @param nImageHeight 图像高度 @param nPixelFormat 像素格式 @param nPixelColorFilter Bayer 滤色器类型 @param flip 是否垂直翻转 @param mirror 是否水平镜像 */
     void ProcessData(void *pImageBuf, void *pImageRaw8Buf, void *pImageRGBBuf, int nImageWidth, int nImageHeight,
                         int nPixelFormat, int nPixelColorFilter, bool flip , bool mirror ) ;
 private:
@@ -124,7 +136,9 @@ private:
     bool auto_white_balance_ = true;
     
 
+    /** @brief 暂停相机采集 */
     void pause() override;
+    /** @brief 恢复相机采集 */
     void resume() override;
 
     std::mutex pause_mutex_;

@@ -29,6 +29,7 @@ constexpr std::array<ArmorType, 9> MODEL_TYPES = {
   ArmorType::small, ArmorType::small, ArmorType::big};
 constexpr float BIG_ARMOR_RATIO_THRESHOLD = 3.0F;
 
+/** @brief 将字符串转换为大写 @param value 输入字符串 @return 大写字符串 */
 std::string uppercase(std::string value)
 {
   std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
@@ -37,6 +38,7 @@ std::string uppercase(std::string value)
   return value;
 }
 
+/** @brief 检查可用设备列表是否包含指定设备或其子设备 @param available_devices 可用设备名 @param device 设备前缀 @return 存在时返回 true */
 bool has_device(const std::vector<std::string> & available_devices, const std::string & device)
 {
   return std::any_of(
@@ -45,6 +47,7 @@ bool has_device(const std::vector<std::string> & available_devices, const std::s
     });
 }
 
+/** @brief 将可用设备列表格式化为文本 @param available_devices 可用设备名 @return 逗号分隔文本 */
 std::string available_devices_text(const std::vector<std::string> & available_devices)
 {
   std::string result;
@@ -55,6 +58,7 @@ std::string available_devices_text(const std::vector<std::string> & available_de
   return result.empty() ? "none" : result;
 }
 
+/** @brief 根据配置和可用设备选择 OpenVINO 执行设备 @param core OpenVINO 核心 @param configured_device 配置设备名 @return 实际设备名 @throws std::runtime_error 当配置非法或设备不可用 */
 std::string select_device(ov::Core & core, const std::string & configured_device)
 {
   const auto requested = uppercase(configured_device);

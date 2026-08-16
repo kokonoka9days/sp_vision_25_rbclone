@@ -18,7 +18,7 @@ public:
   static constexpr Eigen::Index kStateDimension = 11;   ///< 状态维度
   static constexpr double kTowerArmorHeightStep = 0.10; ///< 前哨站装甲板高低差
 
-  /** 默认构造函数（未初始化） */
+  /** @brief 默认构造未初始化的估计器 */
   RVfromFYT() = default;
 
   /**
@@ -33,9 +33,10 @@ public:
     const Eigen::VectorXd & x0, const Eigen::MatrixXd & P0, int armor_num,
     ArmorName armor_name);
 
-
+  /** @brief 按半径-速度模型执行 EKF 预测 @param dt 时间步长，单位 s @param u 三轴加速度输入 @param noises 过程噪声参数 */
   void kf_predict(double dt, const Eigen::VectorXd & u, const Eigen::VectorXd noises);
 
+  /** @brief 执行 MPC 兼容预测 @param dt 时间步长，单位 s @param u 三轴加速度输入 @param noises 过程噪声参数 */
   void mpc_predict(double dt, 
       const Eigen::VectorXd & u, 
       const Eigen::VectorXd noises) {this->kf_predict(dt, u, noises); };
@@ -142,12 +143,18 @@ private:
 
   /**
    * @brief 状态加法（重载）: state + delta，并对偏航角归一化
+   * @param state 原状态向量
+   * @param delta 状态增量
+   * @return 相加并归一化后的状态
    */
   static Eigen::VectorXd state_add(
     const Eigen::VectorXd & state, const Eigen::VectorXd & delta);
 
   /**
    * @brief 观测残差计算: observation - prediction，并对角度残差归一化
+   * @param observation 实际观测
+   * @param prediction 预测观测
+   * @return 归一化后的观测残差
    */
   static Eigen::VectorXd observation_subtract(
     const Eigen::VectorXd & observation, const Eigen::VectorXd & prediction);

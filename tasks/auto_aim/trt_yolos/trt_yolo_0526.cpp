@@ -7,6 +7,7 @@
 
 #define IS_ASYNC true
 
+/** @brief 在 CUDA 流上启动 0526 图像预处理 @param src GPU 原图 @param dst GPU 网络输入 @param src_width 原图宽度 @param src_height 原图高度 @param src_step 原图行步长 @param dst_width 网络宽度 @param dst_height 网络高度 @param stream CUDA 流 */
 extern "C" void launchPreprocess(const unsigned char* src, half* dst,
                                  int src_width, int src_height, int src_step,
                                  int dst_width, int dst_height,
@@ -17,6 +18,7 @@ namespace auto_aim {
 // ---------- Logger（匿名命名空间避免重复定义） ----------
 namespace {
 class Logger : public nvinfer1::ILogger {
+    /** @brief 输出 TensorRT 警告及更严重日志 @param severity 严重级别 @param msg 日志文本 */
     void log(Severity severity, const char* msg) noexcept override {
         if (severity <= Severity::kWARNING)
             std::cout << "[TensorRT 0526] " << msg;
@@ -27,7 +29,9 @@ class Logger : public nvinfer1::ILogger {
 // ---------- TensorrtInferEngine0526 实现 ----------
 TensorrtInferEngine0526::TensorrtInferEngine0526(const std::string& engine_path,
                                                  const std::string& device)
-    : task_queue_(3), free_buffer_queue_(3), result_queue_(3) {
+    : task_queue_(3, tools::OverflowPolicy::Block),
+      free_buffer_queue_(3, tools::OverflowPolicy::Block),
+      result_queue_(3, tools::OverflowPolicy::Block) {
     std::ifstream file(engine_path, std::ios::binary);
     if (!file) throw std::runtime_error("Cannot open engine file: " + engine_path);
     file.seekg(0, std::ios::end);
@@ -37,13 +41,10 @@ TensorrtInferEngine0526::TensorrtInferEngine0526(const std::string& engine_path,
     file.read(data.data(), size);
     file.close();
 
-    auto runtime = nvinfer1::createInferRuntime(gLogger);
-    engine_ = runtime->deserializeCudaEngine(data.data(), size);
-    delete runtime;
+    std::unique_ptr<nvinfer1::IRuntime> runtime(nvinfer1::createInferRuntime(gLogger));
+    if (!runtime) throw std::runtime_error("Failed to create TensorRT runtime");
+    engine_.reset(runtime->deserializeCudaEngine(data.data(), size));
     if (!engine_) throw std::runtime_error("Failed to deserialize engine");
-
-    context_ = engine_->createExecutionContext();
-    if (!context_) throw std::runtime_error("Failed to create context");
 
     input_name_ = engine_->getIOTensorName(0);
     output_name_ = engine_->getIOTensorName(1);
@@ -56,12 +57,8 @@ TensorrtInferEngine0526::TensorrtInferEngine0526(const std::string& engine_path,
 
     auto init_stream = [this](){
         TRTFrameData0526 task;
-        task.frame_id = -1;
-        cudaStreamCreate(&task.stream);
-        cudaMalloc(&task.input_device, input_size_);
-        cudaMalloc(&task.output_device, output_size_);
-        cudaHostAlloc(&task.output_host, output_size_, cudaHostAllocDefault);
-        free_buffer_queue_.push(task);
+        task.initialize(engine_.get(), input_size_, output_size_);
+        free_buffer_queue_.push(std::move(task));
     };
     if(IS_ASYNC){
         const int POOL_SIZE = 3;
@@ -71,46 +68,48 @@ TensorrtInferEngine0526::TensorrtInferEngine0526(const std::string& engine_path,
     }else{
         init_stream();
     }
-    worker_running_ = true;
     worker_thread_ = std::thread(&TensorrtInferEngine0526::workerLoop, this);
 }
 
 TensorrtInferEngine0526::~TensorrtInferEngine0526() {
-    worker_running_ = false;
-    TRTFrameData0526 poison;
-    poison.frame_id = -1;
-    task_queue_.push(poison);
+    task_queue_.close();
+    result_queue_.close();
     if (worker_thread_.joinable()) worker_thread_.join();
+    free_buffer_queue_.close();
 
-    auto free_task = [](TRTFrameData0526& t) {
-        if (t.stream) cudaStreamDestroy(t.stream);
-        if (t.input_device) cudaFree(t.input_device);
-        if (t.output_device) cudaFree(t.output_device);
-        if (t.output_host) cudaFreeHost(t.output_host);
-        if (t.d_img) cudaFree(t.d_img);
-    };
-    TRTFrameData0526 tmp;
-    while (free_buffer_queue_.try_pop(tmp)) free_task(tmp);
-    while (task_queue_.try_pop(tmp))       free_task(tmp);
-    while (result_queue_.try_pop(tmp))     free_task(tmp);
-
-    delete context_;
-    delete engine_;
+    free_buffer_queue_.clear();
+    task_queue_.clear();
+    result_queue_.clear();
 }
 
 void TensorrtInferEngine0526::workerLoop() {
-    while (worker_running_) {
-        TRTFrameData0526 task = task_queue_.pop();
-        if (task.frame_id == -1) break;
-
-        context_->setTensorAddress(input_name_.c_str(), task.input_device);
-        context_->setTensorAddress(output_name_.c_str(), task.output_device);
-        context_->enqueueV3(task.stream);
-        cudaMemcpyAsync(task.output_host, task.output_device,
-                        output_size_, cudaMemcpyDeviceToHost, task.stream);
-        cudaStreamSynchronize(task.stream);
-        result_queue_.push(task);
+    try {
+        while (auto queued_task = task_queue_.wait_pop()) {
+            TRTFrameData0526 task = std::move(*queued_task);
+            execute(task);
+            if (result_queue_.push(std::move(task)) == tools::QueuePushResult::Closed) return;
+        }
+    } catch (const std::exception& error) {
+        tools::logger()->error("[TensorRT 0526] worker failed: {}", error.what());
+        task_queue_.close();
+        free_buffer_queue_.close();
+        result_queue_.close();
     }
+}
+
+void TensorrtInferEngine0526::execute(TRTExecutionSlot<half>& slot) {
+    if (!slot.context->setTensorAddress(input_name_.c_str(), slot.input_device) ||
+        !slot.context->setTensorAddress(output_name_.c_str(), slot.output_device)) {
+        throw std::runtime_error("TensorRT 0526 failed to bind inference tensors");
+    }
+    if (!slot.context->enqueueV3(slot.stream)) {
+        throw std::runtime_error("TensorRT 0526 enqueueV3 failed");
+    }
+    check_cuda(
+      cudaMemcpyAsync(slot.output_host, slot.output_device, output_size_,
+                      cudaMemcpyDeviceToHost, slot.stream),
+      "cudaMemcpyAsync(output)");
+    check_cuda(cudaStreamSynchronize(slot.stream), "cudaStreamSynchronize");
 }
 
 void TensorrtInferEngine0526::infer(const cv::Mat& bgr_img,
@@ -118,34 +117,29 @@ void TensorrtInferEngine0526::infer(const cv::Mat& bgr_img,
                                     int detect_color,
                                     std::vector<Object0526>& out_objects,
                                     YOLOFrameData& out_frame_data) {
-    TRTFrameData0526 task = free_buffer_queue_.pop();
+    auto available_task = free_buffer_queue_.wait_pop();
+    if (!available_task.has_value()) return;
+    TRTFrameData0526 task = std::move(*available_task);
     task.setTRTFrameData({bgr_img});
     task.frame_id = frame_count;
     task.detect_color = detect_color;
 
     size_t needed = bgr_img.total() * bgr_img.elemSize();
-    if (task.d_img_size < needed) {
-        if (task.d_img) cudaFree(task.d_img);
-        cudaMalloc(&task.d_img, needed);
-        task.d_img_size = needed;
-    }
-    cudaMemcpyAsync(task.d_img, bgr_img.data, needed,
-                    cudaMemcpyHostToDevice, task.stream);
+    task.ensure_image_capacity(needed);
+    check_cuda(
+      cudaMemcpyAsync(task.d_img, bgr_img.data, needed, cudaMemcpyHostToDevice, task.stream),
+      "cudaMemcpyAsync(image)");
     launchPreprocess(task.d_img, task.input_device,
                      bgr_img.cols, bgr_img.rows, bgr_img.step,
                      IMAGE_WIDTH, IMAGE_HEIGHT, task.stream);
+    check_cuda(cudaGetLastError(), "launchPreprocess");
 
-    context_->setTensorAddress(input_name_.c_str(), task.input_device);
-    context_->setTensorAddress(output_name_.c_str(), task.output_device);
-    context_->enqueueV3(task.stream);
-    cudaMemcpyAsync(task.output_host, task.output_device,
-                    output_size_, cudaMemcpyDeviceToHost, task.stream);
-    cudaStreamSynchronize(task.stream);
+    execute(task);
 
     out_objects = decode_outputs(task.output_host, task.detect_color);
     out_frame_data = task;  
     // task = TRTFrameData0526();
-    free_buffer_queue_.push(task);
+    free_buffer_queue_.push(std::move(task));
 
 }
 
@@ -155,36 +149,38 @@ bool TensorrtInferEngine0526::async_enabled_infer(const cv::Mat& bgr_img,
                                                   int detect_color,
                                                   std::vector<Object0526>& out_objects,
                                                   YOLOFrameData& out_frame_data) {
-    TRTFrameData0526 task = free_buffer_queue_.pop();
+    auto available_task = free_buffer_queue_.wait_pop();
+    if (!available_task.has_value()) return false;
+    TRTFrameData0526 task = std::move(*available_task);
     task.setTRTFrameData(frame_info);
     task.frame_id = frame_count;
     task.detect_color = detect_color;
 
     size_t needed = bgr_img.total() * bgr_img.elemSize();
-    if (task.d_img_size < needed) {
-        if (task.d_img) cudaFree(task.d_img);
-        cudaMalloc(&task.d_img, needed);
-        task.d_img_size = needed;
-    }
-    cudaMemcpyAsync(task.d_img, bgr_img.data, needed,
-                    cudaMemcpyHostToDevice, task.stream);
+    task.ensure_image_capacity(needed);
+    check_cuda(
+      cudaMemcpyAsync(task.d_img, bgr_img.data, needed, cudaMemcpyHostToDevice, task.stream),
+      "cudaMemcpyAsync(image)");
     launchPreprocess(task.d_img, task.input_device,
                      bgr_img.cols, bgr_img.rows, bgr_img.step,
                      IMAGE_WIDTH, IMAGE_HEIGHT, task.stream);
+    check_cuda(cudaGetLastError(), "launchPreprocess");
 
-    task_queue_.push(task);
+    if (task_queue_.push(std::move(task)) == tools::QueuePushResult::Closed) return false;
     in_flight_count_++;
 
     const int MAX_IN_FLIGHT = 2;
     if (in_flight_count_ >= MAX_IN_FLIGHT) {
-        TRTFrameData0526 finished = result_queue_.pop();
+        auto completed_task = result_queue_.wait_pop();
+        if (!completed_task.has_value()) return false;
+        TRTFrameData0526 finished = std::move(*completed_task);
         in_flight_count_--;
 
         out_objects = decode_outputs(finished.output_host, finished.detect_color);
         out_frame_data = finished;
         out_frame_data.is_empty = false;
 
-        free_buffer_queue_.push(finished);
+        free_buffer_queue_.push(std::move(finished));
         return true;
     }
     return false;

@@ -20,7 +20,7 @@ public:
   static constexpr Eigen::Index kMeasurementDimension = 4;  ///< 测量维度
 //   static constexpr double kMeasurementVariance = 0.1;  ///< TJU模型默认测量方差
 
-  /** 默认构造函数（未初始化） */
+  /** @brief 默认构造未初始化的估计器 */
   CAFromTJU() = default;
 
   /**
@@ -71,6 +71,8 @@ public:
 
   /**
    * @brief 计算 [x, y, z, yaw] 观测量与当前后验状态的逐分量平方残差
+   * @param observation_xyzyaw 观测向量 [x, y, z, yaw]
+   * @param armor_id 装甲板编号，本模型忽略该参数
    * @return [dx^2, dy^2, dz^2, dyaw^2]
    */
   Eigen::Vector4d posterior_residual_squared(
@@ -79,6 +81,9 @@ public:
 private:
   /**
    * @brief 状态加法，并对偏航角进行归一化
+   * @param state 原状态向量
+   * @param delta 状态增量
+   * @return 相加并归一化后的状态
    */
   static Eigen::VectorXd state_add(
     const Eigen::VectorXd & state, const Eigen::VectorXd & delta);

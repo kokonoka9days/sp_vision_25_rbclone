@@ -1,0 +1,11 @@
+yolo_name: trt_0708
+trt_engine_path_0708: ../assets/0708_fp16_super.engine
+device: cuda:0
+detect_color: -1
+min_confidence: 0.65
+use_roi: false
+roi:
+  x: 0
+  y: 0
+  width: -1
+  height: -1

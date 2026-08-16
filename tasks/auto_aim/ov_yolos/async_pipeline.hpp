@@ -15,6 +15,7 @@ namespace auto_aim
 class OpenVINOAsyncPipeline
 {
 public:
+  /** @brief 初始化异步推理槽 @param compiled_model 已编译 OpenVINO 模型 @param input_width 网络输入宽度 @param input_height 网络输入高度 */
   void init(ov::CompiledModel & compiled_model, int input_width, int input_height)
   {
     input_width_ = input_width;
@@ -25,6 +26,7 @@ public:
     }
   }
 
+  /** @brief 提交一帧并在流水线填满后取回最早结果 @tparam Parser 后处理回调类型 @param bgr_img 输入图像 @param frame_data 帧元数据 @param frame_count 帧编号 @param parser 后处理回调 @return 检测结果；流水线尚未填满时返回空帧 @throws std::runtime_error 当模型输出形状异常 */
   template <typename Parser>
   YOLOFrameData detect(
     const cv::Mat & bgr_img, const YOLOFrameData & frame_data, int frame_count, Parser parser)
@@ -70,6 +72,7 @@ private:
     bool pending = false;
   };
 
+  /** @brief 将一帧提交到下一个空闲推理槽 @param bgr_img 输入图像 @param frame_data 帧元数据 @param frame_count 帧编号 @throws std::runtime_error 当目标槽仍在运行 */
   void submit(const cv::Mat & bgr_img, const YOLOFrameData & frame_data, int frame_count)
   {
     auto & slot = slots_[next_submit_];

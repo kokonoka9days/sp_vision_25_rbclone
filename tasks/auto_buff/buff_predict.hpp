@@ -16,10 +16,15 @@ const double SMALL_W = CV_PI / 3;
 class Predictor
 {
 public:
+  /** @brief 构造预测器基类 */
   Predictor(){};
+  /** @brief 使用角度观测更新预测器 @param angle 当前角度，单位 rad @param nowtime 当前时间，单位 s */
   virtual void update(double angle, double nowtime) = 0;  // 纯虚函数
+  /** @brief 预测未来角度增量 @param delta_time 预测时长，单位 s @return 角度增量，单位 rad */
   virtual double predict(double delta_time) = 0;          // 纯虚函数
+  /** @brief 查询预测器是否无解 @return 无解时返回 true */
   virtual bool is_unsolve() const = 0;                    // 纯虚函数
+  /** @brief 获取当前最优状态 @return 状态向量 */
   virtual Eigen::VectorXd getX_best() const = 0;          // 纯虚函数
 protected:
   Eigen::VectorXd x0;
@@ -40,6 +45,7 @@ protected:
 class Small_Predictor : public Predictor
 {
 public:
+  /** @brief 构造匀速小符预测器 */
   Small_Predictor()
   : Predictor()  //, x0(Eigen::VectorXd(1)), P0(1, 1), A(1, 1), Q(1, 1), H(1, 1), R(1, 1)
   {
@@ -66,6 +72,7 @@ public:
     ekf = tools::ExtendedKalmanFilter(x0, P0);
   }
 
+  /** @brief 使用角度观测更新小符滤波器 @param angle 当前角度，单位 rad @param nowtime 当前时间，单位 s */
   virtual void update(double angle, double nowtime) override
   {
     // [angle]
@@ -124,6 +131,7 @@ public:
     return;
   }
 
+  /** @brief 预测小符角度增量 @param delta_time 预测时长，单位 s @return 角度增量，单位 rad */
   virtual double predict(double delta_time) override
   {
     if (unsolvable)
@@ -132,14 +140,17 @@ public:
       return (cw_ccw > 0 ? 1 : -1) * SMALL_W * delta_time;
   }
 
+  /** @brief 查询小符预测器是否无解 @return 无解时返回 true */
   virtual bool is_unsolve() const { return unsolvable; }
 
+  /** @brief 获取小符最优状态 @return 状态向量 */
   virtual Eigen::VectorXd getX_best() const { return X_best; }
 };
 
 class Big_Predictor : public Predictor
 {
 public:
+  /** @brief 构造正弦变速大符预测器 */
   Big_Predictor()
   : Predictor()  //,  x0(Eigen::VectorXd(5)), P0(5, 5), A(5, 5), Q(5, 5), H(1, 5), R(1, 1)
   {
@@ -188,6 +199,7 @@ public:
     ekf = tools::ExtendedKalmanFilter(x0, P0);
   }
 
+  /** @brief 使用角度观测更新大符滤波器 @param angle 当前角度，单位 rad @param nowtime 当前时间，单位 s */
   virtual void update(double angle, double nowtime) override
   {
     // 初始化angle
@@ -261,6 +273,7 @@ public:
 #endif
   }
 
+  /** @brief 预测大符角度增量 @param delta_time 预测时长，单位 s @return 角度增量，单位 rad */
   virtual double predict(double delta_time) override
   {
     if (unsolvable) return 0;
@@ -271,8 +284,10 @@ public:
            (-a / w * cos(sita + w * delta_time) + a / w * cos(sita) + (2.09 - a) * delta_time);
   }
 
+  /** @brief 查询大符预测器是否无解 @return 无解时返回 true */
   virtual bool is_unsolve() const { return unsolvable; }
 
+  /** @brief 获取大符最优状态 @return 状态向量 */
   virtual Eigen::VectorXd getX_best() const { return X_best; }
 };
 
@@ -287,6 +302,7 @@ public:
   Eigen::MatrixXd R;
   tools::ExtendedKalmanFilter ekf;
   Eigen::VectorXd X_best;
+  /** @brief 构造三维位置平滑器 */
   XYZ_predictor()
   : x0(Eigen::VectorXd(3)),
     P0(Eigen::MatrixXd(3, 3)),
@@ -311,6 +327,7 @@ public:
     ekf = tools::ExtendedKalmanFilter(x0, P0);
   }
 
+  /** @brief 对三维位置执行一次卡尔曼平滑 @param XYZ 输入观测并输出滤波结果 */
   void kalman(Eigen::Vector3d & XYZ)
   {
     if (first_in) {

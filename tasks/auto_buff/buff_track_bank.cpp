@@ -11,12 +11,14 @@ namespace auto_buff
 {
 namespace
 {
+/** @brief 计算两个稳定时钟时间点之差 @param now 当前时间 @param before 先前时间 @return 时间差，单位 s */
 double seconds_between(
   std::chrono::steady_clock::time_point now, std::chrono::steady_clock::time_point before)
 {
   return std::chrono::duration<double>(now - before).count();
 }
 
+/** @brief 计算像素点集均值 @param points 点集 @return 平均点 */
 cv::Point2f mean_points(const std::vector<cv::Point2f> & points)
 {
   cv::Point2f sum{0.0f, 0.0f};
@@ -25,6 +27,7 @@ cv::Point2f mean_points(const std::vector<cv::Point2f> & points)
   return sum;
 }
 
+/** @brief 计算四边形点到中心的平均距离 @param points 四个顶点 @return 尺度；点数错误时返回 0 */
 double quad_scale(const std::vector<cv::Point2f> & points)
 {
   if (points.size() != 4) return 0.0;
@@ -34,6 +37,7 @@ double quad_scale(const std::vector<cv::Point2f> & points)
   return scale / 4.0;
 }
 
+/** @brief 绕旧中心旋转点集并平移到新中心 @param points 输入点集 @param old_center 旧中心 @param new_center 新中心 @param angle 旋转角 @return 变换后的点集 */
 std::vector<cv::Point2f> rotate_points(
   const std::vector<cv::Point2f> & points, const cv::Point2f & old_center,
   const cv::Point2f & new_center, double angle)
@@ -50,6 +54,7 @@ std::vector<cv::Point2f> rotate_points(
   return rotated;
 }
 
+/** @brief 计算两组对应点的最大残差 @param observed 观测点 @param predicted 预测点 @return 最大像素距离；数量不同时返回正无穷 */
 double max_point_residual(
   const std::vector<cv::Point2f> & observed, const std::vector<cv::Point2f> & predicted)
 {

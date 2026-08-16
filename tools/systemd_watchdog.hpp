@@ -20,6 +20,7 @@ namespace tools
 class SystemdWatchdog
 {
 public:
+  /** @brief 从 systemd 环境变量初始化看门狗通知器 */
   SystemdWatchdog()
   {
     const char * notify_socket = std::getenv("NOTIFY_SOCKET");
@@ -50,8 +51,10 @@ public:
     interval_ = std::chrono::microseconds(usec / 2);
   }
 
+  /** @brief 发送停止通知 */
   ~SystemdWatchdog() { stopping(); }
 
+  /** @brief 向 systemd 发送就绪通知 @param status 可选状态文本 @return 通知发送成功时返回 true */
   bool ready(std::string_view status = {})
   {
     std::string message = "READY=1";
@@ -63,6 +66,7 @@ public:
     return notify(message);
   }
 
+  /** @brief 在看门狗周期到期时发送保活通知 @return 无需发送或发送成功时返回 true */
   bool ping()
   {
     if (!enabled_) return true;
@@ -73,9 +77,11 @@ public:
     return true;
   }
 
+  /** @brief 向 systemd 发送正在停止通知 @return 通知发送成功时返回 true */
   bool stopping() const { return notify("STOPPING=1"); }
 
 private:
+  /** @brief 发送 systemd 通知报文 @param state 通知字段 @return 发送成功时返回 true */
   bool notify(std::string_view state) const
   {
     if (notify_socket_.empty()) return true;

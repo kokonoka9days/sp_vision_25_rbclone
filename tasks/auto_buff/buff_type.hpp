@@ -15,8 +15,6 @@
 namespace auto_buff
 {
 const int INF = 1000000;
-inline double RUNE_RADIUS_M = 0.700;
-inline int SMALL_BUFF_DIRECTION = 0;  // 0: auto, 1/-1: force small buff prediction direction
 inline constexpr double RUNE_SLOT_ANGLE = 2.0 * CV_PI / 5.0;
 
 enum PowerRune_type { SMALL, BIG };
@@ -29,17 +27,6 @@ enum class RuneCenterSource { DETECTED, PREDICTED };
 enum class BuffPoseQuality { FULL_8_POINT, PARTIAL_5_POINT, PARTIAL_4_POINT };
 enum class BuffTrackStatus { TENTATIVE, CONFIRMED, COASTING };
 enum class TargetReadiness { LOST, TRACKING, PREDICTING };
-
-inline double BUFF_BLIND_TIMEOUT_S = 0.100;
-inline double BUFF_TRACK_RETENTION_S = 0.400;
-inline double BUFF_FIRE_FULL_OBSERVATION_MAX_AGE_S = 0.030;
-inline int BUFF_DIRECTION_CONFIRM_INTERVALS = 3;
-inline int BUFF_BIG_SPEED_PHASE_WINDOW = 7;
-inline double BUFF_BIG_SPEED_MIN_SPAN_S = 0.030;
-inline double BUFF_BIG_FIT_MIN_SPAN_S = 1.0;
-inline double BUFF_BIG_FIT_MIN_INLIER_RATIO = 0.75;
-inline double BUFF_BIG_FIT_MAX_RMS = 0.18;
-inline double BUFF_BIG_FIT_BLEND_S = 0.30;
 
 struct BuffObservation
 {
@@ -71,7 +58,9 @@ struct BuffObservation
   bool primary = false;
   std::chrono::steady_clock::time_point timestamp{};
 
+  /** @brief 查询是否包含完整目标四点 @return 完整时返回 true */
   bool has_target() const { return target_points.size() == 4; }
+  /** @brief 查询是否包含完整扇叶四点 @return 完整时返回 true */
   bool has_fan() const { return fan_points.size() == 4; }
 };
 
@@ -87,18 +76,22 @@ public:
   float confidence = 0.0f;
   FanBlade_type type;  // 类型
 
+  /** @brief 构造空扇叶 */
   explicit FanBlade() = default;
 
   // explicit FanBlade(const std::vector<cv::Point2f> & kpt, cv::Point2f keypoints_center, FanBlade_type t);
 
+  /** @brief 由单组关键点构造扇叶 @param kpt 关键点 @param keypoints_center 关键点中心 @param t 扇叶类型 */
   explicit FanBlade(
     const std::vector<cv::Point2f> & kpt, cv::Point2f keypoints_center, FanBlade_type t);
 
+  /** @brief 由目标和扇叶关键点构造完整扇叶 @param target_kpt 目标四点 @param fan_kpt 扇叶四点 @param target_center 目标中心 @param fan_center 扇叶中心 @param t 扇叶类型 @param confidence 置信度 @param slot_id 槽位编号 */
   explicit FanBlade(
     const std::vector<cv::Point2f> & target_kpt, const std::vector<cv::Point2f> & fan_kpt,
     cv::Point2f target_center, cv::Point2f fan_center, FanBlade_type t, float confidence,
     int slot_id);
 
+  /** @brief 仅使用类型构造扇叶 @param t 扇叶类型 */
   explicit FanBlade(FanBlade_type t);
 };
 
@@ -130,19 +123,25 @@ public:
   Eigen::Vector3d blade_ypd_in_world;  // 球坐标系, 单位: m
   Eigen::Vector3d plane_normal_in_world{1.0, 0.0, 0.0};
 
+  /** @brief 由扇叶列表构造能量机关 @param ts 扇叶列表 @param r_center R 标中心 @param last_powerrune 上一帧结果 */
   explicit PowerRune(
     std::vector<FanBlade> & ts, const cv::Point2f r_center,
     std::optional<PowerRune> last_powerrune);
+  /** @brief 由二维观测构造待求解能量机关 @param observation 二维观测 */
   explicit PowerRune(const BuffObservation & observation);
+  /** @brief 构造空能量机关 */
   explicit PowerRune() = default;
 
+  /** @brief 获取目标扇叶 @return 目标扇叶引用 */
   FanBlade & target() { return fanblades[0]; };
 
+  /** @brief 查询三维位姿是否无有效解 @return 无解时返回 true */
   bool is_unsolve() const { return unsolvable_; }
 
 private:
   bool unsolvable_ = false;
 
+  /** @brief 将二维向量转换为 [0, 2pi] 极角 @param v 二维向量 @return 极角，单位 rad */
   double atan_angle(cv::Point2f v) const;  // [0, 2CV_PI]
 };
 }  // namespace auto_buff

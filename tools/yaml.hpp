@@ -7,6 +7,7 @@
 
 namespace tools
 {
+/** @brief 加载 YAML 文件 @param path 文件路径 @return YAML 根节点 @note 文件不存在或格式错误时记录日志并终止进程 */
 inline YAML::Node load(const std::string & path)
 {
   try {
@@ -20,6 +21,7 @@ inline YAML::Node load(const std::string & path)
   }
 }
 
+/** @brief 从 YAML 节点读取必需字段 @tparam T 目标类型 @param yaml YAML 节点 @param key 字段名 @return 转换后的字段值 @note 字段缺失时记录日志并终止进程 */
 template <typename T>
 inline T read(const YAML::Node & yaml, const std::string & key)
 {

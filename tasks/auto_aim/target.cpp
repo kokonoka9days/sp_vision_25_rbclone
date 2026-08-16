@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -179,12 +180,13 @@ void Target::update(const Armor & armor)
     // 【策略 A：前哨站专用】
     // 纯几何匹配(距离+复合角度)，绕开因高度阶梯跳变导致 EKF 协方差波动的干扰
     auto min_angle_error = 1e10;
-    const std::vector<Eigen::Vector4d> & xyza_list = armor_xyza_list();
+    const std::vector<Eigen::Vector4d> xyza_list = armor_xyza_list();
+    if (xyza_list.size() < 3) return;
 
     ekf_.x[10] = RVfromFYT::kTowerArmorHeightStep;
 
     std::vector<std::pair<Eigen::Vector4d, int>> xyza_i_list;
-    for (int i = 0; i < armor_num_; i++) {
+    for (int i = 0; i < std::min<int>(armor_num_, xyza_list.size()); i++) {
       xyza_i_list.push_back({xyza_list[i], i});
     }
 
@@ -215,6 +217,8 @@ void Target::update(const Armor & armor)
     id = ekf_.select_armor_id(last_id);
   }
 
+  if (id < 0 || id >= armor_num_) return;
+
 
   if (id != 0) jumped = true;
 
@@ -224,7 +228,7 @@ void Target::update(const Armor & armor)
     switch_count_++;
     
     // 换板时，将上一块装甲板的历史累加数据计算为平均高度锚点
-    if (name == ArmorName::outpost) {
+    if (name == ArmorName::outpost && last_id >= 0 && last_id < 3) {
       if (tower_armor_hs_datas_ptr[last_id] > 0) {
         tower_armor_hs[last_id].first = true; // 标记该装甲板已有有效的历史数据
         tower_armor_hs[last_id].second = tower_armor_hs_datas[last_id] / tower_armor_hs_datas_ptr[last_id];
@@ -277,17 +281,21 @@ std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
 
 Eigen::Matrix<double, 5, 1> Target::get_recent_armor_xyzad() const
 {
-  Eigen::Vector3d xyz;
-  double yaw;
+  Eigen::Vector3d xyz = Eigen::Vector3d::Zero();
+  double yaw = 0.0;
   auto min_dist = 1e10;
 
   Eigen::VectorXd ekf_x = this->ekf_x();
   // 如果delta_angle为0，则该装甲板中心和整车中心的连线在世界坐标系的xy平面过原点
-  static std::vector<std::pair<int ,double>> armorId_delta_list;  
-  if(!armorId_delta_list.empty()) armorId_delta_list.clear();
+  std::vector<std::pair<int ,double>> armorId_delta_list;
   std::vector<Eigen::Vector4d> armor_xyza_list = this->armor_xyza_list();
 
   auto armor_num = armor_xyza_list.size();
+  if (armor_xyza_list.empty()) {
+    Eigen::Matrix<double, 5, 1> result = Eigen::Matrix<double, 5, 1>::Zero();
+    result[4] = std::numeric_limits<double>::infinity();
+    return result;
+  }
   // // 如果装甲板未发生过跳变，则只有当前装甲板的位置已知
   // if (!target.jumped) return {true, armor_xyza_list[0]};
 
@@ -310,8 +318,9 @@ Eigen::Matrix<double, 5, 1> Target::get_recent_armor_xyzad() const
   }
 
   double abs_vyaw = abs(ekf_x(7));
-  if(abs_vyaw < 90./57.3 
-    && abs(armorId_delta_list[this->last_id].second) < 60./57.3){// 判断当前看到的装甲板在预测时间之后是否还在视野内
+  if(last_id >= 0 && static_cast<std::size_t>(last_id) < armor_xyza_list.size() &&
+    abs_vyaw < 90./57.3 &&
+    abs(armorId_delta_list[this->last_id].second) < 60./57.3){// 判断当前看到的装甲板在预测时间之后是否还在视野内
     min_dist = armor_xyza_list[this->last_id].head<2>().norm();
     xyz = armor_xyza_list[this->last_id].head<3>();
     yaw = armor_xyza_list[this->last_id](3);

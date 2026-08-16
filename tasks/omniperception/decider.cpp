@@ -9,10 +9,12 @@
 #include "tools/math_tools.hpp"
 #include "tools/img_tools.hpp"
 #include "tasks/auto_aim/armor.hpp"
+#include "tasks/auto_aim/solver.hpp"
+#include "tasks/auto_aim/yolo.hpp"
 
 namespace omniperception
 {
-Decider::Decider(const std::string & config_path) : detector_(config_path), count_(0)
+Decider::Decider(const std::string & config_path) : count_(0)
 {
   auto yaml = YAML::LoadFile(config_path);
   img_width_ = yaml["image_width"].as<double>();
@@ -386,11 +388,22 @@ void Decider::set_priority(std::list<auto_aim::Armor> & armors)
     case MODE_TWO: priority_map = mode2;
     break;
     case MODE_THREE: priority_map = mode3;
+    break;
+    default:
+      tools::logger()->error("[omniperception::Decider] invalid priority mode: {}", mode_);
+      return;
   }
 
   if (!armors.empty()) {
     for (auto & armor : armors) {
-      armor.priority = priority_map.at(armor.name);
+      const auto priority = priority_map.find(armor.name);
+      if (priority == priority_map.end()) {
+        tools::logger()->warn(
+          "[omniperception::Decider] armor name {} has no priority mapping",
+          static_cast<int>(armor.name));
+        continue;
+      }
+      armor.priority = priority->second;
     }
   }
 }
@@ -408,6 +421,12 @@ void Decider::sort(std::vector<DetectionResult> & detection_queue)
     dr.armors.sort(
       [](const auto_aim::Armor & a, const auto_aim::Armor & b) { return a.priority < b.priority; });
   }
+
+  detection_queue.erase(
+    std::remove_if(
+      detection_queue.begin(), detection_queue.end(),
+      [](const DetectionResult & result) { return result.armors.empty(); }),
+    detection_queue.end());
 
   // 根据优先级对 DetectionResult 进行排序
   std::sort(

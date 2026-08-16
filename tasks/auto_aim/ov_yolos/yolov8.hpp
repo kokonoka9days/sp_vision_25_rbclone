@@ -19,12 +19,16 @@ namespace auto_aim
 class YOLOV8 : public YOLOBase
 {
 public:
+  /** @brief 初始化 OpenVINO YOLOv8 检测器 @param config_path YAML 配置路径 @param debug 是否启用调试输出 */
   YOLOV8(const std::string & config_path, bool debug);
 
+  /** @brief 同步检测图像中的装甲板 @param bgr_img BGR 图像 @param frame_count 帧编号 @return 装甲板列表 */
   std::list<Armor> detect(const cv::Mat & bgr_img, int frame_count) override;
 
+  /** @brief 异步流水线检测帧 @param frame_data 帧数据 @param frame_count 帧编号 @return 最早完成的帧结果 */
   YOLOFrameData detect(YOLOFrameData frame_data, int frame_count) override;
 
+  /** @brief 后处理网络输出 @param scale 输入缩放系数 @param output 网络输出 @param bgr_img 原图 @param frame_count 帧编号 @return 装甲板列表 */
   std::list<Armor> postprocess(
     double scale, cv::Mat & output, const cv::Mat & bgr_img, int frame_count) override;
 
@@ -48,17 +52,26 @@ private:
   cv::Rect roi_;
   cv::Point2f offset_;
 
+  /** @brief 检查类别名称是否合法 @param armor 装甲板 @return 合法时返回 true */
   bool check_name(const Armor & armor) const;
+  /** @brief 检查尺寸类型是否合法 @param armor 装甲板 @return 合法时返回 true */
   bool check_type(const Armor & armor) const;
 
+  /** @brief 提取数字分类图案 @param bgr_img 原图 @param armor 装甲板 @return 透视校正图案 */
   cv::Mat get_pattern(const cv::Mat & bgr_img, const Armor & armor) const;
+  /** @brief 根据几何比例判断装甲板尺寸 @param armor 装甲板 @return 装甲板尺寸类型 */
   ArmorType get_type(const Armor & armor);
+  /** @brief 归一化装甲板中心坐标 @param bgr_img 输入图像 @param center 像素坐标 @return 归一化坐标 */
   cv::Point2f get_center_norm(const cv::Mat & bgr_img, const cv::Point2f & center) const;
 
+  /** @brief 解析并执行 NMS @param scale 输入缩放系数 @param output 网络输出 @param bgr_img 原图 @param frame_count 帧编号 @return 装甲板列表 */
   std::list<Armor> parse(double scale, cv::Mat & output, const cv::Mat & bgr_img, int frame_count);
 
+  /** @brief 保存装甲板样本 @param armor 装甲板 */
   void save(const Armor & armor) const;
+  /** @brief 绘制检测结果 @param img 图像 @param armors 装甲板列表 @param frame_count 帧编号 */
   void draw_detections(const cv::Mat & img, const std::list<Armor> & armors, int frame_count) const;
+  /** @brief 将四个关键点排列为统一顺序 @param keypoints 待排序关键点 */
   void sort_keypoints(std::vector<cv::Point2f> & keypoints);
 };
 

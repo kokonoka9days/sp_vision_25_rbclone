@@ -34,12 +34,15 @@ public:
    * @brief 提取数字图像 (预处理)
    * 保留 rm_auto_aim 的透视变换 + 二值化逻辑
    * 结果将存储在 armor.pattern 中
+   * @param src 原始图像
+   * @param armors 待处理装甲板列表
    */
   void extractNumbers(const cv::Mat & src, std::vector<auto_aim::Armor> & armors);
 
   /**
    * @brief 数字分类
    * 使用 OpenCV DNN 进行推理
+   * @param armors 待分类装甲板列表，结果写回各元素
    */
   void classify(std::vector<auto_aim::Armor> & armors);
 

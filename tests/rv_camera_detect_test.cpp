@@ -7,6 +7,7 @@
 #include "tasks/auto_aim/rv_detector.hpp"
 #include "tasks/auto_aim/armor.hpp"
 #include "tasks/auto_aim/tracker.hpp"
+#include "tasks/auto_aim/solver.hpp"
 #include "tools/exiter.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"

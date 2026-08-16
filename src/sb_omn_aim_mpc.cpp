@@ -5,6 +5,7 @@
 #include "io/camera.hpp"
 #include "io/gimbal/gimbal.hpp"  // 改为使用Gimbal串口通信
 #include "tasks/auto_aim/yolo.hpp"
+#include "tasks/auto_aim/solver.hpp"
 #include "tasks/omniperception/decider.hpp"
 #include "tools/exiter.hpp"
 #include "tools/systemd_watchdog.hpp"

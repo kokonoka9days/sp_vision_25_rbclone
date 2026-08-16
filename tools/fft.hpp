@@ -34,15 +34,21 @@ struct Wave
   double signal_to_noise_ratio = 0.0;
   std::optional<TimePoint> time_origin;
 
-  /** @brief 快照是否包含可用的周期波形 */
+  /** @brief 快照是否包含可用的周期波形 @return 可用时返回 true */
   bool valid() const;
 
+  /** @brief 计算相对时间处的周期分量值 @param t 相对时间，单位 s @return 周期分量值 */
   double get_value(double t) const;
+  /** @brief 计算相对时间处的周期分量速度 @param t 相对时间，单位 s @return 一阶导数 */
   double get_velocity(double t) const;
+  /** @brief 计算相对时间处的周期分量加速度 @param t 相对时间，单位 s @return 二阶导数 */
   double get_acceleration(double t) const;
 
+  /** @brief 计算绝对时间点的周期分量值 @param t 稳定时钟时间点 @return 周期分量值 */
   double get_value(TimePoint t) const;
+  /** @brief 计算绝对时间点的周期分量速度 @param t 稳定时钟时间点 @return 一阶导数 */
   double get_velocity(TimePoint t) const;
+  /** @brief 计算绝对时间点的周期分量加速度 @param t 稳定时钟时间点 @return 二阶导数 */
   double get_acceleration(TimePoint t) const;
 };
 
@@ -75,13 +81,13 @@ public:
   }
 
   // ---------- 数据添加接口 ----------
-  /** @brief 添加样本（时间以秒为单位，不含armor_id） */
+  /** @brief 添加无数据源编号的相对时间样本 @param t 相对时间，单位 s @param val 观测值 */
   void add_sample(double t, double val);
-  /** @brief 添加样本（时间以秒为单位，含armor_id） */
+  /** @brief 添加带数据源编号的相对时间样本 @param t 相对时间，单位 s @param armor_id 数据源装甲板编号 @param val 观测值 */
   void add_sample(double t, int armor_id, double val);
-  /** @brief 添加样本（使用steady时钟时间点，不含armor_id） */
+  /** @brief 添加无数据源编号的绝对时间样本 @param t 稳定时钟时间点 @param val 观测值 */
   void add_sample(TimePoint t, double val);
-  /** @brief 添加样本（使用steady时钟时间点，含armor_id） */
+  /** @brief 添加带数据源编号的绝对时间样本 @param t 稳定时钟时间点 @param armor_id 数据源装甲板编号 @param val 观测值 */
   void add_sample(TimePoint t, int armor_id, double val);
 
   /** @brief 清空所有内部状态，重置分析器 */
@@ -116,7 +122,7 @@ public:
    * @return 加速度值（仅当周期性时有效）
    */
   double get_acceleration(double t) const;
-  /** @brief 使用 steady_clock 时间点计算加速度 */
+  /** @brief 使用稳定时钟时间点计算加速度 @param t 查询时间点 @return 加速度 */
   double get_acceleration(TimePoint t) const;
   /**
    * @brief 在指定时间点获取预测值（根据拟合的正弦模型）
@@ -124,30 +130,28 @@ public:
    * @return 预测值
    */
   double get_value(double t) const;
-  /**
-   * @brief 使用 steady_clock 时间点获取预测值
-   */
+  /** @brief 使用稳定时钟时间点获取预测值 @param t 查询时间点 @return 预测值 */
   double get_value(TimePoint t) const;
-  /** @brief 获取缓冲区中最旧的值 */
+  /** @brief 获取缓冲区中最旧的值 @return 最旧样本值 */
   double get_val_buf_front() const;
-  /** @brief 获取缓冲区中最新的值 */
+  /** @brief 获取缓冲区中最新的值 @return 最新样本值 */
   double get_latest_value() const;
 
-  /** @brief 是否判定为周期性运动 */
+  /** @brief 查询是否判定为周期性运动 @return 已确认周期性时返回 true */
   bool get_is_periodic() const;
-  /** @brief 设置相位偏移（用于调整预测相位） */
+  /** @brief 设置预测相位偏移 @param offset 相位偏移，单位 rad */
   void set_phase_offset(double offset);
-  /** @brief 获取拟合均值（offset） */
+  /** @brief 获取拟合均值 @return 直流偏置 */
   double get_mean_val() const;
-  /** @brief 获取频率（Hz） */
+  /** @brief 获取频率 @return 频率，单位 Hz */
   double get_frequency() const;
-  /** @brief 获取幅度 */
+  /** @brief 获取幅度 @return 拟合振幅 */
   double get_amplitude() const;
-  /** @brief 获取拟合质量（0~1，越接近1越好） */
+  /** @brief 获取拟合质量 @return 0 到 1 的质量指标 */
   double get_fit_quality() const;
-  /** @brief 获取信噪比（信号功率/噪声功率） */
+  /** @brief 获取信噪比 @return 信号功率与噪声功率之比 */
   double get_signal_to_noise_ratio() const;
-  /** @brief 返回当前拟合波形的线程安全值快照 */
+  /** @brief 返回当前拟合波形的线程安全值快照 @return 波形快照 */
   Wave get_wave() const;
 
 private:
@@ -194,13 +198,13 @@ private:
   std::size_t sample_generation_ = 0;   ///< 样本代数（用于检测重置）
 
   // ---------- 内部辅助方法 ----------
-  /** 带锁的样本添加（内部使用） */
+  /** @brief 在已持锁状态下添加样本 @param t 相对时间 @param armor_id 数据源编号 @param val 观测值 */
   void add_sample_locked(double t, int armor_id, double val);
-  /** 重置（内部，不加锁） */
+  /** @brief 在已持锁状态下重置分析器 */
   void reset_locked();
-  /** 在给定时间（相对时间）计算预测值（不加锁） */
+  /** @brief 在已持锁状态下计算预测值 @param elapsed 相对时间 @return 预测值 */
   double value_at_locked(double elapsed) const;
-  /** 构造当前波形快照（不加锁） */
+  /** @brief 在已持锁状态下构造波形快照 @return 波形快照 */
   Wave wave_locked() const;
 };
 

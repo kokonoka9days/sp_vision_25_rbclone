@@ -5,6 +5,7 @@
 
 namespace tools
 {
+/** @brief 获取项目共享日志器 @return spdlog 日志器实例 */
 std::shared_ptr<spdlog::logger> logger();
 
 }  // namespace tools

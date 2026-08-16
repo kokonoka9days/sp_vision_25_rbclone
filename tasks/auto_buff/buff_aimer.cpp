@@ -7,18 +7,18 @@
 namespace auto_buff
 {
 Aimer::Aimer(const std::string & config_path)
+: Aimer(config_path, load_buff_config(config_path))
+{
+}
+
+Aimer::Aimer(const std::string & config_path, BuffConfig config)
+: config_(std::move(config))
 {
   auto yaml = YAML::LoadFile(config_path);
   yaw_offset_ = yaml["yaw_offset"].as<double>() / 57.3;      // degree to rad
   pitch_offset_ = yaml["pitch_offset"].as<double>() / 57.3;  // degree to rad
   fire_gap_time_ = yaml["fire_gap_time"].as<double>();
   predict_time_ = yaml["predict_time"].as<double>();
-  if (yaml["buff_rune_radius_m"]) RUNE_RADIUS_M = yaml["buff_rune_radius_m"].as<double>();
-  if (yaml["buff_small_direction"]) SMALL_BUFF_DIRECTION = yaml["buff_small_direction"].as<int>();
-  if (yaml["buff_fire_full_observation_max_age_s"]) {
-    BUFF_FIRE_FULL_OBSERVATION_MAX_AGE_S =
-      yaml["buff_fire_full_observation_max_age_s"].as<double>();
-  }
 
   last_fire_t_ = std::chrono::steady_clock::now();
 }
@@ -140,7 +140,7 @@ bool Aimer::get_send_angle(
     angle = predicted->ekf_x()[5];
 
     const auto aim_in_world =
-      predicted->point_buff2world(Eigen::Vector3d(0.0, 0.0, RUNE_RADIUS_M));
+      predicted->point_buff2world(Eigen::Vector3d(0.0, 0.0, config_.rune_radius_m));
     const double d = std::sqrt(
       aim_in_world[0] * aim_in_world[0] + aim_in_world[1] * aim_in_world[1]);
     const double h = aim_in_world[2];

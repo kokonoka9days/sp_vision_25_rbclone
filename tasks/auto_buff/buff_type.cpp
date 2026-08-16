@@ -1,6 +1,7 @@
 #include "buff_type.hpp"
 
 #include <algorithm>
+#include <stdexcept>
 
 #include "tools/logger.hpp"
 
@@ -29,7 +30,9 @@ FanBlade::FanBlade(
 
 FanBlade::FanBlade(FanBlade_type t) : type(t)
 {
-  if (t != _unlight) exit(-1);
+  if (t != _unlight) {
+    throw std::invalid_argument("placeholder FanBlade must have _unlight type");
+  }
 }
 
 PowerRune::PowerRune(

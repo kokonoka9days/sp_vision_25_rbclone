@@ -6,21 +6,23 @@ namespace tools
 class PID
 {
 public:
-  // dt: 控制周期, 单位: s
-  // kp: P项系数
-  // ki: I项系数
-  // kd: D项系数
-  // max_out: PID最大输出值
-  // max_iout I项最大输出值
+  /**
+   * @brief 构造 PID 控制器
+   * @param dt 控制周期，单位 s
+   * @param kp 比例系数
+   * @param ki 积分系数
+   * @param kd 微分系数
+   * @param max_out 输出绝对值上限
+   * @param max_iout 积分项绝对值上限
+   * @param angular 是否将误差按周期角处理
+   */
   PID(float dt, float kp, float ki, float kd, float max_out, float max_iout, bool angular = false);
 
   float pout = 0.0f;  // P项输出, 用于调试
   float iout = 0.0f;  // I项输出, 用于调试
   float dout = 0.0f;  // D项输出, 用于调试
 
-  // 计算PID输出值
-  // set: 目标值
-  // fdb: 反馈值(feedback)
+  /** @brief 计算 PID 输出 @param set 目标值 @param fdb 反馈值 @return 限幅后的控制量 */
   float calc(float set, float fdb);
 
 private:

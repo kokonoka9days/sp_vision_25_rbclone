@@ -19,24 +19,16 @@ class State2Est : public tools::ExtendedKalmanFilter
 public:
   using tools::ExtendedKalmanFilter::ExtendedKalmanFilter;
 
+  /** @brief 销毁状态估计器接口 */
   virtual ~State2Est() = default;
     
-  /// @brief         卡尔曼更新
-  /// @param dt      采集间隔
-  /// @param u       控制量
-  /// @param noises  噪声
+  /** @brief 执行卡尔曼预测 @param dt 采集间隔，单位 s @param u 控制量 @param noises 过程噪声参数 */
   virtual void kf_predict(double dt, const Eigen::VectorXd & u, const Eigen::VectorXd noises) = 0;
 
-  /// @brief         mpc预测
-  /// @param dt      采集间隔
-  /// @param u       控制量
-  /// @param noises  噪声
+  /** @brief 执行 MPC 兼容预测 @param dt 采集间隔，单位 s @param u 控制量 @param noises 过程噪声参数 */
   virtual void mpc_predict(double dt, const Eigen::VectorXd & u, const Eigen::VectorXd noises) = 0;
 
-  /// @brief 计算 [x, y, z, yaw] 观测量与后验估计量的逐分量平方残差
-  /// @param observation_xyzyaw 观测量 [x, y, z, yaw]
-  /// @param armor_id 装甲板 ID；对不区分装甲板的模型忽略此参数
-  /// @return [dx^2, dy^2, dz^2, dyaw^2]，其中偏航残差已归一化到 [-pi, pi]
+  /** @brief 计算观测量与后验估计量的逐分量平方残差 @param observation_xyzyaw 观测量 [x, y, z, yaw] @param armor_id 装甲板 ID；不区分装甲板的模型忽略此参数 @return [dx^2, dy^2, dz^2, dyaw^2] */
   virtual Eigen::Vector4d posterior_residual_squared(
     const Eigen::Vector4d & observation_xyzyaw, int armor_id = 0) const = 0;
 };

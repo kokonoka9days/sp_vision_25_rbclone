@@ -28,16 +28,19 @@ namespace auto_buff
 {
 namespace
 {
+/** @brief 将矩形裁剪到图像范围 @param rect 输入矩形 @param size 图像尺寸 @return 裁剪后的矩形 */
 cv::Rect clip_rect(const cv::Rect & rect, const cv::Size & size)
 {
   return rect & cv::Rect(0, 0, size.width, size.height);
 }
 
+/** @brief 计算矩形中心 @param rect 矩形 @return 中心点 */
 cv::Point2f rect_center(const cv::Rect_<float> & rect)
 {
   return {rect.x + rect.width * 0.5f, rect.y + rect.height * 0.5f};
 }
 
+/** @brief 获取类别调试绘制颜色 @param label 类别编号 @return BGR 颜色 */
 cv::Scalar color_for_label(int label)
 {
   static const std::array<cv::Scalar, 3> colors = {
@@ -46,6 +49,7 @@ cv::Scalar color_for_label(int label)
   return colors[label];
 }
 
+/** @brief 使用左上对齐 letterbox 缩放图像 @param input 输入图像 @param output 输出图像 @param network_size 网络尺寸 @return 逆缩放系数 */
 float top_left_letterbox(
   const cv::Mat & input, cv::Mat & output, const cv::Size & network_size)
 {
@@ -63,6 +67,7 @@ float top_left_letterbox(
 class TensorRTLogger : public nvinfer1::ILogger
 {
 public:
+  /** @brief 转发 TensorRT 日志 @param severity 严重级别 @param message 日志文本 */
   void log(Severity severity, const char * message) noexcept override
   {
     if (severity <= Severity::kWARNING) std::fprintf(stderr, "[TensorRT] %s\n", message);
@@ -71,6 +76,7 @@ public:
 
 TensorRTLogger g_trt_logger;
 
+/** @brief 检查 CUDA 调用状态 @param status 状态码 @param operation 操作名 @throws std::runtime_error 当调用失败 */
 void check_cuda(cudaError_t status, const char * operation)
 {
   if (status != cudaSuccess) {
@@ -79,6 +85,7 @@ void check_cuda(cudaError_t status, const char * operation)
   }
 }
 
+/** @brief 计算 TensorRT 张量元素数 @param dims 张量维度 @return 元素数 @throws std::runtime_error 当包含动态维度 */
 size_t tensor_volume(const nvinfer1::Dims & dims)
 {
   size_t volume = 1;
@@ -102,6 +109,7 @@ struct YOLO11_BUFF::Backend
   };
 
 #if defined(SP_AUTO_BUFF_OPENVINO)
+  /** @brief 加载并编译 OpenVINO 模型 @param model_path 模型路径 */
   explicit Backend(const std::string & model_path)
   {
     auto model = core.read_model(model_path);
@@ -125,6 +133,7 @@ struct YOLO11_BUFF::Backend
     input_tensor = infer_request.get_input_tensor();
   }
 
+  /** @brief 使用 OpenVINO 执行推理 @param image 输入图像 @return 原始输出视图与缩放信息 */
   Result infer(const cv::Mat & image)
   {
     const ov::Shape input_shape = input_tensor.get_shape();
@@ -157,6 +166,7 @@ struct YOLO11_BUFF::Backend
   ov::Tensor input_tensor;
   ov::Tensor output_tensor;
 #elif defined(SP_AUTO_BUFF_TENSORRT)
+  /** @brief 反序列化 TensorRT 引擎并分配 CUDA 资源 @param engine_path 引擎路径 */
   explicit Backend(const std::string & engine_path)
   {
     try {
@@ -242,6 +252,7 @@ struct YOLO11_BUFF::Backend
 
   ~Backend() { release(); }
 
+  /** @brief 使用 TensorRT 执行推理 @param image 输入图像 @return 原始输出视图与缩放信息 */
   Result infer(const cv::Mat & image)
   {
     if (image.type() != CV_8UC3) {
@@ -282,6 +293,7 @@ struct YOLO11_BUFF::Backend
     return {output_host, output_rows, output_cols, inverse_scale};
   }
 
+  /** @brief 释放 TensorRT 和 CUDA 资源 */
   void release() noexcept
   {
     if (output_device != nullptr) cudaFree(output_device);

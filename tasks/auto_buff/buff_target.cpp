@@ -8,34 +8,31 @@ namespace auto_buff
 {
 namespace
 {
-int configured_small_buff_direction()
+/** @brief 规范化配置的小符方向 @param configured 配置值 @return -1、0 或 1 */
+int configured_small_buff_direction(int configured)
 {
-  if (SMALL_BUFF_DIRECTION > 0) return 1;
-  if (SMALL_BUFF_DIRECTION < 0) return -1;
+  if (configured > 0) return 1;
+  if (configured < 0) return -1;
   return 0;
 }
 
-int small_buff_direction(int auto_direction)
+/** @brief 综合自动检测和配置选择小符方向 @param auto_direction 自动检测方向 @param configured 配置方向 @return -1、0 或 1 */
+int small_buff_direction(int auto_direction, int configured)
 {
-  const int configured_direction = configured_small_buff_direction();
+  const int configured_direction = configured_small_buff_direction(configured);
   if (configured_direction != 0) return configured_direction;
   if (auto_direction > 0) return 1;
   if (auto_direction < 0) return -1;
   return 0;
 }
 
-int signum(int value)
-{
-  if (value > 0) return 1;
-  if (value < 0) return -1;
-  return 0;
-}
-
+/** @brief 将角度展开到参考角附近 @param angle 输入角 @param reference 参考角 @return 连续角度 */
 double unwrap_near(double angle, double reference)
 {
   return angle + std::round((reference - angle) / CV_2PI) * CV_2PI;
 }
 
+/** @brief 根据位姿质量获取相位噪声倍率 @param p 三维观测 @return 噪声倍率 */
 double phase_noise_multiplier(const PowerRune & p)
 {
   if (p.pose_quality == BuffPoseQuality::PARTIAL_4_POINT) return 10.0 / 6.0;
@@ -43,6 +40,7 @@ double phase_noise_multiplier(const PowerRune & p)
   return 1.0;
 }
 
+/** @brief 计算数值数组中位数 @param values 输入数组副本 @return 中位数；空数组返回 0 */
 double median(std::vector<double> values)
 {
   if (values.empty()) return 0.0;
@@ -57,106 +55,14 @@ double median(std::vector<double> values)
 }
 }  // namespace
 
-void PhaseDirectionTracker::rebase(double phase, bool preserve_direction)
-{
-  has_last_phase_ = true;
-  last_phase_ = phase;
-  reverse_candidate_direction_ = 0;
-  reverse_confirm_count_ = 0;
-  if (!preserve_direction) {
-    deltas_.clear();
-    votes_.clear();
-    direction_ = 0;
-    score_ = 0;
-  } else if (direction_ != 0) {
-    score_ = direction_ * 6;
-  }
-}
-
-void PhaseDirectionTracker::reset()
-{
-  has_last_phase_ = false;
-  last_phase_ = 0.0;
-  direction_ = 0;
-  score_ = 0;
-  reverse_candidate_direction_ = 0;
-  reverse_confirm_count_ = 0;
-  deltas_.clear();
-  votes_.clear();
-}
-
-void PhaseDirectionTracker::shift_reference(double delta)
-{
-  if (has_last_phase_) last_phase_ += delta;
-}
-
-void PhaseDirectionTracker::update(double phase)
-{
-  if (!has_last_phase_) {
-    rebase(phase, true);
-    return;
-  }
-
-  const double delta = phase - last_phase_;
-  last_phase_ = phase;
-
-  constexpr double min_direction_delta = CV_PI / 900.0;
-  constexpr double max_direction_delta = CV_PI / 5.0;
-  constexpr double confirm_window_delta = CV_PI / 120.0;
-  constexpr int direction_window = 8;
-  const int min_window_samples = std::max(2, BUFF_DIRECTION_CONFIRM_INTERVALS);
-  const int confirm_vote_margin = min_window_samples;
-  const int confirm_score = min_window_samples;
-  constexpr int score_limit = 30;
-
-  if (std::abs(delta) <= min_direction_delta || std::abs(delta) >= max_direction_delta) return;
-
-  const int sample_direction = delta > 0.0 ? 1 : -1;
-  deltas_.push_back(delta);
-  votes_.push_back(sample_direction);
-  while (static_cast<int>(deltas_.size()) > direction_window) {
-    deltas_.pop_front();
-    votes_.pop_front();
-  }
-  score_ = std::clamp(score_ + sample_direction, -score_limit, score_limit);
-
-  double window_delta_sum = 0.0;
-  int window_vote_sum = 0;
-  for (size_t i = 0; i < deltas_.size(); ++i) {
-    window_delta_sum += deltas_[i];
-    window_vote_sum += votes_[i];
-  }
-
-  int window_direction = 0;
-  if (
-    static_cast<int>(deltas_.size()) >= min_window_samples &&
-    std::abs(window_delta_sum) >= confirm_window_delta &&
-    std::abs(window_vote_sum) >= confirm_vote_margin) {
-    const int delta_direction = window_delta_sum > 0.0 ? 1 : -1;
-    const int vote_direction = signum(window_vote_sum);
-    if (delta_direction == vote_direction) window_direction = delta_direction;
-  }
-
-  if (window_direction == 0) {
-    reverse_candidate_direction_ = 0;
-    reverse_confirm_count_ = 0;
-    return;
-  }
-
-  if (direction_ == 0) {
-    if (signum(score_) == window_direction && std::abs(score_) >= confirm_score) {
-      direction_ = window_direction;
-      reverse_candidate_direction_ = 0;
-      reverse_confirm_count_ = 0;
-    }
-    return;
-  }
-  // The rune does not reverse in one mode session. Opposite votes are treated as outliers.
-}
-
 /// Target
 
-Target::Target() : first_in_(true), unsolvable_(true) {};
+Target::Target() : Target(BuffConfig{}) {}
+
+Target::Target(BuffConfig config)
+: config_(std::move(config)), first_in_(true), unsolvable_(true)
+{
+}
 
 void Target::get_target(
   const std::vector<PowerRune> & observations,
@@ -238,7 +144,7 @@ bool Target::can_fire(std::chrono::steady_clock::time_point now) const
     return false;
   }
   return tools::delta_time(now, last_full_observation_timestamp_) <=
-         BUFF_FIRE_FULL_OBSERVATION_MAX_AGE_S;
+         config_.fire_full_observation_max_age_s;
 }
 
 double Target::relative_time(std::chrono::steady_clock::time_point timestamp)
@@ -260,12 +166,12 @@ bool Target::predict_without_measurement(std::chrono::steady_clock::time_point t
   }
 
   const double measurement_age = tools::delta_time(timestamp, last_measurement_timestamp_);
-  if (measurement_age > BUFF_TRACK_RETENTION_S) {
+  if (measurement_age > config_.track_retention_s) {
     reset();
     blind_ = true;
     return false;
   }
-  if (measurement_age > BUFF_BLIND_TIMEOUT_S) {
+  if (measurement_age > config_.blind_timeout_s) {
     unsolvable_ = true;
     readiness_ = TargetReadiness::LOST;
     blind_ = true;
@@ -297,7 +203,17 @@ Eigen::VectorXd Target::ekf_x() const { return ekf_.x; }
 
 /// SmallTarget
 
-SmallTarget::SmallTarget() : Target() {}
+SmallTarget::SmallTarget() : SmallTarget(BuffConfig{}) {}
+
+SmallTarget::SmallTarget(BuffConfig config)
+: Target(config), phase_direction_(config.direction_confirm_intervals)
+{
+}
+
+SmallTarget::SmallTarget(const std::string & config_path)
+: SmallTarget(load_buff_config(config_path))
+{
+}
 
 void SmallTarget::reset()
 {
@@ -424,7 +340,7 @@ void SmallTarget::get_target(
 {
   if (
     p.has_value() && has_measurement_timestamp_ &&
-    tools::delta_time(timestamp, last_measurement_timestamp_) > BUFF_TRACK_RETENTION_S) {
+    tools::delta_time(timestamp, last_measurement_timestamp_) > config_.track_retention_s) {
     reset();
   }
   const double time_gap = relative_time(timestamp);
@@ -712,17 +628,29 @@ void SmallTarget::update(double nowtime, const PowerRune & p)
 
 int SmallTarget::small_prediction_roll_direction() const
 {
-  return small_buff_direction(phase_direction_.direction());
+  return small_buff_direction(phase_direction_.direction(), config_.small_direction);
 }
 
 bool SmallTarget::has_stable_small_prediction_direction() const
 {
-  return configured_small_buff_direction() != 0 || phase_direction_.ready();
+  return configured_small_buff_direction(config_.small_direction) != 0 || phase_direction_.ready();
 }
 
 /// BigTarget
 
-BigTarget::BigTarget() : Target(), spd_fitter_(100, 0.25, 1.884, 2.000) {}
+BigTarget::BigTarget() : BigTarget(BuffConfig{}) {}
+
+BigTarget::BigTarget(BuffConfig config)
+: Target(config),
+  spd_fitter_(100, 0.25, 1.884, 2.000),
+  phase_direction_(config.direction_confirm_intervals)
+{
+}
+
+BigTarget::BigTarget(const std::string & config_path)
+: BigTarget(load_buff_config(config_path))
+{
+}
 
 void BigTarget::reset()
 {
@@ -750,7 +678,7 @@ void BigTarget::clear_speed_samples(bool clear_fitter)
 std::optional<double> BigTarget::estimate_window_speed() const
 {
   if (phase_samples_.size() < 3) return std::nullopt;
-  if (phase_samples_.back().time - phase_samples_.front().time < BUFF_BIG_SPEED_MIN_SPAN_S) {
+  if (phase_samples_.back().time - phase_samples_.front().time < config_.big_speed_min_span_s) {
     return std::nullopt;
   }
 
@@ -806,7 +734,7 @@ void BigTarget::add_speed_sample(double nowtime, double observed_phase, const Po
 
   phase_samples_.push_back(
     {nowtime, observed_phase, 1.0 / std::max(1.0, p.measurement_noise_scale)});
-  while (static_cast<int>(phase_samples_.size()) > BUFF_BIG_SPEED_PHASE_WINDOW) {
+  while (static_cast<int>(phase_samples_.size()) > config_.big_speed_phase_window) {
     phase_samples_.pop_front();
   }
 
@@ -899,7 +827,7 @@ void BigTarget::get_target(
 {
   if (
     p.has_value() && has_measurement_timestamp_ &&
-    tools::delta_time(timestamp, last_measurement_timestamp_) > BUFF_TRACK_RETENTION_S) {
+    tools::delta_time(timestamp, last_measurement_timestamp_) > config_.track_retention_s) {
     reset();
   }
   const double time_gap = relative_time(timestamp);
@@ -1002,7 +930,7 @@ void BigTarget::predict(double dt)
 {
   dt = std::max(0.0, dt);
   const bool fit_ready = spd_fitter_.ready(
-    60, BUFF_BIG_FIT_MIN_SPAN_S, BUFF_BIG_FIT_MIN_INLIER_RATIO, BUFF_BIG_FIT_MAX_RMS);
+    60, config_.big_fit_min_span_s, config_.big_fit_min_inlier_ratio, config_.big_fit_max_rms);
   const auto fit = spd_fitter_.best_result_;
   const double t = lasttime_ + dt;
   const int direction = phase_direction_.direction();
@@ -1128,10 +1056,10 @@ void BigTarget::update(double nowtime, const PowerRune & p)
 
   const double state_dt = nowtime - lasttime_;
   const bool fit_ready = spd_fitter_.ready(
-    60, BUFF_BIG_FIT_MIN_SPAN_S, BUFF_BIG_FIT_MIN_INLIER_RATIO, BUFF_BIG_FIT_MAX_RMS);
+    60, config_.big_fit_min_span_s, config_.big_fit_min_inlier_ratio, config_.big_fit_max_rms);
   if (fit_ready) {
     fit_blend_ = std::min(
-      1.0, fit_blend_ + std::max(state_dt, 0.0) / std::max(BUFF_BIG_FIT_BLEND_S, 1e-3));
+      1.0, fit_blend_ + std::max(state_dt, 0.0) / std::max(config_.big_fit_blend_s, 1e-3));
   } else {
     fit_blend_ = 0.0;
   }

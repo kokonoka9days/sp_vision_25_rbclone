@@ -4,6 +4,7 @@
 
 namespace
 {
+/** @brief 双线性读取并归一化 GPU 图像通道 @param src 输入图像 @param src_step 行步长 @param src_width 宽度 @param src_height 高度 @param x 浮点 X 坐标 @param y 浮点 Y 坐标 @param channel 通道编号 @return 归一化像素值 */
 __device__ __forceinline__ float read_bilinear(
   const unsigned char * src, std::size_t src_step, int src_width, int src_height,
   float x, float y, int channel)
@@ -39,6 +40,7 @@ __device__ __forceinline__ float read_bilinear(
   return fmaf(dy, bottom - top, top) * (1.0f / 255.0f);
 }
 
+/** @brief 执行能量机关模型 GPU 图像预处理 @param src 输入图像 @param src_width 输入宽度 @param src_height 输入高度 @param src_step 行步长 @param dst 输出张量 @param dst_width 输出宽度 @param dst_height 输出高度 @param scale 缩放系数 */
 __global__ void yolo11_buff_preprocess_kernel(
   const unsigned char * __restrict__ src, int src_width, int src_height, std::size_t src_step,
   float * __restrict__ dst, int dst_width, int dst_height, float scale)

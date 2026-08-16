@@ -7,6 +7,7 @@
 
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
+#include "tasks/auto_aim/roi.hpp"
 
 namespace auto_aim
 {
@@ -64,13 +65,12 @@ std::list<Armor> YOLO11::detect(const cv::Mat & raw_img, int frame_count)
   cv::Mat bgr_img;
   tmp_img_ = raw_img;
   if (use_roi_) {
-    if (roi_.width == -1) {  // -1 表示该维度不裁切
-      roi_.width = raw_img.cols;
+    try {
+      bgr_img = raw_img(resolve_roi(roi_, raw_img.size()));
+    } catch (const std::exception & error) {
+      tools::logger()->error("[YOLO11] invalid ROI: {}", error.what());
+      return {};
     }
-    if (roi_.height == -1) {  // -1 表示该维度不裁切
-      roi_.height = raw_img.rows;
-    }
-    bgr_img = raw_img(roi_);
   } else {
     bgr_img = raw_img;
   }
@@ -109,13 +109,12 @@ YOLOFrameData YOLO11::detect(YOLOFrameData frame_data, int frame_count)
 
   cv::Mat bgr_img;
   if (use_roi_) {
-    if (roi_.width == -1) {
-      roi_.width = frame_data.frame.cols;
+    try {
+      bgr_img = frame_data.frame(resolve_roi(roi_, frame_data.frame.size()));
+    } catch (const std::exception & error) {
+      tools::logger()->error("[YOLO11] invalid ROI: {}", error.what());
+      return YOLOFrameData();
     }
-    if (roi_.height == -1) {
-      roi_.height = frame_data.frame.rows;
-    }
-    bgr_img = frame_data.frame(roi_);
   } else {
     bgr_img = frame_data.frame;
   }
@@ -277,7 +276,7 @@ void YOLO11::draw_detections(
 
   if (use_roi_) {
     cv::Scalar green(0, 255, 0);
-    cv::rectangle(detection, roi_, green, 2);
+    cv::rectangle(detection, resolve_roi(roi_, detection.size()), green, 2);
   }
   cv::resize(detection, detection, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
   cv::imshow("detection", detection);

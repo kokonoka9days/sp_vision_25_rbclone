@@ -42,10 +42,13 @@ public:
   ShootMode shoot_mode;
   double ft_angle;  //无人机专有
 
+  /** @brief 根据配置文件初始化控制板 CAN 通信 @param config_path YAML 配置文件路径 */
   CBoard(const std::string & config_path);
 
+  /** @brief 插值得到指定时刻的 IMU 姿态 @param timestamp 查询时间戳 @return 姿态四元数 */
   Eigen::Quaterniond imu_at(std::chrono::steady_clock::time_point timestamp);
 
+  /** @brief 向控制板发送云台控制命令 @param command 控制命令 */
   void send(Command command) const;
 
 private:
@@ -62,8 +65,10 @@ private:
 
   int quaternion_canid_, bullet_speed_canid_, send_canid_;
 
+  /** @brief 处理接收到的 CAN 帧 @param frame CAN 数据帧 */
   void callback(const can_frame & frame);
 
+  /** @brief 读取控制板配置 @param config_path YAML 配置文件路径 @return CAN 接口名称 */
   std::string read_yaml(const std::string & config_path);
 };
 

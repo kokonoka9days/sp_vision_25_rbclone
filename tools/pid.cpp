@@ -2,6 +2,7 @@
 
 #include "math_tools.hpp"
 
+/** @brief 将浮点数限制到闭区间 @param value 输入值 @param min 下限 @param max 上限 @return 限幅值 */
 float clip(float value, float min, float max) { return std::max(min, std::min(max, value)); }
 
 namespace tools
