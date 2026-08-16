@@ -81,6 +81,29 @@ sp_vision_25rbclone
 
 ```
 
+## PlotJuggler 数据录制和回放
+
+`Plotter` 默认仍只实时发送。需要录制时，把构造函数的第三个参数设为 `true`：
+
+```cpp
+tools::Plotter plotter("127.0.0.1", 9870, true);
+```
+
+数据默认保存到 `plot_records/时间戳.csv`，并保留同名 `.jsonl` 原始记录。也可以用第四个参数
+指定文件，或在运行中调用 `start_recording(path)` / `stop_recording()` 开关录制。CSV 会在
+`stop_recording()` 或程序正常退出时生成。
+
+录制结束后，在 PlotJuggler 中选择 `Data -> Load data`，直接打开生成的 `.csv`，并选择第一列
+`time` 作为时间轴，即可使用 PlotJuggler 自带的时间滑块回放，无需启动原视觉程序。
+
+如果需要模拟原来的 UDP 实时输入，也可以执行：
+
+```bash
+./build/plotter_replay plot_records/2026-08-16_19-30-00_123456.csv
+```
+
+第二个参数可设置回放倍速，例如 `2.0` 为两倍速；后两个可选参数依次为目标 IP 和端口。
+
 
 ## 其他组在造车时需注意：
 
@@ -90,7 +113,7 @@ sp_vision_25rbclone
 1. i5-8代intel nuc(尺寸相对较小)
 2. 华硕nuc (三台华硕性能都不同，但是结构尺寸大小、接口位置都相同。 与8代结构尺寸相同，接口位置不同)
 3. 雷神nuc(结构尺寸最大， usb3.0数量最多，与8代和华硕区别较大)
-4. jetson orin nano (尺寸最小，重量最轻)
+4. jetson orin nx (尺寸最小，重量最轻)
 - 小电脑接口位置需要往外延伸3cm左右用于接线预留位置
 #### 相机，镜头选型
 - 实验室相机尺寸大差不差，但是各种型号的镜头尺寸不一，在结构画云台前一定要跟视觉确定相机和镜头选型，尽量做往最大尺寸作为参考、兼容其他镜头的相机保护壳。

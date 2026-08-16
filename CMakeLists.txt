@@ -159,6 +159,11 @@ add_test(NAME thread_safe_queue_test COMMAND thread_safe_queue_test)
 add_executable(thread_pool_test tests/thread_pool_test.cpp)
 add_test(NAME thread_pool_test COMMAND thread_pool_test)
 
+add_executable(plotter_replay tools/plotter_replay.cpp tools/plotter.cpp)
+
+add_executable(plotter_test tests/plotter_test.cpp tools/plotter.cpp)
+add_test(NAME plotter_test COMMAND plotter_test)
+
 add_executable(enemy_color_policy_test tests/enemy_color_policy_test.cpp)
 target_link_libraries(enemy_color_policy_test ${OpenCV_LIBS})
 add_test(NAME enemy_color_policy_test COMMAND enemy_color_policy_test)
