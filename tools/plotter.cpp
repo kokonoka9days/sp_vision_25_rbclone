@@ -100,7 +100,7 @@ bool read_record(
 
 }  // namespace
 
-Plotter::Plotter(std::string host, uint16_t port, bool record, std::string record_path)
+Plotter::Plotter(bool record, std::string host, uint16_t port, std::string record_path)
 {
   socket_ = ::socket(AF_INET, SOCK_DGRAM, 0);
 

@@ -16,13 +16,13 @@ class Plotter
 public:
   /**
    * @brief 构造 UDP 绘图数据发送器
+   * @param record 是否从构造时开始保存
    * @param host 目标主机地址
    * @param port 目标 UDP 端口
-   * @param record 是否从构造时开始保存
    * @param record_path CSV 保存路径；为空时自动生成
    */
   Plotter(
-    std::string host = "127.0.0.1", uint16_t port = 9870, bool record = true,
+    bool record = true, std::string host = "127.0.0.1", uint16_t port = 9870,
     std::string record_path = "");
 
   /** @brief 关闭网络套接字 */

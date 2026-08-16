@@ -83,10 +83,11 @@ sp_vision_25rbclone
 
 ## PlotJuggler 数据录制和回放
 
-`Plotter` 默认仍只实时发送。需要录制时，把构造函数的第三个参数设为 `true`：
+`Plotter` 默认实时发送并录制。构造函数的第一个参数用于选择是否录制：
 
 ```cpp
-tools::Plotter plotter("127.0.0.1", 9870, true);
+tools::Plotter recording_plotter(true);
+tools::Plotter realtime_only_plotter(false);
 ```
 
 数据默认保存到 `plot_records/时间戳.csv`，并保留同名 `.jsonl` 原始记录。也可以用第四个参数

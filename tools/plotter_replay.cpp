@@ -31,7 +31,7 @@ int main(int argc, char * argv[])
       throw std::out_of_range("port");
     }
 
-    tools::Plotter plotter(host, static_cast<uint16_t>(parsed_port));
+    tools::Plotter plotter(false, host, static_cast<uint16_t>(parsed_port));
     if (!plotter.replay(path, speed)) return 1;
   } catch (const std::exception & error) {
     std::cerr << "plotter_replay: invalid argument: " << error.what() << '\n';

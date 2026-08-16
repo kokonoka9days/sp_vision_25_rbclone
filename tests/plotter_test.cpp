@@ -71,7 +71,7 @@ int main()
   std::filesystem::remove(path);
   std::filesystem::remove(raw_path);
 
-  tools::Plotter plotter("127.0.0.1", port, true, path.string());
+  tools::Plotter plotter(true, "127.0.0.1", port, path.string());
   CHECK(plotter.recording());
   CHECK(plotter.recording_path() == path.string());
 
@@ -129,7 +129,7 @@ int main()
   std::filesystem::remove(destructor_path);
   std::filesystem::remove(destructor_raw_path);
   {
-    tools::Plotter destructor_plotter("127.0.0.1", port, true, destructor_path.string());
+    tools::Plotter destructor_plotter(true, "127.0.0.1", port, destructor_path.string());
     destructor_plotter.plot(first);
   }
   CHECK(std::filesystem::exists(destructor_path));
