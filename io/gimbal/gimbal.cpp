@@ -104,23 +104,8 @@ Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t)
 
 void Gimbal::sb_send(io::sb_VisionToGimbal VisionToGimbal)
 {
-  sb_tx_data_.mode = VisionToGimbal.mode;
-  sb_tx_data_.yaw = VisionToGimbal.yaw;
-  sb_tx_data_.yaw_vel = VisionToGimbal.yaw_vel;
-  sb_tx_data_.yaw_acc = VisionToGimbal.yaw_acc;
-  sb_tx_data_.pitch = VisionToGimbal.pitch;
-  sb_tx_data_.pitch_vel = VisionToGimbal.pitch_vel;
-  sb_tx_data_.pitch_acc = VisionToGimbal.pitch_acc;
-  sb_tx_data_.target_x = VisionToGimbal.target_x;
-  sb_tx_data_.target_y = VisionToGimbal.target_y;
-  sb_tx_data_.target_name = VisionToGimbal.target_name;
-
-  try {
-    // 2. 这里的底层缓冲必须是 sb_tx_data_，不能是 tx_data_ ！
-    serial_.write(reinterpret_cast<uint8_t *>(&sb_tx_data_), sizeof(sb_tx_data_));
-  } catch (const std::exception & e) {
-    tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
-  }
+  // 入参已是完整帧（head/end 由 NSDMI 提供），直接发送局部副本即可
+  write_frame(VisionToGimbal);
 }
 
 void Gimbal::omni_send(const io::OmniVisionToGimbal & VisionToGimbal)
@@ -131,76 +116,59 @@ void Gimbal::omni_send(const io::OmniVisionToGimbal & VisionToGimbal)
 
 void Gimbal::omni_send(uint8_t mode, float yaw, float pitch, float distance)
 {
-  omni_tx_data_.mode = mode;
-  omni_tx_data_.yaw = yaw;
-  omni_tx_data_.pitch = pitch;
-  omni_tx_data_.distance = distance;
+  OmniVisionToGimbal frame;
+  frame.mode = mode;
+  frame.yaw = yaw;
+  frame.pitch = pitch;
+  frame.distance = distance;
 
-  try {
-    serial_.write(reinterpret_cast<const uint8_t *>(&omni_tx_data_), sizeof(omni_tx_data_));
-  } catch (const std::exception & e) {
-    tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
-  }
+  write_frame(frame);
 }
 
 void Gimbal::send(io::VisionToGimbal VisionToGimbal)
 {
-  tx_data_.mode = VisionToGimbal.mode;
-  tx_data_.yaw = VisionToGimbal.yaw;
-  tx_data_.yaw_vel = VisionToGimbal.yaw_vel;
-  tx_data_.yaw_acc = VisionToGimbal.yaw_acc;
-  tx_data_.pitch = VisionToGimbal.pitch;
-  tx_data_.pitch_vel = VisionToGimbal.pitch_vel;
-  tx_data_.pitch_acc = VisionToGimbal.pitch_acc;
-      reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
-
-  try {
-    serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
-  } catch (const std::exception & e) {
-    tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
-  }
+  // 入参已是完整帧（head/end 由 NSDMI 提供），直接发送局部副本即可
+  // TODO: VisionToGimbal 有 crc16 字段但发送路径从未计算过，目前恒为 0。
+  //       与电控确认下行校验策略后，在此处补上：
+  //       VisionToGimbal.crc16 = tools::get_crc16(
+  //         reinterpret_cast<uint8_t *>(&VisionToGimbal),
+  //         sizeof(VisionToGimbal) - sizeof(VisionToGimbal.crc16));
+  write_frame(VisionToGimbal);
 }
 
 void Gimbal::send(
   bool control, bool fire, float yaw, float yaw_vel, float yaw_acc, float pitch, float pitch_vel,
   float pitch_acc)
 {
-  tx_data_.mode = control ? (fire ? 2 : 1) : 0;
-  tx_data_.yaw = yaw;
-  tx_data_.yaw_vel = yaw_vel;
-  tx_data_.yaw_acc = yaw_acc;
-  tx_data_.pitch = pitch;
-  tx_data_.pitch_vel = pitch_vel;
-  tx_data_.pitch_acc = pitch_acc;
-      reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) ;
+  VisionToGimbal frame;
+  frame.mode = control ? (fire ? 2 : 1) : 0;
+  frame.yaw = yaw;
+  frame.yaw_vel = yaw_vel;
+  frame.yaw_acc = yaw_acc;
+  frame.pitch = pitch;
+  frame.pitch_vel = pitch_vel;
+  frame.pitch_acc = pitch_acc;
 
-  try {
-    serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
-  } catch (const std::exception & e) {
-    tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
-  }
+  send(frame);
 }
 
 void Gimbal::sb_send(
   bool control, bool fire, float yaw, float yaw_vel, float yaw_acc,
   float pitch, float pitch_vel, float pitch_acc, float target_x, float target_y, uint8_t target_name)
 {
-  sb_tx_data_.mode = control ? (fire ? 2 : 1) : 0;
-  sb_tx_data_.yaw = yaw;
-  sb_tx_data_.yaw_vel = yaw_vel;
-  sb_tx_data_.yaw_acc = yaw_acc;
-  sb_tx_data_.pitch = pitch;
-  sb_tx_data_.pitch_vel = pitch_vel;
-  sb_tx_data_.pitch_acc = pitch_acc;
-  sb_tx_data_.target_x = target_x;
-  sb_tx_data_.target_y = target_y;
-  sb_tx_data_.target_name = target_name;
+  sb_VisionToGimbal frame;
+  frame.mode = control ? (fire ? 2 : 1) : 0;
+  frame.yaw = yaw;
+  frame.yaw_vel = yaw_vel;
+  frame.yaw_acc = yaw_acc;
+  frame.pitch = pitch;
+  frame.pitch_vel = pitch_vel;
+  frame.pitch_acc = pitch_acc;
+  frame.target_x = target_x;
+  frame.target_y = target_y;
+  frame.target_name = target_name;
 
-  try {
-    serial_.write(reinterpret_cast<const uint8_t *>(&sb_tx_data_), sizeof(sb_tx_data_)); 
-  } catch (const std::exception & e) {
-    tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
-  }
+  write_frame(frame);
 }
 
 // void Gimbal::sb_send(

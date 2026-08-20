@@ -61,7 +61,9 @@ auto_aim::Plan Aimer::mpc_aim(
   auto_buff::Target & target, std::chrono::steady_clock::time_point & timestamp, io::GimbalState gs,
   bool to_now)
 {
-  auto_aim::Plan plan = {false, false, 0, 0, 0, 0, 0, 0, 0, 0};
+  // 用 {} 而非逐个列举：Plan 有 13 个成员，旧写法只给了 10 个初始化器，
+  // 以后往 Plan 加字段会静默改变各初始化器的对应关系
+  auto_aim::Plan plan{};
   predicted_target_.reset();
   if (!target.can_control()) return plan;
 
@@ -84,34 +86,50 @@ auto_aim::Plan Aimer::mpc_aim(
     plan.pitch = pitch;
     plan.control = true;
 
-    if (plan.control) {
     if (first_in_aimer_) {
       plan.yaw_vel = 0; plan.yaw_acc = 0;
       plan.pitch_vel = 0; plan.pitch_acc = 0;
       first_in_aimer_ = false;
     } else {
-      auto dt = predict_time_;
-      double last_yaw_mpc, last_pitch_mpc;
+      // 前馈速度/加速度用「同一个预测器、同一套符号、同一个单位」的三点中心差分求得。
+      // 三个采样点围绕实际下发的那一点 (future) 对称展开，间隔均为 predict_time_：
+      //   prev = solve(now_time)                     -> 命令点的前一点
+      //   cur  = solve(future)          = yaw/pitch   -> 实际下发的命令
+      //   next = solve(future + dt)                  -> 命令点的后一点
+      // 不能像以前那样拿 gs.yaw / gs.pitch 当中间点：它们是云台「实测」角且单位是度
+      // (gimbal.cpp 里 state_.yaw = ypr[0] * 57.3)，与弧度的解算结果混算无物理意义。
+      const double dt = predict_time_;
+      const double now_time = to_now ? detect_now_gap : 0.1;
+      double prev_yaw, prev_pitch, next_yaw, next_pitch;
 
-      // 使用另一个全新的副本，推算“当前瞬间”的位姿，而不是传入负时间！
-      auto target_for_now = target.clone();
-      double now_time = to_now ? detect_now_gap : 0.1; 
-      if (get_send_angle(*target_for_now, now_time, bullet_speed, to_now, last_yaw_mpc, last_pitch_mpc)) {
-        plan.yaw_vel = tools::limit_rad(yaw - last_yaw_mpc) / (2 * dt);
-        plan.yaw_acc =
-          (tools::limit_rad(yaw - gs.yaw) - tools::limit_rad(gs.yaw - last_yaw_mpc)) /
-          std::pow(dt, 2);
-        plan.pitch_vel = tools::limit_rad(-pitch + last_pitch_mpc) / (2 * dt);
-        plan.pitch_acc =
-          (-pitch - gs.pitch - (gs.pitch + last_pitch_mpc)) / std::pow(dt, 2);
+      // 使用全新的副本推算各时刻位姿，而不是传入负时间！
+      auto target_prev = target.clone();
+      auto target_next = target.clone();
+      const bool prev_ok =
+        get_send_angle(*target_prev, now_time, bullet_speed, to_now, prev_yaw, prev_pitch);
+      const bool next_ok =
+        get_send_angle(*target_next, future + dt, bullet_speed, to_now, next_yaw, next_pitch);
+
+      if (prev_ok && next_ok && dt > 0) {
+        // yaw 需要考虑 ±π 环绕，逐段取最短弧后再做差分
+        const double yaw_back = tools::limit_rad(yaw - prev_yaw);
+        const double yaw_fwd = tools::limit_rad(next_yaw - yaw);
+        plan.yaw_vel = (yaw_fwd + yaw_back) / (2 * dt);
+        plan.yaw_acc = (yaw_fwd - yaw_back) / (dt * dt);
+
+        // pitch 不会环绕，且与 plan.pitch 同为「向上为正」，直接差分
+        const double pitch_back = pitch - prev_pitch;
+        const double pitch_fwd = next_pitch - pitch;
+        plan.pitch_vel = (pitch_fwd + pitch_back) / (2 * dt);
+        plan.pitch_acc = (pitch_fwd - pitch_back) / (dt * dt);
       } else {
         plan.yaw_vel = plan.yaw_acc = 0.0;
         plan.pitch_vel = plan.pitch_acc = 0.0;
       }
     }
+    // get_send_angle 会覆写 solution_converged_，此处恢复为下发解的收敛状态
     solution_converged_ = future_solution_converged;
   }
-}
 
   if (!plan.control || !solution_converged_ || !target.can_fire(now)) {
     plan.fire = false;

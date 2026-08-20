@@ -8,9 +8,11 @@
 #include <string>
 #include <thread>
 #include <tuple>
+#include <type_traits>
 #include <vector>
 
 #include "serial/serial.h"
+#include "tools/logger.hpp"
 #include "tools/thread_safe_queue.hpp"
 
 namespace io
@@ -48,7 +50,7 @@ struct __attribute__((packed)) VisionToGimbal
   float pitch = 0;
   float pitch_vel = 0;
   float pitch_acc = 0;
-  uint16_t crc16;
+  uint16_t crc16 = 0;  // 注意：目前发送路径未计算 CRC，此处置 0 保证帧内容确定
   uint8_t end = {0x11};
 };
 
@@ -158,9 +160,10 @@ private:
   mutable std::mutex mutex_;
 
   GimbalToVision rx_data_;
-  VisionToGimbal tx_data_;
-  sb_VisionToGimbal sb_tx_data_;
-  OmniVisionToGimbal omni_tx_data_;
+  // 发送帧一律在各 send() 内部以局部变量组装，不使用共享成员缓冲区：
+  // 自瞄线程与打符主循环会在模式切换瞬间同时调用 send()，共享缓冲区会被两个
+  // 线程逐字段交叉写入，发出「自瞄的 yaw + 打符的 pitch + mode=开火」的混合帧。
+  // serial_.write() 自身持写锁，因此单帧的字节流不会交错。
 
   GimbalMode mode_ = GimbalMode::IDLE;
   GimbalState state_;
@@ -168,6 +171,18 @@ private:
     queue_{1000};
 
   int gimbal_yaw2vision, gimbal_pitch2vision, gimbal_roll2vision;
+
+  /** @brief 发送一个已组装好的定长发送帧 @tparam Frame packed 发送帧类型 @param frame 待发送帧（局部变量，非共享缓冲） */
+  template <typename Frame>
+  void write_frame(const Frame & frame)
+  {
+    static_assert(std::is_trivially_copyable<Frame>::value, "发送帧必须是可平凡复制的 packed 结构");
+    try {
+      serial_.write(reinterpret_cast<const uint8_t *>(&frame), sizeof(frame));
+    } catch (const std::exception & e) {
+      tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
+    }
+  }
 
   /** @brief 从串口读取指定字节数 @param buffer 输出缓冲区 @param size 期望字节数 @return 读取成功时返回 true */
   bool read(uint8_t * buffer, size_t size);
