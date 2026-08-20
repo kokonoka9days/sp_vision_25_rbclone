@@ -17,7 +17,8 @@ bool finite(const auto_aim::Plan & plan)
   return std::isfinite(plan.target_yaw) && std::isfinite(plan.target_pitch) &&
          std::isfinite(plan.yaw) && std::isfinite(plan.yaw_vel) &&
          std::isfinite(plan.yaw_acc) && std::isfinite(plan.pitch) &&
-         std::isfinite(plan.pitch_vel) && std::isfinite(plan.pitch_acc);
+         std::isfinite(plan.pitch_vel) && std::isfinite(plan.pitch_acc) &&
+         std::isfinite(plan.yaw_delay);
 }
 
 bool near(double lhs, double rhs) { return std::abs(lhs - rhs) < 1e-8; }
@@ -44,6 +45,13 @@ int main(int argc, char ** argv)
   CHECK(near(original_plan.pitch, copied_plan.pitch));
   CHECK(near(original_plan.yaw, moved_plan.yaw));
   CHECK(near(original_plan.pitch, moved_plan.pitch));
+
+  const auto rb_plan = original.plan(
+    std::optional<auto_aim::Target>{target}, 22.0, 0.0,
+    auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
+  CHECK(rb_plan.control);
+  CHECK(finite(rb_plan));
+  CHECK(rb_plan.yaw_delay > 0 && rb_plan.yaw_delay_direction == 0 && !rb_plan.yaw_reversing);
 
   const auto hero_plan = original.rbHeroplan(target, 22.0, 0.0);
   CHECK(hero_plan.control);
