@@ -36,6 +36,7 @@ std::list<Armor> + timestamp -> Tracker -> std::list<Target>
 ### 状态估计器
 
 - `RVfromFYT::kf_predict()`：按整车平移、旋转和半径模型预测 11 维状态。
+- `CenterAccelerationEstimator`：对最近的 EKF 后验整车中心 XY 位置做二次拟合，结果只作为下一跟踪帧的短时预测输入。
 - `prepare_measurement()`：把装甲板位置转换成 `[yaw,pitch,distance,armor_yaw]` 观测。
 - `select_armor_id()`：用马氏距离选择观测对应的装甲板编号。
 - `correct()`：使用选定装甲板执行 EKF 校正。
@@ -58,5 +59,7 @@ std::list<Armor> + timestamp -> Tracker -> std::list<Target>
 不同目标使用不同装甲板数量、初始半径和协方差，例如平衡步兵按两块装甲板建模，前哨站和基地按三块建模，普通车辆按四块建模。
 
 EKF 的预测阶段利用运动模型得到下一时刻状态和不确定度；校正阶段将实际观测与预测观测作差，再按协方差权重修正状态。角度残差必须归一化，否则跨越 `-pi/pi` 时会产生错误跳变。
+
+普通车辆的帧间预测可使用上一帧确认的中心 XY 加速度，形式为 `F*x+B*a`。加速度估计器由 `Tracker` 持有，不写入 `Target`，因此 Planner、弹道补偿和旧 Aimer 对目标副本的未来外推仍保持 CV；现有 Z 轴周期 `Wave` 补偿不受影响。
 
 修改丢失和重新锁定逻辑从 `tracker.cpp` 开始；修改目标生命周期从 `target.cpp` 开始；修改状态方程和观测方程从 `rv_from_fyt.cpp` 或 `ca_from_tju.cpp` 开始。

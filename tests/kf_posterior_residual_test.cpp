@@ -60,6 +60,22 @@ int main()
     return 1;
   }
 
+  Eigen::VectorXd controlled_state = Eigen::VectorXd::Zero(auto_aim::RVfromFYT::kStateDimension);
+  const Eigen::MatrixXd controlled_covariance = Eigen::MatrixXd::Identity(
+    auto_aim::RVfromFYT::kStateDimension, auto_aim::RVfromFYT::kStateDimension);
+  auto_aim::RVfromFYT controlled_rv(
+    controlled_state, controlled_covariance, 4, auto_aim::ArmorName::sentry);
+  Eigen::VectorXd process_noises(2);
+  process_noises << 1.0, 1.0;
+  Eigen::Vector3d acceleration(2.0, -1.0, 0.0);
+  controlled_rv.kf_predict(0.1, acceleration, process_noises);
+  if (
+    !near(controlled_rv.x[0], 0.01) || !near(controlled_rv.x[1], 0.2) ||
+    !near(controlled_rv.x[2], -0.005) || !near(controlled_rv.x[3], -0.1)) {
+    std::cerr << "RVfromFYT did not apply planar acceleration input\n";
+    return 1;
+  }
+
   auto_aim::Target target(1.0, 0.0, 0.2, 0.0);
   const std::vector<cv::Point2f> keypoints{
     {0.0F, 0.0F}, {1.0F, 0.0F}, {1.0F, 1.0F}, {0.0F, 1.0F}};
@@ -73,7 +89,7 @@ int main()
   target_observation << armor.xyz_in_world, armor.ypr_in_world[0];
   const Eigen::Vector4d expected_target =
     target.ekf().posterior_residual_squared(target_observation, target.last_id);
-  if (!near(target.rv_residual, expected_target)) {
+  if (!target.rv_residual || !near(*target.rv_residual, expected_target)) {
     std::cerr << "Target did not store the RVfromFYT posterior residual\n";
     return 1;
   }

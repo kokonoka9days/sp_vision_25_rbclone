@@ -35,6 +35,29 @@ void sort_by_image_center(std::list<Armor> & armors)
     return normalized_center_distance(a) < normalized_center_distance(b);
   });
 }
+
+template <typename T>
+T optional_value(const YAML::Node & yaml, const char * key, const T & fallback)
+{
+  return yaml[key] ? yaml[key].as<T>() : fallback;
+}
+
+CenterAccelerationEstimatorConfig read_center_acceleration_config(const YAML::Node & yaml)
+{
+  CenterAccelerationEstimatorConfig config;
+  config.enabled = optional_value(yaml, "center_accel_ff_enabled", config.enabled);
+  config.window_seconds = optional_value(yaml, "center_accel_window_s", config.window_seconds);
+  config.min_samples = optional_value(yaml, "center_accel_min_samples", config.min_samples);
+  config.min_span_seconds =
+    optional_value(yaml, "center_accel_min_span_s", config.min_span_seconds);
+  config.ema_alpha = optional_value(yaml, "center_accel_ema_alpha", config.ema_alpha);
+  config.max_acceleration = optional_value(yaml, "center_accel_max_mps2", config.max_acceleration);
+  config.max_jerk = optional_value(yaml, "center_accel_max_jerk_mps3", config.max_jerk);
+  config.max_fit_rmse = optional_value(yaml, "center_accel_max_fit_rmse_m", config.max_fit_rmse);
+  config.stale_timeout_seconds =
+    optional_value(yaml, "center_accel_stale_timeout_s", config.stale_timeout_seconds);
+  return config;
+}
 }  // namespace
 
 Tracker::Tracker(const std::string & config_path, Solver * solver)
@@ -59,6 +82,8 @@ Tracker::Tracker(const std::string & config_path, IArmorPoseSolver * solver)
   max_temp_lost_count_ = yaml["max_temp_lost_count"].as<int>();
   outpost_max_temp_lost_count_ = yaml["outpost_max_temp_lost_count"].as<int>();
   normal_temp_lost_count_ = max_temp_lost_count_;
+  center_acceleration_estimator_ =
+    CenterAccelerationEstimator(read_center_acceleration_config(yaml));
 
   last_cam_is_short = true;
 }
@@ -84,6 +109,7 @@ void Tracker::reset()
   pre_state_ = "lost";
   last_timestamp_ = std::chrono::steady_clock::now();
   last_mode_.reset();
+  center_acceleration_estimator_.reset();
 }
 
 void Tracker::set_fft(tools::FFTExample * fft)
@@ -104,6 +130,18 @@ void Tracker::update_fft_sample(
   fft_->add_sample(t, target_.last_id, armor.xyz_in_world.z());
 }
 
+void Tracker::update_camera_mode(bool cam_is_short)
+{
+  if (cam_is_short != last_cam_is_short) center_acceleration_estimator_.reset();
+  target_.cam_is_short = cam_is_short;
+  last_cam_is_short = cam_is_short;
+}
+
+bool Tracker::use_center_acceleration() const
+{
+  return target_.name != ArmorName::base && target_.name != ArmorName::outpost;
+}
+
 std::list<Target> Tracker::sb_track(
   std::list<Armor> & armors, std::chrono::steady_clock::time_point t,bool cam_is_short, bool use_enemy_color)
 {
@@ -120,7 +158,7 @@ std::list<Target> Tracker::sb_track(
     enemy_color_ = enemy_color_from_gimbal(EnemyColorPolicy::Sentry, g.enemy_color);
   }
 
-  target_.cam_is_short = cam_is_short;
+  update_camera_mode(cam_is_short);
 
   // 时间间隔过长，说明可能发生了相机离线
   if (state_ != "lost" && dt > 0.1) {
@@ -191,7 +229,7 @@ std::list<Target> Tracker::track(
     enemy_color_ = enemy_color_from_gimbal(EnemyColorPolicy::Standard, g.enemy_color);
   }
 
-  target_.cam_is_short = cam_is_short;
+  update_camera_mode(cam_is_short);
 
   // 时间间隔过长，说明可能发生了相机离线
   if (state_ != "lost" && dt > 0.1) {
@@ -288,7 +326,7 @@ std::list<Target> Tracker::test_track(
   last_timestamp_ = t;
   
  
-  target_.cam_is_short = cam_is_short;
+  update_camera_mode(cam_is_short);
 
   // 时间间隔过长，说明可能发生了相机离线
   if (state_ != "lost" && dt > 0.1) {
@@ -516,6 +554,12 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
   target_.cam_is_short = cam_is_short;
   last_cam_is_short = cam_is_short;
 
+  center_acceleration_estimator_.reset();
+  if (use_center_acceleration()) {
+    const Eigen::VectorXd state = target_.ekf_x();
+    center_acceleration_estimator_.add_sample(t, {state[0], state[2]});
+  }
+
   reset_fft_sample_state();
   update_fft_sample(armor, t);
   return true;
@@ -529,8 +573,13 @@ bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock
               : std::nullopt;
 
   }
-  target_.predict(t);
-  
+  Eigen::VectorXd acceleration = Eigen::VectorXd::Zero(3);
+  if (use_center_acceleration()) {
+    acceleration.head<2>() = center_acceleration_estimator_.acceleration(t);
+  }
+  // XY acceleration is intentionally limited to this online frame-to-frame prediction.
+  target_.predict(t, acceleration);
+
   bool found = false;
 
   // 由于 armors 在 track/sb_track 中已经按距离图像中心的远近排序
@@ -538,7 +587,13 @@ bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock
   for (auto & armor : armors) {
     if (armor.name == target_.name && armor.type == target_.armor_type) {
       if (!solver_->try_solve(armor)) continue;
+      const int previous_update_count = target_.update_count_;
       target_.update(armor);
+
+      if (use_center_acceleration() && target_.update_count_ > previous_update_count) {
+        const Eigen::VectorXd state = target_.ekf_x();
+        center_acceleration_estimator_.add_sample(t, {state[0], state[2]});
+      }
 
       update_fft_sample(armor, t);
       found = true;

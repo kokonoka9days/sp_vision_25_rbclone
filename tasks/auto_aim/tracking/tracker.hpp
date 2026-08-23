@@ -10,6 +10,7 @@
 #include "io/gimbal/gimbal.hpp"
 #include "../model/armor.hpp"
 #include "../model/armor_interfaces.hpp"
+#include "center_acceleration_estimator.hpp"
 #include "target.hpp"
 #include "tasks/omniperception/detection.hpp"
 #include "tools/thread_safe_queue.hpp"
@@ -85,6 +86,7 @@ private:
   int normal_temp_lost_count_;
   std::string state_, pre_state_;
   Target target_;
+  CenterAccelerationEstimator center_acceleration_estimator_;
   std::chrono::steady_clock::time_point last_timestamp_;
   ArmorPriority omni_target_priority_;
   std::optional<uint8_t> last_mode_;
@@ -103,6 +105,12 @@ private:
   void reset_fft_sample_state();
   /** @brief 向周期运动分析器添加装甲板样本 @param armor 匹配装甲板 @param t 帧时间戳 */
   void update_fft_sample(const Armor & armor, std::chrono::steady_clock::time_point t);
+
+  /** @brief 更新相机模式；相机切换时清空中心加速度历史 */
+  void update_camera_mode(bool cam_is_short);
+
+  /** @brief 当前目标是否允许使用整车中心平移加速度前馈 */
+  bool use_center_acceleration() const;
 
   
 };

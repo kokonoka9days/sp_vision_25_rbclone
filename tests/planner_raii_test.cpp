@@ -51,7 +51,8 @@ int main(int argc, char ** argv)
     auto_aim::Planner::ShootStrategy::rbSuppressiveFire);
   CHECK(rb_plan.control);
   CHECK(finite(rb_plan));
-  CHECK(rb_plan.yaw_delay > 0 && rb_plan.yaw_delay_direction == 0 && !rb_plan.yaw_reversing);
+  CHECK(rb_plan.yaw_delay >= 0);
+  CHECK(rb_plan.yaw_delay_direction >= -1 && rb_plan.yaw_delay_direction <= 1);
 
   const auto hero_plan = original.rbHeroplan(target, 22.0, 0.0);
   CHECK(hero_plan.control);

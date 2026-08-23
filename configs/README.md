@@ -156,6 +156,17 @@ RV 数字分类器额外读取：
 | `min_detect_count` | int | 必填 | 连续检测达到该帧数后，从 detecting 进入 tracking |
 | `max_temp_lost_count` | int | 必填 | 普通目标临时丢失的最大容忍帧数 |
 | `outpost_max_temp_lost_count` | int | 必填 | 前哨站目标临时丢失的最大容忍帧数 |
+| `center_accel_ff_enabled` | bool | 可选，`true` | 普通车辆是否在相邻跟踪帧之间使用整车中心 XY 加速度前馈；不作用于 MPC、弹道或旧 Aimer 外推 |
+| `center_accel_window_s` | double | 可选，`0.25` | 后验整车中心位置的二次拟合时间窗口，s |
+| `center_accel_min_samples` | int | 可选，`6` | 启用加速度拟合所需的最少后验样本数，必须不小于 3 |
+| `center_accel_min_span_s` | double | 可选，`0.12` | 启用加速度拟合所需的最小样本跨度，s |
+| `center_accel_ema_alpha` | double | 可选，`0.2` | 拟合加速度的 EMA 新值权重，范围 `(0,1]` |
+| `center_accel_max_mps2` | double | 可选，`6.0` | XY 合加速度模长上限，m/s^2 |
+| `center_accel_max_jerk_mps3` | double | 可选，`30.0` | 相邻有效估计的 XY 合 jerk 上限，m/s^3 |
+| `center_accel_max_fit_rmse_m` | double | 可选，`0.08` | 二次位置拟合允许的最大二维 RMSE，m |
+| `center_accel_stale_timeout_s` | double | 可选，`0.15` | 无新后验观测后继续使用加速度的最长时间，s；同时作为异常采样间隔重置阈值 |
+
+中心加速度样本取自 EKF 校正后的整车旋转中心，而不是单块装甲板原始位置。基地和前哨站固定禁用该前馈；目标重建、相机切换、时间倒退或异常采样间隔会清空拟合历史。
 
 ## Aimer 与 Shooter
 

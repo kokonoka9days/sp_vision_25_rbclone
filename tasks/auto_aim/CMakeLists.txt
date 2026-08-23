@@ -4,6 +4,7 @@ set(AUTO_AIM_SOURCES
     model/armor.cpp
     geometry/solver.cpp
     aiming/aimer.cpp
+    tracking/center_acceleration_estimator.cpp
     tracking/target.cpp
     tracking/ca_from_tju.cpp
     tracking/rv_from_fyt.cpp

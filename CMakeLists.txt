@@ -153,6 +153,12 @@ target_link_libraries(calibrate ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
 add_executable(fft_fit_test tests/fft_fit_test.cpp tools/fft.cpp)
 add_test(NAME fft_fit_test COMMAND fft_fit_test)
 
+add_executable(
+    center_acceleration_estimator_test
+    tests/center_acceleration_estimator_test.cpp
+    tasks/auto_aim/tracking/center_acceleration_estimator.cpp)
+add_test(NAME center_acceleration_estimator_test COMMAND center_acceleration_estimator_test)
+
 add_executable(thread_safe_queue_test tests/thread_safe_queue_test.cpp)
 add_test(NAME thread_safe_queue_test COMMAND thread_safe_queue_test)
 
@@ -205,20 +211,20 @@ add_test(
       -DANALYZER=$<TARGET_FILE:yaw_delay_analyzer>
       -P ${PROJECT_SOURCE_DIR}/tests/yaw_delay_analyzer_test.cmake)
 
-# add_executable(
-#     kf_posterior_residual_test
-#     tests/kf_posterior_residual_test.cpp
-#     tasks/auto_aim/model/armor.cpp
-#     tasks/auto_aim/tracking/target.cpp
-#     tasks/auto_aim/tracking/ca_from_tju.cpp
-#     tasks/auto_aim/tracking/rv_from_fyt.cpp)
-# target_link_libraries(
-#     kf_posterior_residual_test
-#     ${OpenCV_LIBS}
-#     fmt::fmt
-#     spdlog::spdlog
-#     tools)
-# add_test(NAME kf_posterior_residual_test COMMAND kf_posterior_residual_test)
+add_executable(
+    kf_posterior_residual_test
+    tests/kf_posterior_residual_test.cpp
+    tasks/auto_aim/model/armor.cpp
+    tasks/auto_aim/tracking/target.cpp
+    tasks/auto_aim/tracking/ca_from_tju.cpp
+    tasks/auto_aim/tracking/rv_from_fyt.cpp)
+target_link_libraries(
+    kf_posterior_residual_test
+    ${OpenCV_LIBS}
+    fmt::fmt
+    spdlog::spdlog
+    tools)
+add_test(NAME kf_posterior_residual_test COMMAND kf_posterior_residual_test)
 
 if(OPENVINO_MAKE)
     add_executable(auto_aim_test tests/auto_aim_test.cpp)
