@@ -1,4 +1,4 @@
-#include "io/usbcamera/usbcamera.hpp"
+#include "io/camera/usbcamera/usbcamera.hpp"
 
 #include <opencv2/opencv.hpp>
 #include <thread>

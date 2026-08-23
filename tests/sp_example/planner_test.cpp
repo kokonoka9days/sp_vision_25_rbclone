@@ -1,4 +1,4 @@
-#include "tasks/auto_aim/planner/planner.hpp"
+#include "tasks/auto_aim/aiming/planner/planner.hpp"
 
 #include <chrono>
 #include <nlohmann/json.hpp>

@@ -4,8 +4,8 @@
 #include <fstream>
 #include <opencv2/opencv.hpp>
 
-#include "io/camera.hpp"
-#include "io/cboard.hpp"
+#include "io/camera/camera.hpp"
+#include "io/gimbal/cboard.hpp"
 #include "io/gimbal/gimbal.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
@@ -146,8 +146,8 @@ int main(int argc, char * argv[])
 // #include <fstream>
 // #include <opencv2/opencv.hpp>
 
-// #include "io/camera.hpp"
-// #include "io/cboard.hpp"
+// #include "io/camera/camera.hpp"
+// #include "io/gimbal/cboard.hpp"
 // #include "tools/img_tools.hpp"
 // #include "tools/logger.hpp"
 // #include "tools/math_tools.hpp"

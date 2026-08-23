@@ -8,7 +8,7 @@
 #include <stdexcept>
 
 #include "enemy_color_policy.hpp"
-#include "solver.hpp"
+#include "../geometry/solver.hpp"
 #include "tools/logger.hpp"
 #include "tools/fft.hpp"
 #include "tools/math_tools.hpp"

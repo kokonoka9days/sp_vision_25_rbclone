@@ -2,8 +2,8 @@
 
 #include <string>
 
-#include "io/camera.hpp"
-#include "io/cboard.hpp"
+#include "io/camera/camera.hpp"
+#include "io/gimbal/cboard.hpp"
 #include "tasks/auto_buff/buff_aimer.hpp"
 #include "tasks/auto_buff/buff_detector.hpp"
 #include "tasks/auto_buff/buff_solver.hpp"

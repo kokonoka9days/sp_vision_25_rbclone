@@ -7,7 +7,7 @@
 
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
-#include "tasks/auto_aim/roi.hpp"
+#include "../roi.hpp"
 
 namespace auto_aim
 {

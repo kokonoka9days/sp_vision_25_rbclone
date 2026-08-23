@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "io/command.hpp"
-#include "io/socketcan.hpp"
+#include "io/gimbal/command.hpp"
+#include "io/gimbal/socketcan.hpp"
 #include "tools/logger.hpp"
 #include "tools/thread_safe_queue.hpp"
 

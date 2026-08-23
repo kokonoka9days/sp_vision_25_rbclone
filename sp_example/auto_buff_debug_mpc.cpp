@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "io/camera.hpp"
+#include "io/camera/camera.hpp"
 #include "io/gimbal/gimbal.hpp"
 #include "tasks/auto_buff/buff_aimer.hpp"
 #include "tasks/auto_buff/buff_detector.hpp"

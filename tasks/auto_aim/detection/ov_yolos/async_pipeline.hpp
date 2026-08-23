@@ -7,7 +7,7 @@
 #include <opencv2/opencv.hpp>
 #include <openvino/openvino.hpp>
 
-#include "tasks/auto_aim/yolo.hpp"
+#include "../yolo.hpp"
 
 namespace auto_aim
 {

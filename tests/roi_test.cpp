@@ -1,7 +1,7 @@
 #include <cstdlib>
 #include <stdexcept>
 
-#include "tasks/auto_aim/roi.hpp"
+#include "tasks/auto_aim/detection/roi.hpp"
 
 #define CHECK(condition)             \
   do {                               \

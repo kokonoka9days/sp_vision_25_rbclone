@@ -3,11 +3,11 @@
 #include <chrono>
 #include <opencv2/opencv.hpp>
 
-#include "io/camera.hpp"
-#include "tasks/auto_aim/rv_detector.hpp"
-#include "tasks/auto_aim/armor.hpp"
-#include "tasks/auto_aim/tracker.hpp"
-#include "tasks/auto_aim/solver.hpp"
+#include "io/camera/camera.hpp"
+#include "tasks/auto_aim/detection/rv_detector.hpp"
+#include "tasks/auto_aim/model/armor.hpp"
+#include "tasks/auto_aim/tracking/tracker.hpp"
+#include "tasks/auto_aim/geometry/solver.hpp"
 #include "tools/exiter.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"

@@ -14,7 +14,7 @@
 #include "DxImageProc.h"
 
 #include "tools/thread_safe_queue.hpp"
-#include "io/camera.hpp"
+#include "io/camera/camera.hpp"
 #include "tools/logger.hpp"
 
 namespace io

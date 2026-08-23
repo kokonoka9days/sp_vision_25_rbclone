@@ -6,8 +6,8 @@
 #include <opencv2/opencv.hpp>
 #include <thread>
 
-#include "armor.hpp"
-#include "armor_interfaces.hpp"
+#include "../model/armor.hpp"
+#include "../model/armor_interfaces.hpp"
 
 namespace auto_aim
 {

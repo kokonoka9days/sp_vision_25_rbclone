@@ -8,8 +8,8 @@
 #include <filesystem>
 #include <random>
 
-#include "tasks/auto_aim/classifier.hpp"
-#include "tasks/auto_aim/roi.hpp"
+#include "../classifier.hpp"
+#include "../roi.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
 

@@ -6,37 +6,37 @@ add_subdirectory(serial)
 
 # 创建目标 io
 add_library(io STATIC 
-    daheng/daheng.cpp
-    hikrobot/hikrobot.cpp    
-    mindvision/mindvision.cpp  
-    usbcamera/usbcamera.cpp  
-    camera.cpp
-    image_processing.cpp
-    cboard.cpp
+    camera/daheng/daheng.cpp
+    camera/hikrobot/hikrobot.cpp
+    camera/mindvision/mindvision.cpp
+    camera/usbcamera/usbcamera.cpp
+    camera/camera.cpp
+    camera/image_processing.cpp
+    gimbal/cboard.cpp
     dm_imu/dm_imu.cpp
     gimbal/gimbal.cpp
 )
 
 # daheng
-target_include_directories(io PUBLIC daheng
-                                      daheng/include)
+target_include_directories(io PUBLIC camera/daheng
+                                      camera/daheng/include)
                                       
 # hikrobot
-target_include_directories(io PUBLIC hikrobot/include)
+target_include_directories(io PUBLIC camera/hikrobot/include)
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
-  target_link_directories(io PUBLIC hikrobot/lib/amd64)
+  target_link_directories(io PUBLIC camera/hikrobot/lib/amd64)
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
-  target_link_directories(io PUBLIC hikrobot/lib/arm64)
+  target_link_directories(io PUBLIC camera/hikrobot/lib/arm64)
 else()
   message(FATAL_ERROR "Unsupported architecture: ${CMAKE_HOST_SYSTEM_PROCESSOR}!")
 endif()
 
 # mindvision
-target_include_directories(io PUBLIC mindvision/include)
+target_include_directories(io PUBLIC camera/mindvision/include)
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
-  target_link_directories(io PUBLIC mindvision/lib/amd64)
+  target_link_directories(io PUBLIC camera/mindvision/lib/amd64)
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
-  target_link_directories(io PUBLIC mindvision/lib/arm64)
+  target_link_directories(io PUBLIC camera/mindvision/lib/arm64)
 else()
   message(FATAL_ERROR "Unsupported architecture: ${CMAKE_HOST_SYSTEM_PROCESSOR}!")
 endif()

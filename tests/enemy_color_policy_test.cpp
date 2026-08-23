@@ -1,6 +1,6 @@
 #include <cstdlib>
 
-#include "tasks/auto_aim/enemy_color_policy.hpp"
+#include "tasks/auto_aim/tracking/enemy_color_policy.hpp"
 
 #define CHECK(condition)          \
   do {                            \

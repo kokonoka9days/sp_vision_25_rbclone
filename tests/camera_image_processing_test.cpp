@@ -1,4 +1,4 @@
-#include "io/image_processing.hpp"
+#include "io/camera/image_processing.hpp"
 
 #include <cmath>
 #include <cstdlib>

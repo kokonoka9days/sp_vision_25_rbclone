@@ -3,9 +3,9 @@
 
 #include <string>
 
-#include "io/command.hpp"
+#include "io/gimbal/command.hpp"
 #include "io/gimbal/gimbal.hpp"
-#include "tasks/auto_aim/aimer.hpp"
+#include "aimer.hpp"
 
 namespace auto_aim
 {

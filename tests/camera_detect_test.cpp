@@ -3,9 +3,9 @@
 #include <chrono>
 #include <opencv2/opencv.hpp>
 
-#include "io/camera.hpp"
-#include "tasks/auto_aim/detector.hpp"
-#include "tasks/auto_aim/yolo.hpp"
+#include "io/camera/camera.hpp"
+#include "tasks/auto_aim/detection/detector.hpp"
+#include "tasks/auto_aim/detection/yolo.hpp"
 #include "tools/exiter.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"

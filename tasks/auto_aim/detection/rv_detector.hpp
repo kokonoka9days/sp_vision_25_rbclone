@@ -7,7 +7,7 @@
 #include <string>
 
 // 引用 auto_aim 的基础数据结构
-#include "armor.hpp"
+#include "../model/armor.hpp"
 // 引用 rv_aim 的数字识别器
 #include "rv_number.hpp"
 

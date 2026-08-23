@@ -2,7 +2,7 @@
 #ifndef AUTO_AIM__KF_EXAMPLE__RV_FROM_FYT_HPP
 #define AUTO_AIM__KF_EXAMPLE__RV_FROM_FYT_HPP
 
-#include "./state2est.hpp"
+#include "state2est.hpp"
 
 namespace auto_aim
 {

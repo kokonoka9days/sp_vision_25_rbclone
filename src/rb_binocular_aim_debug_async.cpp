@@ -11,12 +11,12 @@
 #include <optional>
 #include <thread>
 
-#include "io/camera.hpp"
+#include "io/camera/camera.hpp"
 #include "io/gimbal/gimbal.hpp"
-#include "tasks/auto_aim/planner/planner.hpp"
-#include "tasks/auto_aim/solver.hpp"
-#include "tasks/auto_aim/tracker.hpp"
-#include "tasks/auto_aim/yolo.hpp"
+#include "tasks/auto_aim/aiming/planner/planner.hpp"
+#include "tasks/auto_aim/geometry/solver.hpp"
+#include "tasks/auto_aim/tracking/tracker.hpp"
+#include "tasks/auto_aim/detection/yolo.hpp"
 #include "tools/exiter.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"

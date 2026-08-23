@@ -4,10 +4,10 @@
 #include <atomic>
 #include <cstdint>
 
-#include "../io/camera.hpp"
-#include "../tasks/auto_aim/planner/planner.hpp"
-#include "../tasks/auto_aim/solver.hpp"
-#include "../tasks/auto_aim/tracker.hpp"
+#include "../io/camera/camera.hpp"
+#include "../tasks/auto_aim/aiming/planner/planner.hpp"
+#include "../tasks/auto_aim/geometry/solver.hpp"
+#include "../tasks/auto_aim/tracking/tracker.hpp"
 #include "../tools/logger.hpp"
 
 using namespace std::chrono_literals;

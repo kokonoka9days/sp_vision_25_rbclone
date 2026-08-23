@@ -13,8 +13,11 @@ sp_vision_25rbclone
 ├── CMakeLists.txt // CMake配置文件
 ├── configs        // 每台机器人的YAML配置文件
 │   └── ...
-├── io             // 硬件抽象层，见3.4软件架构
-│   └── ...
+├── io             // 硬件抽象层，见 io/README.md
+│   ├── camera     // 相机统一接口、图像处理和厂商驱动
+│   ├── gimbal     // 云台、C 板和控制命令通信
+│   ├── serial     // 串口库
+│   └── README.md
 ├── src            // 应用层，调试/上场代码
 |   ├── 1.cpp
 |   ├── auto_aim_debug_mpc.cpp          //原济瞄aim mpc debug，已弃用
@@ -36,8 +39,12 @@ sp_vision_25rbclone
 |   └── uav_debug.cpp                   //没用
 |
 ├── tasks          // 功能层，见3.4软件架构
-│   ├── auto_aim       // 自瞄相关算法实现
-│   │   └── ...
+│   ├── auto_aim       // 自瞄相关算法实现，见 tasks/auto_aim/README.md
+│   │   ├── model      // 公共数据结构
+│   │   ├── detection  // 图像识别和推理后端
+│   │   ├── geometry   // 装甲板位姿解算
+│   │   ├── tracking   // 目标跟踪和滤波
+│   │   └── aiming     // 瞄准、规划和火控
 │   ├── auto_buff      // 打符相关算法实现
 │   │   └── ...
 │   └── omniperception // 全向感知相关算法实现

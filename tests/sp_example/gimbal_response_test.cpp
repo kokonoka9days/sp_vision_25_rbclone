@@ -3,8 +3,8 @@
 #include <opencv2/opencv.hpp>
 #include <thread>
 
-#include "io/cboard.hpp"
-#include "io/command.hpp"
+#include "io/gimbal/cboard.hpp"
+#include "io/gimbal/command.hpp"
 #include "tools/exiter.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"

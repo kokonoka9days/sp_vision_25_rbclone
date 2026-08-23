@@ -1,9 +1,9 @@
 #include <cmath>
 #include <iostream>
 
-#include "tasks/auto_aim/kf_example/ca_from_tju.hpp"
-#include "tasks/auto_aim/kf_example/rv_from_fyt.hpp"
-#include "tasks/auto_aim/target.hpp"
+#include "tasks/auto_aim/tracking/ca_from_tju.hpp"
+#include "tasks/auto_aim/tracking/rv_from_fyt.hpp"
+#include "tasks/auto_aim/tracking/target.hpp"
 #include "tools/math_tools.hpp"
 
 namespace

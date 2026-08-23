@@ -8,10 +8,10 @@
 #include <vector>
 
 #include "async_pipeline.hpp"
-#include "tasks/auto_aim/armor.hpp"
-#include "tasks/auto_aim/classifier.hpp"
-#include "tasks/auto_aim/detector.hpp"
-#include "tasks/auto_aim/yolo.hpp"
+#include "../../model/armor.hpp"
+#include "../classifier.hpp"
+#include "../detector.hpp"
+#include "../yolo.hpp"
 
 namespace auto_aim
 {

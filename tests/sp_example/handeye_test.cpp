@@ -8,9 +8,9 @@
 #include <nlohmann/json.hpp>
 #include <opencv2/core/eigen.hpp>
 
-#include "io/camera.hpp"
-#include "io/cboard.hpp"
-#include "tasks/auto_aim/solver.hpp"
+#include "io/camera/camera.hpp"
+#include "io/gimbal/cboard.hpp"
+#include "tasks/auto_aim/geometry/solver.hpp"
 #include "tools/exiter.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/logger.hpp"

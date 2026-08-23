@@ -8,8 +8,8 @@
 #include <string>
 
 #include "io/gimbal/gimbal.hpp"
-#include "armor.hpp"
-#include "armor_interfaces.hpp"
+#include "../model/armor.hpp"
+#include "../model/armor_interfaces.hpp"
 #include "target.hpp"
 #include "tasks/omniperception/detection.hpp"
 #include "tools/thread_safe_queue.hpp"

@@ -180,7 +180,7 @@ add_test(NAME roi_test COMMAND roi_test)
 add_executable(
     camera_image_processing_test
     tests/camera_image_processing_test.cpp
-    io/image_processing.cpp)
+    io/camera/image_processing.cpp)
 target_link_libraries(camera_image_processing_test ${OpenCV_LIBS})
 add_test(NAME camera_image_processing_test COMMAND camera_image_processing_test)
 
@@ -208,10 +208,10 @@ add_test(
 # add_executable(
 #     kf_posterior_residual_test
 #     tests/kf_posterior_residual_test.cpp
-#     tasks/auto_aim/armor.cpp
-#     tasks/auto_aim/target.cpp
-#     tasks/auto_aim/kf_example/ca_from_tju.cpp
-#     tasks/auto_aim/kf_example/rv_from_fyt.cpp)
+#     tasks/auto_aim/model/armor.cpp
+#     tasks/auto_aim/tracking/target.cpp
+#     tasks/auto_aim/tracking/ca_from_tju.cpp
+#     tasks/auto_aim/tracking/rv_from_fyt.cpp)
 # target_link_libraries(
 #     kf_posterior_residual_test
 #     ${OpenCV_LIBS}

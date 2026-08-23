@@ -1,4 +1,4 @@
-#include "io/camera.hpp"
+#include "io/camera/camera.hpp"
 
 #include <opencv2/opencv.hpp>
 

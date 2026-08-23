@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "armor.hpp"
-#include "kf_example/rv_from_fyt.hpp"
+#include "../model/armor.hpp"
+#include "rv_from_fyt.hpp"
 #include "tools/fft.hpp"
 
 namespace auto_aim

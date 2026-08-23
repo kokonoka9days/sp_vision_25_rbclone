@@ -8,13 +8,13 @@
 
 // #include "armor.hpp"
 #include "detection.hpp"
-#include "io/camera.hpp"
-#include "io/command.hpp"
+#include "io/camera/camera.hpp"
+#include "io/gimbal/command.hpp"
 #include "io/gimbal/gimbal.hpp"
-#include "io/usbcamera/usbcamera.hpp"
-#include "tasks/auto_aim/armor.hpp"
-#include "tasks/auto_aim/target.hpp"
-#include "tasks/auto_aim/solver.hpp"
+#include "io/camera/usbcamera/usbcamera.hpp"
+#include "tasks/auto_aim/model/armor.hpp"
+#include "tasks/auto_aim/tracking/target.hpp"
+#include "tasks/auto_aim/geometry/solver.hpp"
 
 namespace auto_aim
 {

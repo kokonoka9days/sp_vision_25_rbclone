@@ -4,7 +4,7 @@
 
 #include <opencv2/core.hpp>
 
-#include "tasks/auto_aim/yolo.hpp"
+#include "tasks/auto_aim/detection/yolo.hpp"
 
 #define CHECK(condition)             \
   do {                               \

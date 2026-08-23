@@ -11,7 +11,7 @@
 #include "tools/logger.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/math_tools.hpp"
-#include "tasks/auto_aim/roi.hpp"
+#include "../roi.hpp"
 
 #define IS_ASYNC true
 

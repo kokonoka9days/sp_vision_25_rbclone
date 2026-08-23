@@ -8,8 +8,8 @@
 
 #include "decider.hpp"
 #include "detection.hpp"
-#include "tasks/auto_aim/armor.hpp"
-#include "tasks/auto_aim/armor_interfaces.hpp"
+#include "tasks/auto_aim/model/armor.hpp"
+#include "tasks/auto_aim/model/armor_interfaces.hpp"
 #include "frame_source.hpp"
 #include "tools/thread_safe_queue.hpp"
 

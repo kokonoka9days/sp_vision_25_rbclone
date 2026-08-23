@@ -13,8 +13,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "tasks/auto_aim/armor.hpp"
-#include "tasks/auto_aim/yolo.hpp"
+#include "../../model/armor.hpp"
+#include "../yolo.hpp"
 #include "tools/logger.hpp"
 
 namespace auto_aim

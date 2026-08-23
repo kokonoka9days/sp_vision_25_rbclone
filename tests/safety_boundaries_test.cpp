@@ -3,8 +3,8 @@
 #include <cstdlib>
 #include <limits>
 
-#include "tasks/auto_aim/planner/planner.hpp"
-#include "tasks/auto_aim/solver.hpp"
+#include "tasks/auto_aim/aiming/planner/planner.hpp"
+#include "tasks/auto_aim/geometry/solver.hpp"
 #include "tasks/omniperception/decider.hpp"
 
 #define CHECK(condition)             \

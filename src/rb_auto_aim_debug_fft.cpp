@@ -6,15 +6,15 @@
 #include <opencv2/opencv.hpp>
 #include <thread>
 
-#include "io/camera.hpp"
+#include "io/camera/camera.hpp"
 #include "io/gimbal/gimbal.hpp"
-#include "tasks/auto_aim/planner/planner.hpp"
-#include "tasks/auto_aim/solver.hpp"
-#include "tasks/auto_aim/tracker.hpp"
-#include "tasks/auto_aim/aimer.hpp"
-#include "tasks/auto_aim/shooter.hpp"
-#include "tasks/auto_aim/yolo.hpp"
-// #include "tasks/auto_aim/detector.hpp"
+#include "tasks/auto_aim/aiming/planner/planner.hpp"
+#include "tasks/auto_aim/geometry/solver.hpp"
+#include "tasks/auto_aim/tracking/tracker.hpp"
+#include "tasks/auto_aim/aiming/aimer.hpp"
+#include "tasks/auto_aim/aiming/shooter.hpp"
+#include "tasks/auto_aim/detection/yolo.hpp"
+// #include "tasks/auto_aim/detection/detector.hpp"
 #include "tools/exiter.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/reprojection.hpp"

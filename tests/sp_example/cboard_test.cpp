@@ -1,4 +1,4 @@
-#include "io/cboard.hpp"
+#include "io/gimbal/cboard.hpp"
 
 #include <chrono>
 #include <opencv2/opencv.hpp>

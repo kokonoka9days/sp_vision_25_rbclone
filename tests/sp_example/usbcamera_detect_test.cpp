@@ -1,8 +1,8 @@
 #include <opencv2/opencv.hpp>
 #include <thread>
 
-#include "io/usbcamera/usbcamera.hpp"
-#include "tasks/auto_aim/yolo.hpp"
+#include "io/camera/usbcamera/usbcamera.hpp"
+#include "tasks/auto_aim/detection/yolo.hpp"
 #include "tools/exiter.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"

@@ -1,8 +1,8 @@
 #include <opencv2/opencv.hpp>
 #include <thread>
 
-#include "io/camera.hpp"
-#include "io/usbcamera/usbcamera.hpp"
+#include "io/camera/camera.hpp"
+#include "io/camera/usbcamera/usbcamera.hpp"
 #include "tools/exiter.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"

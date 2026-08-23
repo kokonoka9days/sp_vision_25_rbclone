@@ -9,11 +9,11 @@
 #include <memory>
 #include <vector>
 
-#include "../auto_aim/planner/planner.hpp"
+#include "../auto_aim/aiming/planner/planner.hpp"
 #include "buff_target.hpp"
 #include "buff_config.hpp"
 #include "buff_type.hpp"
-#include "io/command.hpp"
+#include "io/gimbal/command.hpp"
 #include "io/gimbal/gimbal.hpp"
 
 namespace auto_buff

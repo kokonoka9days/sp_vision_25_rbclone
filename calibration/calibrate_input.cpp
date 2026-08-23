@@ -18,7 +18,7 @@
 #include <utility>
 #include <vector>
 
-#include "io/camera.hpp"
+#include "io/camera/camera.hpp"
 #include "io/gimbal/gimbal.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"

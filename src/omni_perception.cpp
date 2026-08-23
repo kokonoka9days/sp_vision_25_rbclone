@@ -4,10 +4,10 @@
 #include <Eigen/Dense>
 #include <opencv2/opencv.hpp>
 
-#include "io/camera.hpp"
+#include "io/camera/camera.hpp"
 #include "io/gimbal/gimbal.hpp"
-#include "tasks/auto_aim/solver.hpp"
-#include "tasks/auto_aim/yolo.hpp"
+#include "tasks/auto_aim/geometry/solver.hpp"
+#include "tasks/auto_aim/detection/yolo.hpp"
 #include "tasks/omniperception/decider.hpp"
 #include "tools/exiter.hpp"
 #include "tools/systemd_watchdog.hpp"

@@ -2,15 +2,15 @@
 #include <opencv2/opencv.hpp>
 #include <thread>
 
-#include "io/camera.hpp"
+#include "io/camera/camera.hpp"
 #include "io/gimbal/gimbal.hpp" 
-#include "io/usbcamera/usbcamera.hpp"
-#include "tasks/auto_aim/aimer.hpp"
-#include "tasks/auto_aim/shooter.hpp"
-#include "tasks/auto_aim/solver.hpp"
-#include "tasks/auto_aim/tracker.hpp"
-#include "tasks/auto_aim/planner/planner.hpp"  // MPC 规划器
-#include "tasks/auto_aim/yolo.hpp"
+#include "io/camera/usbcamera/usbcamera.hpp"
+#include "tasks/auto_aim/aiming/aimer.hpp"
+#include "tasks/auto_aim/aiming/shooter.hpp"
+#include "tasks/auto_aim/geometry/solver.hpp"
+#include "tasks/auto_aim/tracking/tracker.hpp"
+#include "tasks/auto_aim/aiming/planner/planner.hpp"  // MPC 规划器
+#include "tasks/auto_aim/detection/yolo.hpp"
 #include "tasks/omniperception/decider.hpp"
 #include "tools/exiter.hpp"
 #include "tools/logger.hpp"

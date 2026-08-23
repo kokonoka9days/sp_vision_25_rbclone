@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <list>
 
-#include "armor.hpp"
+#include "../model/armor.hpp"
 
 namespace auto_aim
 {

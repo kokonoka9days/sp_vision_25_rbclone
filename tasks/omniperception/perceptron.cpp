@@ -4,8 +4,8 @@
 #include <memory>
 #include <thread>
 
-#include "io/usbcamera/usbcamera.hpp"
-#include "tasks/auto_aim/yolo.hpp"
+#include "io/camera/usbcamera/usbcamera.hpp"
+#include "tasks/auto_aim/detection/yolo.hpp"
 #include "tools/exiter.hpp"
 #include "tools/logger.hpp"
 

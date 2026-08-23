@@ -26,10 +26,10 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <tf2_msgs/msg/tf_message.hpp>
 
-#include "tasks/auto_aim/planner/planner.hpp"
-#include "tasks/auto_aim/solver.hpp"
-#include "tasks/auto_aim/tracker.hpp"
-#include "tasks/auto_aim/yolo.hpp"
+#include "tasks/auto_aim/aiming/planner/planner.hpp"
+#include "tasks/auto_aim/geometry/solver.hpp"
+#include "tasks/auto_aim/tracking/tracker.hpp"
+#include "tasks/auto_aim/detection/yolo.hpp"
 #include "tools/fft.hpp"
 #include "tools/fps_solve.hpp"
 #include "tools/img_tools.hpp"

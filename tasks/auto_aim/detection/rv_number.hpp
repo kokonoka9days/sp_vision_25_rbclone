@@ -12,7 +12,7 @@
 #include <vector>
 
 // 引用 auto_aim 的 Armor 定义
-#include "armor.hpp"
+#include "../model/armor.hpp"
 
 namespace rv_aim
 {

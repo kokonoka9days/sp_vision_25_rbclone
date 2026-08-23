@@ -1,5 +1,5 @@
 // test_simple.cpp
-#include "io/camera.hpp"
+#include "io/camera/camera.hpp"
 #include <opencv2/opencv.hpp>
 #include <thread>        // 添加：支持 std::this_thread
 #include <chrono>        // 添加：支持 std::chrono

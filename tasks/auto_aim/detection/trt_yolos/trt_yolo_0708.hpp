@@ -13,7 +13,7 @@
 #include <cmath>
 #include <mutex>
 
-#include "../armor.hpp"
+#include "../../model/armor.hpp"
 #include "../yolo.hpp"
 #include "trt_execution_slot.hpp"
 #include "tools/thread_safe_queue.hpp"

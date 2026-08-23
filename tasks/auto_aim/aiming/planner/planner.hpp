@@ -8,7 +8,7 @@
 #include <optional>
 #include <string>
 
-#include "tasks/auto_aim/target.hpp"
+#include "../../tracking/target.hpp"
 #include "tinympc/tiny_api.hpp"
 #include "tools/logger.hpp"
 #include "tools/yaw_delay_model.hpp"

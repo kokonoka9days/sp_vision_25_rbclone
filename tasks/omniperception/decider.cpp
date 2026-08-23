@@ -8,9 +8,9 @@
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/img_tools.hpp"
-#include "tasks/auto_aim/armor.hpp"
-#include "tasks/auto_aim/solver.hpp"
-#include "tasks/auto_aim/yolo.hpp"
+#include "tasks/auto_aim/model/armor.hpp"
+#include "tasks/auto_aim/geometry/solver.hpp"
+#include "tasks/auto_aim/detection/yolo.hpp"
 
 namespace omniperception
 {

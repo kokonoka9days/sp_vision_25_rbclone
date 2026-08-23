@@ -6,10 +6,10 @@
 #include <atomic>
 #include <chrono>
 
-#include "../io/camera.hpp"
+#include "../io/camera/camera.hpp"
 #include "../tools/logger.hpp"
-#include "../tasks/auto_aim/solver.hpp"
-#include "../tasks/auto_aim/planner/planner.hpp"
+#include "../tasks/auto_aim/geometry/solver.hpp"
+#include "../tasks/auto_aim/aiming/planner/planner.hpp"
 
 namespace io {
 class CameraManager {
