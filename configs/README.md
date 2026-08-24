@@ -11,7 +11,9 @@
 | 可选 | 可以不写，代码中有明确默认值 |
 | 工具必填 | 仅特定标定或测试工具读取 |
 
-相对路径按程序启动时的当前工作目录解析，并非按 YAML 文件所在目录解析。数组长度必须符合表中要求；当前求解代码直接按固定长度映射，长度错误可能导致越界访问。
+除 `RuneSystem` 的 `power_rune.detector` 资源路径外，相对路径按程序启动时的当前工作目录解析，
+并非按 YAML 文件所在目录解析。数组长度必须符合表中要求；当前求解代码直接按固定长度映射，
+长度错误可能导致越界访问。
 
 ## 工业相机
 
@@ -228,85 +230,44 @@ RV 数字分类器额外读取：
 
 全向感知还会读取前述 `enemy_color`；值为 `auto` 时从云台数据动态选择敌方颜色。
 
-## 能量机关
+## 能量机关（当前 RuneSystem）
 
-### 推理模型
+当前能量机关入口使用 `tasks/auto_buff/rune_system.hpp`。对 `RuneSystem` 而言，根配置文件提供
+机器人相关的相机、姿态和云台标定；RP 算法默认参数位于
+`tasks/auto_buff/config/power_rune_defaults.yaml`。
 
-| 字段 | 类型 | 状态/默认值 | 作用 |
-| --- | --- | --- | --- |
-| `model` | string | OpenVINO Buff 条件必填 | 能量机关 YOLO11 OpenVINO/ONNX 模型路径 |
-| `buff_engine_path` | string | TensorRT Buff 条件必填 | 能量机关 TensorRT engine 路径 |
-| `buff_confidence_threshold` | float | 可选，`0.7` | 候选框置信度阈值 |
-| `buff_keypoint_threshold` | float | 可选，`0.3` | 关键点置信度阈值，同时用于新建轨迹 |
-| `buff_iou_threshold` | float | 可选，`0.4` | NMS IoU 阈值 |
+`RuneSystem` 初始化时要求根配置包含以下字段：
 
-### 运动模型与拟合
-
-| 字段 | 类型 | 默认值 | 作用 |
-| --- | --- | --- | --- |
-| `buff_rune_radius_m` | double | `0.700` | R 标中心到目标运动圆周的半径，m |
-| `buff_small_direction` | int | `0` | 小符旋转方向；`0` 自动判断，正数强制 `+1`，负数强制 `-1` |
-| `buff_blind_timeout_s` | double | `0.100` | 丢失观测后仍允许盲控的时间，s |
-| `buff_track_retention_s` | double | `0.400` | 未观测轨迹的保留时间，s |
-| `buff_fire_full_observation_max_age_s` | double | `0.030` | 开火所用完整观测允许的最大年龄，s |
-| `buff_direction_confirm_intervals` | int | `3` | 自动旋转方向连续确认的时间间隔数量 |
-| `buff_big_speed_phase_window` | int | `7` | 大符角速度估计保留的相位样本数 |
-| `buff_big_speed_min_span_s` | double | `0.030` | 大符速度估计要求的最小样本时间跨度，s |
-| `buff_big_fit_min_span_s` | double | `1.0` | 大符正弦速度拟合要求的最小时间跨度，s |
-| `buff_big_fit_min_inlier_ratio` | double | `0.75` | 大符拟合最小内点比例 |
-| `buff_big_fit_max_rms` | double | `0.18` | 大符拟合允许的最大 RMS 残差 |
-| `buff_big_fit_blend_s` | double | `0.30` | 大符拟合结果渐入预测器的混合时间，s |
-
-### 检测、中心与轨迹关联
-
-以下字段全部可选。
-
-| 字段 | 默认值 | 作用 |
+| 字段 | 类型/长度 | 作用 |
 | --- | --- | --- |
-| `buff_keypoint_hard_threshold` | `0.15` | 保留弱关键点的最低硬阈值 |
-| `buff_keypoint_temporal_gate_px` | `10.0` | 关键点时序残差门限，px |
-| `buff_center_innovation_gate_px` | `45.0` | R 标中心更新创新门限，px |
-| `buff_center_recovery_hits` | `2` | 中心恢复所需连续命中数 |
-| `buff_center_lost_max` | `6` | 中心允许连续丢失的最大帧数 |
-| `buff_pair_angle_gate_deg` | `15` | 目标与扇叶配对的角度门限，degree |
-| `buff_pair_ratio_min` | `0.30` | 配对半径比例下限 |
-| `buff_pair_ratio_max` | `0.70` | 配对半径比例上限 |
-| `buff_pair_ratio_center` | `0.51` | 配对半径比例期望中心 |
-| `buff_track_gate_min_deg` | `12` | 轨迹关联角门限的最小值，degree |
-| `buff_track_gate_max_deg` | `25` | 轨迹关联角门限的最大值，degree |
-| `buff_track_reset_timeout_s` | `0.500` | 超时后重置轨迹状态，s |
-| `buff_track_confirm_hits` | `2` | 新轨迹确认所需连续命中数 |
-| `buff_track_recovery_hits` | `2` | 丢失轨迹恢复所需连续命中数 |
-| `buff_control_blind_timeout_s` | `buff_blind_timeout_s` | 控制输出允许的盲控时间，s |
-| `buff_switch_confirm_frames` | `5` | 通用目标切换确认帧数；显式配置时也会先覆盖相邻槽切换帧数 |
-| `buff_same_slot_confirm_frames` | `3` | 同槽目标切换确认帧数 |
-| `buff_adjacent_switch_confirm_frames` | `8` | 相邻槽目标切换确认帧数；若同时配置，优先于 `buff_switch_confirm_frames` |
-| `buff_adjacent_switch_delay_s` | `0.180` | 相邻槽切换后的等待时间，s |
-| `buff_slot_tolerance_deg` | `12` | 将观测归入扇叶槽位的角容差，degree |
-| `buff_switch_pair_angle_gate_deg` | `10` | 切换候选的配对角门限，degree |
-| `buff_switch_pair_ratio_min` | `0.38` | 切换候选半径比例下限 |
-| `buff_switch_pair_ratio_max` | `0.64` | 切换候选半径比例上限 |
+| `R_gimbal2imubody` | double[9] | 云台到 IMU 机体坐标系的旋转矩阵 |
+| `R_camera2gimbal` | double[9] | 相机到云台坐标系的旋转矩阵 |
+| `t_camera2gimbal` | double[3] | 相机原点在云台坐标系中的平移，m |
+| `camera_matrix` | double[9] | OpenCV 3x3 相机内参矩阵 |
+| `distort_coeffs` | double[5] | OpenCV 畸变系数 `[k1,k2,p1,p2,k3]` |
 
-### PnP 门限
+根配置中的 `yaw_offset`、`pitch_offset` 也会被新符系统读取，单位为 degree；缺失时使用
+RP 默认配置中的偏置。每帧的敌方颜色和弹速由 `RuneSystem::process()` 传入，不再从 YAML
+读取旧的 Buff 状态字段。
 
-以下字段全部可选；能量机关 Solver 仍要求位姿求解章节中的五个标定字段。
+如果需要针对机器人覆盖 RP 参数或检测器参数，使用顶层 `power_rune` 节点：
 
-| 字段 | 默认值 | 作用 |
-| --- | --- | --- |
-| `buff_pnp_full_reprojection_gate_px` | `6.0` | 完整 8 点 PnP 最大重投影误差，px |
-| `buff_pnp_target_center_gate_px` | `6.0` | 仅目标观测的中心重投影门限，px |
-| `buff_pnp_fan_center_gate_px` | `8.0` | 仅扇叶观测的中心重投影门限，px |
-| `buff_pnp_partial_center_gate_px` | `8.0` | 部分 4 点 PnP 中心门限，px |
-| `buff_pnp_partial_angle_gate_deg` | `15` | 部分 4 点 PnP 角度门限，degree |
+```yaml
+power_rune:
+  detector:
+    engine_path: "../models/my-rune-fp16.engine"
+    confidence_threshold: 0.65
+  rune_ballistic_model:
+    radius: 0.7
+```
 
-### Buff Aimer
+`power_rune.detector.onnx_path` 和 `power_rune.detector.engine_path` 的相对路径以当前根
+配置文件所在目录为基准。没有覆盖时，使用 `tasks/auto_buff/config/power_rune_defaults.yaml`
+中的默认模型路径。
 
-| 字段 | 类型 | 状态 | 作用 |
-| --- | --- | --- | --- |
-| `yaw_offset` | double | 必填 | 能量机关 yaw 补偿，degree |
-| `pitch_offset` | double | 必填 | 能量机关 pitch 补偿，degree |
-| `fire_gap_time` | double | 必填 | 两次开火的最小时间间隔，s |
-| `predict_time` | double | 必填 | 能量机关额外前向预测时间，s |
+旧版顶层 `model`、`buff_engine_path`、`buff_*`、`detect.*`、`aim_time`、`wait_time`、
+`command_fire_gap`、`fire_gap_time` 和 `predict_time` 字段已从样例配置中移除，也不会被当前
+`RuneSystem` 读取。
 
 ## 标定工具
 
@@ -334,16 +295,11 @@ RV 数字分类器额外读取：
 | `grid_size` | double | 网格点间距，使用求解器世界坐标单位 |
 | `delay` | int | 查询历史 IMU 姿态的延迟，单位 ms |
 
-`auto_buff_test` 在命令行未指定调试预测时间时可选读取 `predict_time`；缺失时按 `0` 处理，并额外加固定 `0.1 s`。
-
 ## 当前样例中存在但生产代码不读取的字段
 
 以下字段出现在一个或多个 `configs/*.yaml` 中，但当前生产路径没有对应读取逻辑。修改它们不会改变当前运行行为：
 
 - `tensorrt_engine_path`：旧的通用 TensorRT 路径；当前使用 `trt_engine_path_0526` 或 `trt_engine_path_0708`。
-- `detect.*`：旧能量机关传统图像处理参数；当前代码没有读取这些字段。
-- `buff_locked_gate_deg`、`buff_switch_gate_deg`、`buff_locked_lost_max`：旧 Buff 跟踪字段。
-- `aim_time`、`wait_time`、`command_fire_gap`：旧 Buff 瞄准/发射字段。
 - `number_classifier.ignore_classes`：RV 分类器当前不读取。
 - `new_image_width`、`new_image_height`、`new_usb_exposure`：当前 USB 相机和 Decider 不读取。
 - `min_spin_speed`：当前 Aimer 不读取。

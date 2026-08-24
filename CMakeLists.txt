@@ -39,9 +39,16 @@ endif()
 
 if(TENSOR_RT_MAKE)
     set(CMAKE_CUDA_ARCHITECTURES 87 CACHE STRING "CUDA architectures for TensorRT kernels")
-    find_path(TENSORRT_INCLUDE_DIR NvInfer.h)
-    find_library(TENSORRT_INFER_LIBRARY nvinfer)
-    find_library(TENSORRT_PLUGIN_LIBRARY nvinfer_plugin)
+    set(TENSORRT_ROOT "" CACHE PATH "TensorRT SDK root (optional when installed system-wide)")
+    find_path(TENSORRT_INCLUDE_DIR NvInfer.h
+        HINTS ${TENSORRT_ROOT}
+        PATH_SUFFIXES include)
+    find_library(TENSORRT_INFER_LIBRARY nvinfer
+        HINTS ${TENSORRT_ROOT}
+        PATH_SUFFIXES lib lib64 targets/x86_64-linux-gnu/lib targets/aarch64-linux-gnu/lib)
+    find_library(TENSORRT_PLUGIN_LIBRARY nvinfer_plugin
+        HINTS ${TENSORRT_ROOT}
+        PATH_SUFFIXES lib lib64 targets/x86_64-linux-gnu/lib targets/aarch64-linux-gnu/lib)
 
     if(NOT TENSORRT_INCLUDE_DIR OR NOT TENSORRT_INFER_LIBRARY OR NOT TENSORRT_PLUGIN_LIBRARY)
         message(FATAL_ERROR "TensorRT headers or libraries were not found")
@@ -104,25 +111,46 @@ target_link_libraries(rb_auto_standard_async ${OpenCV_LIBS} fmt::fmt yaml-cpp au
 target_link_libraries(rb_auto_standard_debug_async ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(rb_auto_aim_debug_fft ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 
-add_executable(buff_config_isolation_test tests/buff_config_isolation_test.cpp)
+add_executable(rune_config_test tests/rune_config_test.cpp)
 target_link_libraries(
-    buff_config_isolation_test
+    rune_config_test
     ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
-add_test(NAME buff_config_isolation_test COMMAND buff_config_isolation_test)
+target_include_directories(rune_config_test PRIVATE
+    ${PROJECT_SOURCE_DIR}/tasks/auto_buff/rp_core/config)
+target_compile_definitions(rune_config_test PRIVATE
+    AUTO_BUFF_TEST_DEFAULT_CONFIG="${PROJECT_SOURCE_DIR}/tasks/auto_buff/config/power_rune_defaults.yaml")
+add_test(NAME rune_config_test COMMAND rune_config_test
+    ${PROJECT_SOURCE_DIR}/configs/sb_long.yaml
+    ${PROJECT_SOURCE_DIR}/configs/xiaohei.yaml)
 
-add_executable(buff_track_bank_test tests/buff_track_bank_test.cpp)
+add_executable(rune_motion_fit_test tests/rune_motion_fit_test.cpp)
 target_link_libraries(
-    buff_track_bank_test
+    rune_motion_fit_test
     ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
-add_test(NAME buff_track_bank_test COMMAND buff_track_bank_test)
+target_include_directories(rune_motion_fit_test PRIVATE
+    ${PROJECT_SOURCE_DIR}/tasks/auto_buff/rp_core/include
+    ${PROJECT_SOURCE_DIR}/tasks/auto_buff/rp_core/config)
+target_compile_definitions(rune_motion_fit_test PRIVATE
+    AUTO_BUFF_TEST_DEFAULT_CONFIG="${PROJECT_SOURCE_DIR}/tasks/auto_buff/config/power_rune_defaults.yaml")
+add_test(NAME rune_motion_fit_test COMMAND rune_motion_fit_test
+    ${PROJECT_SOURCE_DIR}/configs/sb_long.yaml)
 
-add_executable(buff_solver_thread_test tests/buff_solver_thread_test.cpp)
+add_executable(rune_pose_adapter_test tests/rune_pose_adapter_test.cpp)
 target_link_libraries(
-    buff_solver_thread_test
+    rune_pose_adapter_test
     ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
-add_test(
-    NAME buff_solver_thread_test
-    COMMAND buff_solver_thread_test ${PROJECT_SOURCE_DIR}/configs/sb_long.yaml)
+target_include_directories(rune_pose_adapter_test PRIVATE
+    ${PROJECT_SOURCE_DIR}/tasks/auto_buff/adapter
+    ${PROJECT_SOURCE_DIR}/tasks/auto_buff/rp_core/include)
+add_test(NAME rune_pose_adapter_test COMMAND rune_pose_adapter_test)
+
+add_executable(rune_detector_decode_test tests/rune_detector_decode_test.cpp)
+target_include_directories(rune_detector_decode_test PRIVATE
+    ${PROJECT_SOURCE_DIR}/tasks/auto_buff/detector)
+target_link_libraries(
+    rune_detector_decode_test
+    ${OpenCV_LIBS} fmt::fmt spdlog::spdlog auto_buff tools)
+add_test(NAME rune_detector_decode_test COMMAND rune_detector_decode_test)
 endif()
 # rv
 add_executable(rb_rv_aim_debug src/rb_rv_aim_debug.cpp)
@@ -232,6 +260,14 @@ if(OPENVINO_MAKE)
 
     add_executable(auto_buff_test tests/auto_buff_test.cpp)
     target_link_libraries(auto_buff_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
+
+    add_executable(rune_system_safety_test tests/rune_system_safety_test.cpp)
+    target_link_libraries(
+        rune_system_safety_test
+        ${OpenCV_LIBS} fmt::fmt spdlog::spdlog auto_buff tools)
+    add_test(
+        NAME rune_system_safety_test
+        COMMAND rune_system_safety_test ${PROJECT_SOURCE_DIR}/configs/sb_long.yaml)
 
     add_executable(camera_detect_test tests/camera_detect_test.cpp)
     target_link_libraries(camera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools auto_aim io)

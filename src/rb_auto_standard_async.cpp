@@ -21,12 +21,7 @@
 #include "tools/plotter.hpp"
 #include "tools/thread_safe_queue.hpp"
 
-// 打符相关头文件
-#include "tasks/auto_buff/buff_aimer.hpp"
-#include "tasks/auto_buff/buff_detector.hpp"
-#include "tasks/auto_buff/buff_solver.hpp"
-#include "tasks/auto_buff/buff_target.hpp"
-#include "tasks/auto_buff/buff_type.hpp"
+#include "tasks/auto_buff/rune_system.hpp"
 
 using namespace std::chrono_literals;
 using namespace tools;
@@ -60,12 +55,7 @@ int main(int argc, char * argv[])
   auto_aim::Shooter shooter(config_path);
   auto_aim::Planner planner(config_path);
 
-  // 打符相关对象初始化
-  auto_buff::Buff_Detector buff_detector(config_path);
-  auto_buff::Solver buff_solver(config_path);
-  auto_buff::SmallTarget buff_small_target(config_path);
-  auto_buff::BigTarget buff_big_target(config_path);
-  auto_buff::Aimer buff_aimer(config_path);
+  auto_buff::RuneSystem rune_system(config_path);
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
   target_queue.push(std::nullopt);
@@ -169,7 +159,11 @@ int main(int argc, char * argv[])
       const auto is_buff = mode.load() == io::GimbalMode::SMALL_BUFF ||
                            mode.load() == io::GimbalMode::BIG_BUFF;
       if (is_buff) target_queue.push(std::nullopt);
-      if (was_buff && !is_buff) auto_aim_started_at = std::chrono::steady_clock::now();
+      if (was_buff && !is_buff) {
+        rune_system.reset();
+        gimbal.send(false, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+        auto_aim_started_at = std::chrono::steady_clock::now();
+      }
       last_mode = mode.load();
     }
 
@@ -185,87 +179,36 @@ int main(int argc, char * argv[])
     auto q = gimbal.q(t);
 
     // 如果是打符模式
-   if (mode.load() == io::GimbalMode::SMALL_BUFF || mode.load() == io::GimbalMode::BIG_BUFF) {
+    if (mode.load() == io::GimbalMode::SMALL_BUFF || mode.load() == io::GimbalMode::BIG_BUFF) {
       auto gs = gimbal.state();
-      buff_solver.set_R_gimbal2world(q);
-
       const auto buff_mode = mode.load() == io::GimbalMode::BIG_BUFF
                                ? auto_buff::BuffMode::BIG
                                : auto_buff::BuffMode::SMALL;
-      auto buff_observations = buff_detector.detect_tracks(img, buff_mode, t);
-      auto power_runes = buff_solver.solve_all(buff_observations);
-
-      auto_aim::Plan buff_plan;
-      auto_buff::Target* active_target = nullptr;
-      std::unique_ptr<auto_buff::Target> target_copy_ptr = nullptr;
-
-      if (mode.load() == io::GimbalMode::SMALL_BUFF) {
-        buff_small_target.get_target(power_runes, t);
-        active_target = &buff_small_target;
-        auto target_copy = buff_small_target;
-        buff_plan = buff_aimer.mpc_aim(target_copy, t, gs, true);
-        target_copy_ptr = std::make_unique<auto_buff::SmallTarget>(target_copy);
-      } else if (mode.load() == io::GimbalMode::BIG_BUFF) {
-        buff_big_target.get_target(power_runes, t);
-        active_target = &buff_big_target;
-        auto target_copy = buff_big_target;
-        buff_plan = buff_aimer.mpc_aim(target_copy, t, gs, true);
-        target_copy_ptr = std::make_unique<auto_buff::BigTarget>(target_copy);
-      }
-      
-      // 直接发送打符相关的控制指令
+      const auto command = rune_system.process(
+        img, t, q, buff_mode, static_cast<auto_buff::EnemyColor>(gs.enemy_color),
+        gs.bullet_speed);
       gimbal.send(
-        buff_plan.control, buff_plan.fire, buff_plan.yaw, buff_plan.yaw_vel, buff_plan.yaw_acc,
-        buff_plan.pitch, buff_plan.pitch_vel, buff_plan.pitch_acc);
+        command.found, command.found && command.fire, command.yaw, 0.0f, 0.0f,
+        command.pitch, 0.0f, 0.0f);
       
       auto fired = gs.bullet_count > last_bullet_count_main;
       last_bullet_count_main = gs.bullet_count;
 
-      if(buff_plan.control != 0)
-      {
+      if (command.found) {
         nlohmann::json data;
-
         data["t"] = tools::delta_time(std::chrono::steady_clock::now(), t0_main);
-
         data["gimbal_yaw"] = gs.yaw;
-        data["gimbal_yaw_vel"] = gs.yaw_vel;
         data["gimbal_pitch"] = gs.pitch;
-        data["gimbal_pitch_vel"] = gs.pitch_vel;
-
-        data["target_yaw"] = buff_plan.target_yaw;
-        data["target_pitch"] = buff_plan.target_pitch;
-
-        data["plan_mode"] = buff_plan.control ? (buff_plan.fire ? 2 : 1) : 0;
-        data["plan_yaw"] = buff_plan.yaw / CV_PI * 180.;
-        data["plan_yaw_vel"] = buff_plan.yaw_vel;
-        data["plan_yaw_acc"] = buff_plan.yaw_acc;
-
-        data["plan_pitch"] = buff_plan.pitch * 57.3;
-        data["plan_pitch_vel"] = buff_plan.pitch_vel;
-        data["plan_pitch_acc"] = buff_plan.pitch_acc;
-
-        data["fire"] = buff_plan.fire ? 1 : 0;
+        data["plan_mode"] = command.fire ? 2 : 1;
+        data["plan_yaw"] = command.yaw / CV_PI * 180.0;
+        data["plan_pitch"] = command.pitch * 180.0 / CV_PI;
+        data["fire"] = command.fire ? 1 : 0;
         data["fired"] = fired ? 1 : 0;
-
-        if (active_target && !active_target->is_unsolve()) {
-          Eigen::VectorXd x = active_target->ekf_x();
-          data["R_yaw"] = x[0];
-          data["R_V_yaw"] = x[1];
-          data["R_pitch"] = x[2];
-          data["R_dis"] = x[3];
-          data["yaw"] = x[4] * 57.3;
-
-          data["angle"] = x[5] * 57.3;
-          data["spd"] = x[6] * 57.3;
-          if (x.size() >= 10) { // 大符状态量更多
-            data["spd"] = x[6];
-            data["a"] = x[7];
-            data["w"] = x[8];
-            data["fi"] = x[9];
-            data["spd0"] = active_target->spd;
-          }
-        }
-
+        const auto & debug = rune_system.debug_snapshot();
+        data["rune_detection_ms"] = debug.detection_ms;
+        data["rune_core_ms"] = debug.core_ms;
+        if (debug.phase) data["rune_phase"] = *debug.phase;
+        if (debug.angular_velocity) data["rune_angular_velocity"] = *debug.angular_velocity;
         plotter.plot(data);
       }
     }
