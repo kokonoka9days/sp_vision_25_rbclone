@@ -19,7 +19,7 @@ namespace auto_aim
 namespace
 {
 constexpr std::array<Color, 4> MODEL_COLORS = {
-  Color::red, Color::blue, Color::extinguish, Color::purple};
+  Color::blue, Color::red, Color::extinguish, Color::purple};
 constexpr std::array<ArmorName, 9> MODEL_NAMES = {
   ArmorName::sentry, ArmorName::one,  ArmorName::two,  ArmorName::three, ArmorName::four,
   ArmorName::five,   ArmorName::outpost, ArmorName::base, ArmorName::base};
@@ -238,7 +238,7 @@ std::list<Armor> YOLOV5::parse(
     throw std::runtime_error("YOLOV5 decoder received an empty source image");
   }
 
-  // Model output: TL, BL, BR, TR, objectness, red/blue/gray/purple, G/1/2/3/4/5/O/Bs/Bb.
+  // Model output: TL, BL, BR, TR, objectness, blue/red/gray/purple, G/1/2/3/4/5/O/Bs/Bb.
   std::vector<int> color_ids, num_ids;
   std::vector<float> confidences;
   std::vector<cv::Rect> boxes;
