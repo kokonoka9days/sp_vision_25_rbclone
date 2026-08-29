@@ -42,8 +42,8 @@ public:
   void predict(double dt, Eigen::VectorXd u_xyz = Eigen::VectorXd::Zero(3));
   /** @brief 使用控制输入将目标预测到指定时间 @param t 目标时间 @param u_xyz 三轴控制输入 */
   void predict(std::chrono::steady_clock::time_point t, Eigen::VectorXd u_xyz);
-  /** @brief 使用装甲板观测更新目标滤波器 @param armor 新观测装甲板 */
-  void update(const Armor & armor);
+  /** @brief 使用装甲板观测更新目标滤波器 @param armor 新观测装甲板 @return 完成 EKF 校正时返回 true；观测无法匹配到装甲板时返回 false，此时滤波器状态保持不变 */
+  bool update(const Armor & armor);
 
   /** @brief 获取滤波状态副本 @return EKF 状态向量 */
   Eigen::VectorXd ekf_x() const;

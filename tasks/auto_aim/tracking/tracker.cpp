@@ -587,10 +587,11 @@ bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock
   for (auto & armor : armors) {
     if (armor.name == target_.name && armor.type == target_.armor_type) {
       if (!solver_->try_solve(armor)) continue;
-      const int previous_update_count = target_.update_count_;
-      target_.update(armor);
+      // update 返回 false 说明观测未匹配到装甲板、EKF 未执行校正，滤波器状态没有变化，
+      // 不能算作跟踪成功，继续尝试后续装甲板
+      if (!target_.update(armor)) continue;
 
-      if (use_center_acceleration() && target_.update_count_ > previous_update_count) {
+      if (use_center_acceleration()) {
         const Eigen::VectorXd state = target_.ekf_x();
         center_acceleration_estimator_.add_sample(t, {state[0], state[2]});
       }

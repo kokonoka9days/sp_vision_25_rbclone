@@ -171,7 +171,7 @@ void Target::predict(double dt, Eigen::VectorXd u_xyz)
   rv_residual = std::nullopt;
 }
 
-void Target::update(const Armor & armor)
+bool Target::update(const Armor & armor)
 {
   int id = 0;
   ekf_.prepare_measurement(armor, cam_is_short, update_count_);
@@ -181,7 +181,7 @@ void Target::update(const Armor & armor)
     // 纯几何匹配(距离+复合角度)，绕开因高度阶梯跳变导致 EKF 协方差波动的干扰
     auto min_angle_error = 1e10;
     const std::vector<Eigen::Vector4d> xyza_list = armor_xyza_list();
-    if (xyza_list.size() < 3) return;
+    if (xyza_list.size() < 3) return false;
 
     ekf_.x[10] = RVfromFYT::kTowerArmorHeightStep;
 
@@ -217,7 +217,7 @@ void Target::update(const Armor & armor)
     id = ekf_.select_armor_id(last_id);
   }
 
-  if (id < 0 || id >= armor_num_) return;
+  if (id < 0 || id >= armor_num_) return false;
 
 
   if (id != 0) jumped = true;
@@ -265,6 +265,8 @@ void Target::update(const Armor & armor)
   observation_xyzyaw << armor.xyz_in_world, armor.ypr_in_world[0];
   rv_residual =
     ekf_.posterior_residual_squared(observation_xyzyaw, id);
+
+  return true;
 }
 
 // 获取 EKF 状态向量

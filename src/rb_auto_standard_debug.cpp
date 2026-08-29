@@ -164,6 +164,8 @@ int main(int argc, char * argv[])
                             last_mode == io::GimbalMode::BIG_BUFF;
       const bool is_buff = mode.load() == io::GimbalMode::SMALL_BUFF ||
                            mode.load() == io::GimbalMode::BIG_BUFF;
+      // 打符期间主循环不再更新 target_queue，先清空避免切回自瞄时 plan_thread 用到过期目标
+      if (is_buff) target_queue.push(std::nullopt);
       if (was_buff && !is_buff) {
         rune_system.reset();
         gimbal.send(false, false, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);

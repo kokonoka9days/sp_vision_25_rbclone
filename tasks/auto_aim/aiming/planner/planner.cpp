@@ -733,7 +733,8 @@ Plan Planner::rbplan(Target target, double bullet_speed, double gimbal_yaw)
       
     return suggest_fire;
   };
-  plan.fire = is_fire(gimbal_yaw - yaw_offset_, target, false);
+  // gimbal_yaw 由上层以「度」传入（见 io::GimbalState::yaw），yaw_offset_ 为弧度，先统一到弧度
+  plan.fire = is_fire(gimbal_yaw / 57.3 - yaw_offset_, target, false);
   // tools::logger()->warn("fire:{}", plan.fire);
   plan.target_yaw = (aim_target_yaw + yaw_offset_ )* 57.3;
 
